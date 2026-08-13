@@ -1,0 +1,11 @@
+# Raw source footage — 266MB of .MOV masters that the site never serves.
+# The storefront uses the compressed reel at images/reel/toss-reel.mp4.
+images/marketing video/
+
+# OS noise
+Thumbs.db
+.DS_Store
+
+# Local tooling
+node_modules/
+.claude/

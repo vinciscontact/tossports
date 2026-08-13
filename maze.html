@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Maze Room — Toss Sports</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="icon" href="images/logo/favicon-32.png" sizes="32x32">
+<link rel="stylesheet" href="css/maze.css?v=11">
+</head>
+<body>
+
+<!-- ---------- login ---------- -->
+<div id="gate" class="gate">
+  <form class="gate-card" id="loginForm">
+    <img class="gate-mark" src="images/logo/toss-mark-192.png" alt="Toss Sports" width="192" height="192">
+    <h1>Maze Room</h1>
+    <p>Toss Sports control panel</p>
+    <label>Email<input type="email" id="email" autocomplete="username" required></label>
+    <label>Password<input type="password" id="password" autocomplete="current-password" required></label>
+    <button class="btn primary block" id="loginBtn" type="submit">Sign in</button>
+    <div class="gate-err hide" id="loginErr"></div>
+  </form>
+</div>
+
+<!-- ---------- app ---------- -->
+<div id="shell" class="shell hide">
+  <main class="main">
+    <div class="brand"><img src="images/logo/toss-mark-96.png" alt="" width="96" height="96"> Maze Room</div>
+    <div id="banner" class="banner hide"></div>
+    <div id="view"></div>
+  </main>
+
+  <!-- Apple-style glass dock: all navigation, plus the account avatar.
+       Buttons are rendered by buildNav() per role. -->
+  <nav class="dock-wrap" aria-label="Sections">
+    <div class="dock" id="nav"></div>
+    <div class="dock-menu hide" id="dockMenu">
+      <b id="who"></b>
+      <span id="whoRole" class="role-chip hide"></span>
+      <button class="btn ghost sm" id="logout">Sign out</button>
+    </div>
+  </nav>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="js/config.js?v=8"></script>
+<script src="js/maze-bill.js?v=8"></script>
+<script src="js/maze-ops.js?v=10"></script>
+<script src="js/maze.js?v=10"></script>
+</body>
+</html>
