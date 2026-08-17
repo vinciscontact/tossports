@@ -15,7 +15,35 @@ const inr = n => n === null || n === undefined || n === '' ? '—' : '₹' + Num
 const when = t => t ? new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
 let DB = { products: [], orders: [], coupons: [], scores: [], settings: {},
-           categories: [{ id: 'bats', name: 'Bats', sort: 0 }], catSynced: false };
+           categories: [{ id: 'bats', name: 'Bats', sort: 0 }], catSynced: false,
+           branches: [], stock: [], brSynced: false };
+
+/* Which branch the screen is showing. '' = every branch combined, which
+   only a founder may choose; a manager is pinned to their own and the
+   switcher does not appear for them. */
+let BRANCH = '';
+
+/* Analysis computed by the database over every row, not just the orders
+   the browser happened to download. `live` is false until 010 is run. */
+let AN = { live: false, monthPL: [], perf: [], bestSeller: [], deadStock: [], loyalty: [] };
+
+/* rows of an analysis view for the branch on screen */
+const anBranch = rows => BRANCH ? rows.filter(r => r.branch_id === BRANCH) : rows;
+
+/* month rows summed across branches when viewing all */
+function anMonths() {
+  const m = {};
+  anBranch(AN.monthPL).forEach(r => {
+    const t = m[r.month] || (m[r.month] = { month: r.month, orders: 0, revenue: 0,
+      cogs: 0, expenses: 0, salaries: 0, net: 0 });
+    ['orders','revenue','cogs','expenses','salaries','net'].forEach(k => t[k] += Number(r[k]) || 0);
+  });
+  return Object.values(m).sort((a, b) => a.month.localeCompare(b.month));
+}
+const monthLabel = k => {
+  const [y, mo] = String(k).split('-');
+  return new Date(+y, +mo - 1, 1).toLocaleDateString('en-IN', { month: 'short' }) + ' ’' + y.slice(2);
+};
 let TAB = 'dash';
 let USER = null;
 let AUTH = 'anon';        // anon | ok | rejected | unauthorised | offline
@@ -102,14 +130,24 @@ async function loadAll() {
       return fallback;
     }
   };
-  const [products, orders, coupons, scores, settings, invoices, categories] = await Promise.all([
+  const [products, orders, coupons, scores, settings, invoices, categories,
+         branches, stock, monthPL, perf, bestSeller, deadStock, loyalty] = await Promise.all([
     get('products?select=*&order=sort.asc', []),
     get('orders?select=*&order=created_at.desc&limit=200', []),
     get('coupons?select=*&order=unlock_runs.asc', []),
     get('scores?select=*&order=runs.desc&limit=50', []),
     get('settings?select=*', []),
     get('invoices?select=*&order=issued_at.desc&limit=300', []),
-    get('categories?select=*&order=sort.asc', null)   /* null = table missing */
+    get('categories?select=*&order=sort.asc', null),  /* null = table missing */
+    get('branches?select=*&order=sort.asc', null),
+    get('product_stock?select=*', null),
+    /* aggregates computed by Postgres over EVERY row — these stay correct
+       no matter how many orders exist or how few the browser downloaded */
+    get('v_month_pl?select=*&order=month.desc', null),
+    get('v_product_performance?select=*&order=profit.desc', null),
+    get('v_month_best_seller?select=*&rank=eq.1&order=month.desc', null),
+    get('v_dead_stock?select=*&order=tied_up.desc', null),
+    get('v_customer_loyalty?select=*&order=spend.desc&limit=200', null)
   ]);
   DB.products = products || [];
   DB.orders   = orders   || [];
@@ -118,6 +156,22 @@ async function loadAll() {
   DB.catSynced = Array.isArray(categories);
   DB.categories = DB.catSynced && categories.length
     ? categories : [{ id: 'bats', name: 'Bats', sort: 0 }];
+
+  DB.brSynced = Array.isArray(branches);
+  DB.branches = DB.brSynced && branches.length ? branches : [];
+  DB.stock = Array.isArray(stock) ? stock : [];
+
+  /* AN.live tells every screen whether it is showing complete figures
+     from the database or falling back to whatever the browser downloaded */
+  AN.live       = Array.isArray(monthPL);
+  AN.monthPL    = Array.isArray(monthPL)    ? monthPL    : [];
+  AN.perf       = Array.isArray(perf)       ? perf       : [];
+  AN.bestSeller = Array.isArray(bestSeller) ? bestSeller : [];
+  AN.deadStock  = Array.isArray(deadStock)  ? deadStock  : [];
+  AN.loyalty    = Array.isArray(loyalty)    ? loyalty    : [];
+
+  /* a manager is pinned to their branch — they never get to choose */
+  if (ME && ME.branch_id && !isOwner()) BRANCH = ME.branch_id;
   DB.settings = {};
   (settings || []).forEach(s => DB.settings[s.key] = s.value);
   BILL.invoices = invoices || []; BILL.loaded = true;
@@ -144,6 +198,8 @@ const DOCK_ICON = (() => {
     boards:   s('<path d="M7 4h10v4a5 5 0 0 1-10 0Z"/><path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3"/><path d="M12 13v4m-4 4h8m-4-4v4"/>'),
     coupons:  s('<path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2.5 2.5 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2.5 2.5 0 0 0 0-4Z"/><path d="M13 7v2m0 6v2m0-6v2"/>'),
     scores:   s('<rect x="2.5" y="7" width="19" height="10" rx="5"/><path d="M7.5 10v4M5.5 12h4"/><circle cx="16" cy="11" r=".8" fill="currentColor"/><circle cx="18.5" cy="13" r=".8" fill="currentColor"/>'),
+    insights: s('<path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.5.4.8 1 .9 1.7h5.4c.1-.7.4-1.3.9-1.7A6 6 0 0 0 12 3Z"/>'),
+    branches: s('<path d="M3 21h18"/><path d="M5 21V8l5-4 5 4v13"/><path d="M15 21V11l4 2v8"/><path d="M8.5 12h3M8.5 16h3"/>'),
     settings: s('<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 6.9l2 1.2M17.5 15.9l2 1.2M2.8 12h2.4M18.8 12h2.4M4.5 17.1l2-1.2M17.5 8.1l2-1.2"/>')
   };
 })();
@@ -187,11 +243,17 @@ function buildNav() {
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></svg>
       <span class="dk-tip">Back</span>
     </button>
-    <span class="dk-div" aria-hidden="true"></span>` + tabs.map(t => `
-    <button class="dk${TAB === t ? ' on' : ''}" data-tab="${t}" aria-label="${NAV_LABEL[t]}">
+    <span class="dk-div" aria-hidden="true"></span>` + tabs.map((t, i) => {
+      const owned = FOUNDER_ONLY.includes(t);
+      /* one divider, at the moment the founder group starts */
+      const opensGroup = owned && !FOUNDER_ONLY.includes(tabs[i - 1]);
+      return (opensGroup ? '<span class="dk-div" aria-hidden="true"></span>' : '') + `
+    <button class="dk${TAB === t ? ' on' : ''}${owned ? ' owner' : ''}" data-tab="${t}"
+            aria-label="${NAV_LABEL[t]}${owned ? ' — founder only' : ''}">
       ${DOCK_ICON[t] || DOCK_ICON.dash}
-      <span class="dk-tip">${NAV_LABEL[t]}</span>
-    </button>`).join('') + `
+      <span class="dk-tip">${NAV_LABEL[t]}${owned ? ' <i>Founder only</i>' : ''}</span>
+    </button>`;
+    }).join('') + `
     <span class="dk-div" aria-hidden="true"></span>
     <button class="dk me" id="dockMe" aria-label="Account">
       <b>${initials || '?'}</b>
@@ -218,8 +280,27 @@ function buildNav() {
   wireDockMagnify();
 
   const chip = $('#whoRole');
-  if (ME) { chip.textContent = ME.role; chip.className = 'role-chip ' + ME.role; }
+  if (ME) { chip.textContent = ROLE_LABEL[ME.role] || ME.role; chip.className = 'role-chip ' + ME.role; }
   else chip.classList.add('hide');
+
+  /* branch switcher sits beside the identity strip */
+  const bs = $('#brSwitch');
+  if (bs) {
+    bs.innerHTML = branchSwitcher();
+    const sel = $('#brSel');
+    if (sel) sel.onchange = () => { BRANCH = sel.value; render(); };
+  }
+
+  /* the always-visible identity strip */
+  const sa = $('#signedAs'), saName = $('#saName'), saRole = $('#saRole');
+  if (sa) {
+    if (ME) {
+      saName.textContent = ME.name || ME.email || '';
+      saRole.textContent = ROLE_LABEL[ME.role] || ME.role;
+      saRole.className = 'role-chip ' + ME.role;
+      sa.classList.remove('hide');
+    } else sa.classList.add('hide');
+  }
 }
 
 /* macOS-style magnification: icons swell as the pointer nears. Pure
@@ -296,6 +377,42 @@ async function deleteRow(table, key, val) {
 const slugify = s => s.toLowerCase().trim()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
 
+/* ---------------- branches ---------------- */
+const multiBranch = () => DB.branches.filter(b => b.active).length > 1;
+const branchName = id => (DB.branches.find(b => b.id === id) || {}).name || id || '—';
+const defaultBranch = () => (DB.branches.find(b => b.is_default) || DB.branches[0] || {}).id;
+
+/* stock for a product: in the selected branch, or the company total when
+   viewing all branches */
+function stockOf(productId, branchId) {
+  const b = branchId === undefined ? BRANCH : branchId;
+  if (!DB.stock.length) {                       /* migration not run yet */
+    const p = DB.products.find(x => x.id === productId);
+    return p ? (p.stock || 0) : 0;
+  }
+  return DB.stock
+    .filter(s => s.product_id === productId && (!b || s.branch_id === b))
+    .reduce((t, s) => t + (s.stock || 0), 0);
+}
+
+/* the rows the current branch view should show */
+function branchOrders(list) {
+  if (!BRANCH) return list;
+  return list.filter(o => (o.branch_id || defaultBranch()) === BRANCH);
+}
+
+/* The switcher. Founders only — a manager has one branch and showing them
+   a chooser with one entry is noise. */
+function branchSwitcher() {
+  if (!multiBranch()) return '';
+  if (!isOwner()) return `<span class="br-pin">${esc(branchName(BRANCH))}</span>`;
+  return `<select class="br-sel" id="brSel" aria-label="Branch">
+    <option value="">All branches</option>
+    ${DB.branches.filter(b => b.active).map(b =>
+      `<option value="${esc(b.id)}" ${BRANCH === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}
+  </select>`;
+}
+
 /* ---------------- render ---------------- */
 function render() {
   const v = $('#view');
@@ -313,11 +430,112 @@ function render() {
     boards:   [viewBoards,    wireBoards],
     coupons:  [viewCoupons,   wireCoupons],
     scores:   [viewScores,    wireScores],
+    activity: [viewActivity,  wireActivity],
+    insights: [viewInsights,  wireInsights],
+    branches: [viewBranches,  wireBranches],
     settings: [viewSettings,  wireSettings]
   }[TAB];
   if (!R) { v.innerHTML = '<div class="empty">Nothing here.</div>'; return; }
+
+  /* A tab that is not in this person's ROLE_NAV must not render even if
+     TAB was set some other way. The database refuses the data regardless;
+     this stops a half-drawn screen full of empty tables. */
+  const allowed = ROLE_NAV[ME.role] || [];
+  if (!allowed.includes(TAB)) {
+    v.innerHTML = `<div class="head"><h2>Not your section</h2></div>
+      <div class="empty">Your role doesn't have access to this. Ask a founder if you need it.</div>`;
+    return;
+  }
   v.innerHTML = R[0]();
   if (R[1]) R[1]();
+}
+
+/* ---------------- activity (the audit trail) ----------------
+   Founder-only, append-only, straight from the database. Nothing here is
+   written by the browser — Postgres triggers record it, and no policy
+   allows update or delete, so it cannot be quietly rewritten. */
+let AUDIT = { rows: [], loaded: false, filter: '' };
+
+function viewActivity() {
+  const rows = AUDIT.filter
+    ? AUDIT.rows.filter(r => r.entity === AUDIT.filter)
+    : AUDIT.rows;
+  const ENTITY = { products:'Products', settings:'Settings', staff:'Team',
+                   payroll:'Payroll', coupons:'Rewards', invoices:'Invoices' };
+
+  return `
+    <div class="head"><h2>Activity</h2>
+      <span class="muted">${AUDIT.loaded ? rows.length + ' recorded' : 'loading…'}</span>
+      <span class="sp">${exportBar('activity')}
+        <button class="btn ghost sm" id="auRefresh">Refresh</button></span>
+    </div>
+    <p class="muted" style="margin-bottom:14px">Every change to prices, products, the team,
+      payroll, rewards and settings — who did it and when. This log cannot be edited or
+      deleted by anyone, including you.</p>
+    <div class="cat-row">
+      <button class="cat-chip${AUDIT.filter === '' ? ' on' : ''}" data-au="">All</button>
+      ${Object.keys(ENTITY).map(k => `<button class="cat-chip${AUDIT.filter === k ? ' on' : ''}"
+        data-au="${k}">${ENTITY[k]}</button>`).join('')}
+    </div>
+    ${!AUDIT.loaded
+      ? '<div class="empty">Reading the log…</div>'
+      : !rows.length
+        ? `<div class="empty">Nothing recorded yet.${AUDIT.filter ? ' Try another filter.' : ''}
+             <br><span class="muted">If you have made changes and this is empty, run
+             <code>sql/008-access-control.sql</code> in Supabase.</span></div>`
+        : `<div class="tbl-wrap"><table>
+            <thead><tr><th>When</th><th>Who</th><th>What</th><th>Section</th></tr></thead>
+            <tbody>${rows.slice(0, 200).map(r => `<tr>
+              <td class="muted" style="white-space:nowrap">${auWhen(r.at)}</td>
+              <td><div>${esc(r.actor_name || 'system')}</div>
+                  <div class="pid">${esc(ROLE_LABEL[r.actor_role] || r.actor_role || '')}</div></td>
+              <td>${esc(r.summary || r.action)}</td>
+              <td><span class="pill ${r.action === 'delete' ? 'off' : r.action === 'insert' ? 'on' : 'low'}">
+                ${esc(ENTITY[r.entity] || r.entity)}</span></td>
+            </tr>`).join('')}</tbody>
+          </table></div>`}`;
+}
+
+function auWhen(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts), now = new Date();
+  const mins = Math.round((now - d) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + ' min ago';
+  if (mins < 1440) return Math.round(mins / 60) + ' hr ago';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) +
+    ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+
+async function loadAudit(force) {
+  if (AUDIT.loaded && !force) return;
+  try {
+    AUDIT.rows = await supa('audit_log?select=*&order=at.desc&limit=300') || [];
+  } catch (e) {
+    AUDIT.rows = [];                       /* table not created yet — the view says so */
+    console.warn('audit log:', e.message);
+  }
+  AUDIT.loaded = true;
+  if (TAB === 'activity') render();
+}
+
+function wireActivity() {
+  $$('[data-au]').forEach(b => b.onclick = () => { AUDIT.filter = b.dataset.au; render(); });
+
+  wireExport('activity', 'Activity log', () => [{
+    name: 'Activity',
+    columns: [
+      { header: 'When', key: 'at', type: 'date' },
+      { header: 'Who', key: 'actor_name' }, { header: 'Role', key: 'role' },
+      { header: 'Section', key: 'entity' }, { header: 'Action', key: 'action' },
+      { header: 'What changed', key: 'summary' }, { header: 'Record', key: 'row_id' }
+    ],
+    rows: AUDIT.rows.map(r => Object.assign({}, r,
+      { role: ROLE_LABEL[r.actor_role] || r.actor_role || '' }))
+  }], 'Append-only record of every sensitive change. Cannot be edited or deleted by anyone.');
+  const r = $('#auRefresh');
+  if (r) r.onclick = () => { AUDIT.loaded = false; render(); loadAudit(true); };
+  loadAudit();
 }
 
 /* ---------------- products ---------------- */
@@ -333,7 +551,7 @@ function viewProducts() {
     if (pFilter.state === 'live' && !p.active) return false;
     if (pFilter.state === 'off' && p.active) return false;
     if (pFilter.state === 'noprice' && p.price) return false;
-    if (pFilter.state === 'nostock' && p.stock > 0) return false;
+    if (pFilter.state === 'nostock' && stockOf(p.id) > 0) return false;
     if (pFilter.q && !(p.name + ' ' + p.id).toLowerCase().includes(pFilter.q.toLowerCase())) return false;
     return true;
   });
@@ -344,6 +562,7 @@ function viewProducts() {
       <h2>Products</h2>
       <span class="muted">${rows.length} of ${DB.products.length}</span>
       <span class="sp">
+        ${exportBar('products')}
         <button class="btn ghost sm" id="catManage">Categories…</button>
         <button class="btn primary sm" id="pNew">+ New product</button>
       </span>
@@ -375,7 +594,8 @@ function viewProducts() {
     <div class="tbl-wrap"><table>
       <thead><tr>
         <th>Product</th><th>Category</th><th>Tier</th><th class="num">Price</th><th class="num">MRP</th>
-        <th class="num">Stock</th><th>Live</th><th></th>
+        <th class="num">${multiBranch() ? (BRANCH ? esc(branchName(BRANCH)) : 'Stock (all)') : 'Stock'}</th>
+        <th>Live</th><th></th>
       </tr></thead>
       <tbody>${rows.length ? rows.map(p => `<tr>
         <td><div>${esc(p.name)}</div><div class="pid">${esc(p.id)}</div></td>
@@ -383,9 +603,13 @@ function viewProducts() {
         <td><span class="pill ${esc(p.tier)}">${esc(p.tier)}</span></td>
         <td class="num ${p.price ? '' : 'warn-cell'}">${p.price ? inr(p.price) : 'no price'}</td>
         <td class="num muted">${inr(p.mrp)}</td>
-        <td class="num ${p.stock <= 0 ? 'warn-cell' : ''}">${p.stock}</td>
+        <td class="num ${stockOf(p.id) <= 0 ? 'warn-cell' : ''}">${stockOf(p.id)}${
+          multiBranch() && !BRANCH ? `<div class="br-split">${DB.branches.filter(b => b.active)
+            .map(b => `${esc(b.code)} ${stockOf(p.id, b.id)}`).join(' · ')}</div>` : ''}</td>
         <td><span class="pill ${p.active ? 'on' : 'off'}">${p.active ? 'Live' : 'Off'}</span></td>
-        <td style="text-align:right"><button class="btn ghost sm" data-edit="${esc(p.id)}">Edit</button></td>
+        <td style="text-align:right;white-space:nowrap">
+          ${multiBranch() ? `<button class="btn ghost sm" data-move="${esc(p.id)}">Move</button>` : ''}
+          <button class="btn ghost sm" data-edit="${esc(p.id)}">Edit</button></td>
       </tr>`).join('') : `<tr><td colspan="8"><div class="empty">Nothing matches those filters.</div></td></tr>`}
       </tbody>
     </table></div>`;
@@ -397,9 +621,402 @@ function wireProducts() {
   $('#ptier').onchange = e => { pFilter.tier = e.target.value; re(); };
   $('#pstate').onchange = e => { pFilter.state = e.target.value; re(); };
   $$('.cat-chip').forEach(b => b.onclick = () => { pFilter.cat = b.dataset.cat; re(); });
+
+  /* stock valuation, which is the reason to export products at all */
+  wireExport('products', 'Stock report', () => {
+    const rows = DB.products.map(p => {
+      const st = stockOf(p.id);
+      const r = {
+        id: p.id, name: p.name, category: catName(catOf(p)), tier: p.tier,
+        price: p.price, mrp: p.mrp, cost: p.cost, stock: st,
+        value: (p.cost || 0) * st,
+        margin: (p.price != null && p.cost != null) ? p.price - p.cost : null,
+        live: p.active ? 'Live' : 'Off'
+      };
+      /* one column per branch when there is more than one shop */
+      if (multiBranch() && !BRANCH)
+        DB.branches.filter(b => b.active).forEach(b => r['br_' + b.id] = stockOf(p.id, b.id));
+      return r;
+    });
+    const branchCols = (multiBranch() && !BRANCH)
+      ? DB.branches.filter(b => b.active).map(b =>
+          ({ header: b.name, key: 'br_' + b.id, type: 'number' }))
+      : [];
+    return [{
+      name: 'Stock',
+      summary: [
+        { k: 'Products', v: rows.length },
+        { k: 'Units in stock', v: rows.reduce((s, r) => s + r.stock, 0) },
+        { k: 'Stock value', v: '₹' + rows.reduce((s, r) => s + r.value, 0).toLocaleString('en-IN') },
+        { k: 'Out of stock', v: rows.filter(r => r.stock <= 0).length }
+      ],
+      columns: [
+        { header: 'ID', key: 'id' }, { header: 'Product', key: 'name' },
+        { header: 'Category', key: 'category' }, { header: 'Tier', key: 'tier' },
+        { header: 'Price', key: 'price', type: 'money' },
+        { header: 'MRP', key: 'mrp', type: 'money' },
+        { header: 'Cost', key: 'cost', type: 'money' },
+        { header: 'Margin', key: 'margin', type: 'money' },
+        { header: BRANCH ? branchName(BRANCH) + ' stock' : 'Stock (total)', key: 'stock', type: 'number' }
+      ].concat(branchCols, [
+        { header: 'Stock value', key: 'value', type: 'money' },
+        { header: 'Live', key: 'live' }
+      ]),
+      rows
+    }];
+  }, (BRANCH ? branchName(BRANCH) + ' only. ' : '') +
+     'Stock value uses cost price. Products with no cost recorded count as zero.');
   $('#catManage').onclick = manageCategories;
   $('#pNew').onclick = () => editProduct(null);
   $$('[data-edit]').forEach(b => b.onclick = () => editProduct(b.dataset.edit));
+  $$('[data-move]').forEach(b => b.onclick = () => moveStock(b.dataset.move));
+}
+
+/* ---------------- insights (founder only) ----------------
+   Four questions that change decisions, plus a health check that proves
+   the numbers can be trusted. Everything here is computed by Postgres
+   over every row, so it does not drift as the order book grows. */
+let insTab = 'profit';
+
+function viewInsights() {
+  if (!AN.live) return `
+    <div class="head"><h2>Insights</h2></div>
+    <div class="empty">The analysis views are not in the database yet.<br>
+      <span class="muted">Run <code>sql/010-analytics.sql</code> in the Supabase SQL editor,
+      then reload.</span></div>`;
+
+  const tabs = { profit: 'What makes money', dead: 'Stock not moving',
+                 loyal: 'Repeat customers', health: 'Health check' };
+  return `
+    <div class="head"><h2>Insights</h2>
+      <span class="muted">${BRANCH ? esc(branchName(BRANCH)) : 'all branches'}</span>
+      <span class="sp">${exportBar('insights')}</span>
+    </div>
+    <div class="subtabs">${Object.entries(tabs).map(([k, v]) =>
+      `<button data-ins="${k}" class="${insTab === k ? 'on' : ''}">${v}</button>`).join('')}</div>
+    ${insTab === 'profit' ? insProfit()
+      : insTab === 'dead' ? insDead()
+      : insTab === 'loyal' ? insLoyal() : insHealth()}`;
+}
+
+function insProfit() {
+  const rows = AN.perf.filter(r => Number(r.units) > 0)
+    .sort((a, b) => Number(b.profit) - Number(a.profit));
+  if (!rows.length) return '<div class="empty">Nothing has sold yet.</div>';
+  const noCost = rows.filter(r => r.cost == null).length;
+  const best = Math.max(1, ...rows.map(r => Number(r.profit)));
+
+  return `
+    ${noCost ? `<div class="banner"><b>${noCost} of these have no cost price.</b>
+      Their profit shows as the full selling price, which is wrong but optimistic —
+      set a cost in <b>Products → Edit</b> to make this real.</div>` : ''}
+    <p class="muted" style="margin-bottom:14px">Ranked by <b>profit earned</b>, not units sold.
+      A ₹950 bat selling twenty times can earn less than a ₹2,999 bat selling five.</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Product</th><th class="num">Units</th><th class="num">Revenue</th>
+        <th class="num">Profit</th><th class="num">Per unit</th><th>Share of profit</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><div>${esc(r.name)}</div><div class="pid">${esc(r.tier || '')}</div></td>
+        <td class="num">${r.units}</td>
+        <td class="num muted">${money(r.revenue)}</td>
+        <td class="num"><b class="${Number(r.profit) > 0 ? 'good-cell' : 'warn-cell'}">${money(r.profit)}</b></td>
+        <td class="num muted">${r.cost == null ? '—' : money(Math.round(Number(r.profit) / Math.max(1, r.units)))}</td>
+        <td><div class="prog sm" style="max-width:none">
+          <i style="width:${Math.max(0, Number(r.profit) / best * 100)}%"></i></div></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+function insDead() {
+  const rows = anBranch(AN.deadStock);
+  if (!rows.length) return `<div class="empty">Nothing is sitting still —
+    every bat in stock has sold within the last 60 days.</div>`;
+  const tied = rows.reduce((s, r) => s + Number(r.tied_up || 0), 0);
+  return `
+    <div class="cards tight">
+      <div class="card warn"><b>${rows.length}</b><span>Lines not moving</span></div>
+      <div class="card"><b>${money(tied)}</b><span>Cash tied up</span></div>
+    </div>
+    <p class="muted" style="margin-bottom:14px">In stock but not sold in 60 days.
+      ${multiBranch() ? 'If one branch is selling it and the other is not, move it across.' : ''}</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Product</th>${multiBranch() ? '<th>Branch</th>' : ''}
+        <th class="num">Stock</th><th class="num">Cash tied up</th>
+        <th class="num">Days since a sale</th>${multiBranch() ? '<th></th>' : ''}</tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td>${esc(r.name)}</td>
+        ${multiBranch() ? `<td class="muted">${esc(branchName(r.branch_id))}</td>` : ''}
+        <td class="num">${r.stock}</td>
+        <td class="num">${money(r.tied_up)}</td>
+        <td class="num ${(r.days_since_sale || 999) > 120 ? 'warn-cell' : ''}">
+          ${r.days_since_sale == null ? 'never sold' : r.days_since_sale}</td>
+        ${multiBranch() ? `<td style="text-align:right">
+          <button class="btn ghost sm" data-move="${esc(r.product_id)}">Move</button></td>` : ''}
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+function insLoyal() {
+  const rows = AN.loyalty;
+  if (!rows.length) return '<div class="empty">No customers yet.</div>';
+  const repeat = rows.filter(r => r.orders > 1);
+  const pct = Math.round(repeat.length / rows.length * 100);
+  const avgGap = repeat.length
+    ? Math.round(repeat.reduce((s, r) => s + (r.avg_days_between || 0), 0) / repeat.length) : 0;
+
+  return `
+    <div class="cards tight">
+      <div class="card"><b>${rows.length}</b><span>Customers</span></div>
+      <div class="card ${pct >= 20 ? 'good' : ''}"><b>${repeat.length}</b><span>Bought again</span></div>
+      <div class="card hot"><b>${pct}%</b><span>Repeat rate</span></div>
+      <div class="card"><b>${avgGap || '—'}</b><span>Avg days between orders</span></div>
+    </div>
+    <p class="muted" style="margin-bottom:14px">A bat lasts a season, so a repeat purchase is
+      a strong signal the product and service landed. Team orders count once per phone number.</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th class="num">#</th><th>Customer</th><th class="num">Orders</th>
+        <th class="num">Spend</th><th class="num">Days between</th><th>First</th><th>Last</th></tr></thead>
+      <tbody>${rows.slice(0, 60).map((r, i) => `<tr>
+        <td class="num"><b class="${i < 3 ? 'rank' : ''}">${i + 1}</b></td>
+        <td><div>${esc(r.name || 'Unknown')}</div><div class="pid">${esc(r.phone)}</div></td>
+        <td class="num"><b class="${r.orders > 1 ? 'good-cell' : ''}">${r.orders}</b></td>
+        <td class="num">${money(r.spend)}</td>
+        <td class="num muted">${r.avg_days_between ?? '—'}</td>
+        <td class="muted">${when(r.first_order)}</td>
+        <td class="muted">${when(r.last_order)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+let HEALTH = { rows: null, loading: false };
+function insHealth() {
+  if (HEALTH.rows === null) return '<div class="empty">Running the check…</div>';
+  if (!HEALTH.rows.length) return `<div class="empty">
+    <b>Everything checks out.</b><br>
+    <span class="muted">Stock totals agree with the branches, every order has a branch,
+    every product has a cost.</span></div>`;
+
+  const icon = { error: '✕', warn: '!', info: 'i' };
+  return `
+    <p class="muted" style="margin-bottom:14px">Read straight from the raw tables, not from
+      what this screen has loaded. Anything here can quietly make a number wrong.</p>
+    ${HEALTH.rows.map(r => `
+      <div class="job ${r.severity === 'error' ? 'hot' : r.severity === 'warn' ? 'warn' : ''}">
+        <b>${r.severity === 'info' ? r.count : icon[r.severity] || '?'}</b>
+        <span><i>${esc(r.area)} — ${esc(r.detail)}</i>
+          <em>${r.severity === 'error' ? 'Needs fixing — figures may be wrong'
+             : r.severity === 'warn' ? 'Worth tidying — figures are optimistic'
+             : 'For information'}</em></span>
+        <u>${r.severity === 'info' ? '' : r.count}</u>
+      </div>`).join('')}`;
+}
+
+function wireInsights() {
+  $$('[data-ins]').forEach(b => b.onclick = () => { insTab = b.dataset.ins; render(); });
+  $$('[data-move]').forEach(b => b.onclick = () => moveStock(b.dataset.move));
+
+  if (insTab === 'health' && HEALTH.rows === null && !HEALTH.loading) {
+    HEALTH.loading = true;
+    supaRpc('data_health').then(rows => {
+      HEALTH.rows = Array.isArray(rows) ? rows : [];
+      HEALTH.loading = false;
+      if (TAB === 'insights' && insTab === 'health') render();
+    }).catch(() => { HEALTH.rows = []; HEALTH.loading = false; });
+  }
+
+  wireExport('insights', 'Business insights', () => [
+    { name: 'Product profit',
+      columns: [{ header: 'Product', key: 'name' }, { header: 'Tier', key: 'tier' },
+        { header: 'Units', key: 'units', type: 'number' },
+        { header: 'Revenue', key: 'revenue', type: 'money' },
+        { header: 'Profit', key: 'profit', type: 'money' },
+        { header: 'Last sold', key: 'last_sold', type: 'date' }],
+      rows: AN.perf.filter(r => Number(r.units) > 0) },
+    { name: 'Stock not moving',
+      columns: [{ header: 'Product', key: 'name' }, { header: 'Branch', key: 'branch' },
+        { header: 'Stock', key: 'stock', type: 'number' },
+        { header: 'Cash tied up', key: 'tied_up', type: 'money' },
+        { header: 'Days since sale', key: 'days_since_sale', type: 'number' }],
+      rows: anBranch(AN.deadStock).map(r => Object.assign({}, r, { branch: branchName(r.branch_id) })) },
+    { name: 'Repeat customers',
+      columns: [{ header: 'Customer', key: 'name' }, { header: 'Phone', key: 'phone' },
+        { header: 'Orders', key: 'orders', type: 'number' },
+        { header: 'Spend', key: 'spend', type: 'money' },
+        { header: 'Days between', key: 'avg_days_between', type: 'number' },
+        { header: 'First order', key: 'first_order', type: 'date' },
+        { header: 'Last order', key: 'last_order', type: 'date' }],
+      rows: AN.loyalty }
+  ], 'Computed across every order in the database.');
+}
+
+/* ---------------- branches screen (founder only) ---------------- */
+function viewBranches() {
+  if (!DB.brSynced) return `
+    <div class="head"><h2>Branches</h2></div>
+    <div class="empty">The branches table is not in the database yet.<br>
+      <span class="muted">Run <code>sql/009-branches.sql</code> in the Supabase SQL editor,
+      then reload.</span></div>`;
+
+  const stat = b => {
+    const orders = DB.orders.filter(o => o.status !== 'cancelled'
+      && (o.branch_id || defaultBranch()) === b.id);
+    return {
+      orders: orders.length,
+      revenue: orders.reduce((s, o) => s + (o.total || 0), 0),
+      stock: DB.stock.filter(s => s.branch_id === b.id).reduce((t, s) => t + (s.stock || 0), 0),
+      staff: OPS.staff.filter(s => s.active && s.branch_id === b.id).length
+    };
+  };
+
+  return `
+    <div class="head"><h2>Branches</h2>
+      <span class="muted">${DB.branches.length} on record</span>
+      <span class="sp"><button class="btn primary" id="brNew">+ Add branch</button></span>
+    </div>
+    <p class="muted" style="margin-bottom:16px">Each branch holds its own stock and its own
+      bill series. Staff pinned to a branch see only that branch; founders see all of them.</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Branch</th><th>Code</th><th>Address</th><th class="num">Orders</th>
+        <th class="num">Revenue</th><th class="num">Stock</th><th class="num">Team</th>
+        <th>Status</th><th></th></tr></thead>
+      <tbody>${DB.branches.map(b => { const s = stat(b); return `<tr>
+        <td><div><b>${esc(b.name)}</b>${b.is_default ? ' <span class="pill low">Main</span>' : ''}</div>
+            <div class="pid">${esc(b.id)}</div></td>
+        <td><span class="pill premium">${esc(b.code)}</span></td>
+        <td class="muted">${esc(b.address || '—')}<div class="pid">${esc(b.phone || '')}</div></td>
+        <td class="num">${s.orders}</td>
+        <td class="num">${money(s.revenue)}</td>
+        <td class="num">${s.stock}</td>
+        <td class="num">${s.staff}</td>
+        <td><span class="pill ${b.active ? 'on' : 'off'}">${b.active ? 'Open' : 'Closed'}</span></td>
+        <td style="text-align:right"><button class="btn ghost sm" data-bedit="${esc(b.id)}">Edit</button></td>
+      </tr>`; }).join('')}</tbody>
+    </table></div>
+
+    ${DB.branches.length > 1 ? `<div class="panel" style="margin-top:18px">
+      <h3>Recent stock moves</h3>
+      <div id="stMoves" class="muted">Loading…</div></div>` : ''}`;
+}
+
+function wireBranches() {
+  const nb = $('#brNew'); if (nb) nb.onclick = () => branchModal(null);
+  $$('[data-bedit]').forEach(b => b.onclick = () =>
+    branchModal(DB.branches.find(x => x.id === b.dataset.bedit)));
+
+  const box = $('#stMoves');
+  if (box) supa('stock_transfers?select=*&order=at.desc&limit=25').then(rows => {
+    if (!rows || !rows.length) { box.textContent = 'No stock has been moved between branches yet.'; return; }
+    box.innerHTML = `<div class="tbl-wrap"><table>
+      <thead><tr><th>When</th><th>Product</th><th class="num">Qty</th>
+        <th>From</th><th>To</th><th>By</th><th>Note</th></tr></thead>
+      <tbody>${rows.map(t => `<tr>
+        <td class="muted">${when(t.at)}</td>
+        <td>${esc((DB.products.find(p => p.id === t.product_id) || {}).name || t.product_id)}</td>
+        <td class="num"><b>${t.qty}</b></td>
+        <td>${esc(branchName(t.from_branch))}</td>
+        <td>${esc(branchName(t.to_branch))}</td>
+        <td class="muted">${esc(t.by_name || '')}</td>
+        <td class="muted">${esc(t.note || '')}</td>
+      </tr>`).join('')}</tbody></table></div>`;
+  }).catch(() => box.textContent = 'Could not read the transfer log.');
+}
+
+function branchModal(b) {
+  const isNew = !b;
+  openModal(isNew ? 'Add branch' : 'Edit — ' + esc(b.name), `
+    <div class="f">
+      <div class="grid2">
+        <div class="row"><label>Branch name</label>
+          <input id="br_name" value="${esc(b ? b.name : '')}" placeholder="e.g. Coimbatore"></div>
+        <div class="row"><label>Code</label>
+          <input id="br_code" value="${esc(b ? b.code : '')}" maxlength="2" placeholder="B">
+          <div class="hint">One or two letters. Appears in this branch's bill numbers,
+            which is what keeps them unique across the business.</div></div>
+        <div class="row"><label>Phone</label><input id="br_phone" value="${esc(b ? b.phone || '' : '')}"></div>
+        <div class="row"><label>Sort order</label>
+          <input id="br_sort" type="number" value="${b ? b.sort : DB.branches.length}"></div>
+      </div>
+      <div class="row"><label>Address</label><input id="br_addr" value="${esc(b ? b.address || '' : '')}"
+        placeholder="Printed on this branch's bills"></div>
+      <div class="row"><label class="check"><input type="checkbox" id="br_active"
+        ${!b || b.active ? 'checked' : ''}> Open for business</label>
+        <div class="hint">Closing a branch hides it from the switcher. Its stock,
+          bills and history stay exactly where they are.</div></div>
+    </div>`, async () => {
+    const name = $('#br_name').value.trim();
+    const code = $('#br_code').value.trim().toUpperCase();
+    if (!name) { toast('Name is required', true); return false; }
+    if (!code) { toast('A code is required — it goes into the bill numbers', true); return false; }
+    if (DB.branches.some(x => x.code.toUpperCase() === code && (!b || x.id !== b.id))) {
+      toast('That code is already used by another branch', true); return false;
+    }
+    const row = { name, code, phone: $('#br_phone').value.trim(),
+      address: $('#br_addr').value.trim(), sort: Number($('#br_sort').value || 0),
+      active: $('#br_active').checked };
+    try {
+      if (isNew) {
+        row.id = slugify(name);
+        if (DB.branches.some(x => x.id === row.id)) row.id += '-' + Date.now().toString(36).slice(-3);
+        row.is_default = !DB.branches.length;
+        await insertRow('branches', row);
+        DB.branches.push(row);
+        toast('Branch added — its stock starts at zero');
+      } else {
+        await saveRow('branches', Object.assign({ id: b.id }, row));
+        Object.assign(b, row);
+        toast('Saved');
+      }
+      await loadAll();          /* stock rows for the new branch arrive from the trigger */
+      render();
+    } catch (e) { toast(writeError(e), true); return false; }
+  });
+}
+
+/* ---------- moving stock between branches ----------
+   The move happens inside one database function, so a transfer can never
+   leave one branch short without the other gaining. The browser only asks
+   for it; Postgres decides whether it is allowed and whether the stock is
+   actually there. */
+function moveStock(productId) {
+  const p = DB.products.find(x => x.id === productId);
+  if (!p) return;
+  const live = DB.branches.filter(b => b.active);
+  const from = BRANCH || (ME && ME.branch_id) || defaultBranch();
+
+  openModal(`Move stock — ${esc(p.name)}`, `
+    <div class="f">
+      <div class="grid2">
+        <div class="row"><label>From</label><select id="mv_from">
+          ${live.map(b => `<option value="${esc(b.id)}" ${b.id === from ? 'selected' : ''}>
+            ${esc(b.name)} — ${stockOf(p.id, b.id)} in stock</option>`).join('')}</select></div>
+        <div class="row"><label>To</label><select id="mv_to">
+          ${live.map(b => `<option value="${esc(b.id)}" ${b.id !== from ? 'selected' : ''}>
+            ${esc(b.name)} — ${stockOf(p.id, b.id)} in stock</option>`).join('')}</select></div>
+        <div class="row"><label>Quantity</label><input id="mv_qty" type="number" min="1" value="1"></div>
+        <div class="row"><label>Note</label><input id="mv_note" placeholder="Optional"></div>
+      </div>
+      <div class="hint">The transfer is recorded with your name and the time.
+        It will be refused if the sending branch does not have that many.</div>
+    </div>`, async () => {
+    const fromB = $('#mv_from').value, toB = $('#mv_to').value;
+    const qty = Number($('#mv_qty').value || 0);
+    if (fromB === toB) { toast('Pick two different branches', true); return false; }
+    if (qty < 1) { toast('Quantity must be at least 1', true); return false; }
+    try {
+      await supaRpc('transfer_stock', { p_product: productId, p_from: fromB,
+        p_to: toB, p_qty: qty, p_note: $('#mv_note').value.trim() || null });
+      const bump = (b, d) => {
+        const row = DB.stock.find(s => s.product_id === productId && s.branch_id === b);
+        if (row) row.stock += d;
+      };
+      bump(fromB, -qty); bump(toB, qty);
+      toast(`Moved ${qty} to ${branchName(toB)}`);
+      render();
+    } catch (e) {
+      toast((e.message || 'Transfer failed').replace(/^.*?:\s*/, ''), true);
+      return false;
+    }
+  });
 }
 
 /* ---------- category manager ----------
@@ -479,7 +1096,12 @@ function editProduct(id) {
         <div class="row"><label>MRP (₹)</label><input id="f_mrp" type="number" min="0" value="${p.mrp ?? ''}"></div>
         <div class="row"><label>Cost to make (₹)</label><input id="f_cost" type="number" min="0" value="${p.cost ?? ''}">
           <div class="hint">Wood, labour, finishing. Needed for real profit on the Finance page.</div></div>
-        <div class="row"><label>Stock</label><input id="f_stock" type="number" min="0" value="${p.stock ?? 0}"></div>
+        <div class="row"><label>Stock${multiBranch()
+            ? ' — ' + esc(branchName(BRANCH || (ME && ME.branch_id) || defaultBranch())) : ''}</label>
+          <input id="f_stock" type="number" min="0" value="${
+            multiBranch() ? stockOf(p.id, BRANCH || (ME && ME.branch_id) || defaultBranch()) : (p.stock ?? 0)}">
+          ${multiBranch() ? `<div class="hint">Stock is held per branch. Use <b>Move</b> on the
+            product list to shift stock between branches.</div>` : ''}</div>
         <div class="row"><label>Tier</label><select id="f_tier">
           ${['entry', 'mid', 'premium'].map(t => `<option ${p.tier === t ? 'selected' : ''}>${t}</option>`).join('')}
         </select></div>

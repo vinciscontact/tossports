@@ -197,7 +197,8 @@ function viewBilling() {
 
   return `
     <div class="head"><h2>Billing</h2>
-      <div class="sp"><button class="btn primary" id="posBtn">+ Counter sale</button></div>
+      <div class="sp">${exportBar('gst')}
+        <button class="btn primary" id="posBtn">+ Counter sale</button></div>
     </div>
 
     ${!reg ? `<div class="banner">
@@ -250,6 +251,69 @@ function viewBilling() {
 
 function wireBilling() {
   const find = n => BILL.invoices.find(i => i.number === n);
+
+  /* The report an accountant asks for: every bill with its taxable value
+     and tax split, and a month-by-month summary to file against. Cancelled
+     bills stay in the list — a voided invoice number must remain visible
+     and accounted for, never quietly removed. */
+  wireExport('gst', 'GST / sales bill report', () => {
+    const inv = BILL.invoices.slice().sort((a, b) =>
+      (a.issued_at || '').localeCompare(b.issued_at || ''));
+    const live = inv.filter(i => !i.cancelled);
+    const row = i => ({
+      number: i.number, issued_at: i.issued_at,
+      buyer: (i.buyer || {}).name || 'Walk-in',
+      gstin: (i.buyer || {}).gstin || '',
+      type: i.is_tax_invoice ? 'Tax invoice' : 'Bill of supply',
+      taxable: i.taxable || 0, cgst: i.cgst || 0, sgst: i.sgst || 0, igst: i.igst || 0,
+      total: i.total || 0, status: i.cancelled ? 'CANCELLED' : 'Valid'
+    });
+
+    const byMonth = {};
+    live.forEach(i => {
+      const k = (i.issued_at || '').slice(0, 7) || 'unknown';
+      const m = byMonth[k] || (byMonth[k] = { k, bills: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 });
+      m.bills++; m.taxable += i.taxable || 0; m.cgst += i.cgst || 0;
+      m.sgst += i.sgst || 0; m.igst += i.igst || 0; m.total += i.total || 0;
+    });
+
+    const sum = k => live.reduce((s, i) => s + (i[k] || 0), 0);
+    return [
+      { name: 'Bills',
+        summary: [
+          { k: 'Bills issued', v: live.length },
+          { k: 'Taxable value', v: money0(sum('taxable')) },
+          { k: 'CGST', v: money0(sum('cgst')) }, { k: 'SGST', v: money0(sum('sgst')) },
+          { k: 'IGST', v: money0(sum('igst')) }, { k: 'Total billed', v: money0(sum('total')) }
+        ],
+        columns: [
+          { header: 'Bill number', key: 'number' },
+          { header: 'Date', key: 'issued_at', type: 'date' },
+          { header: 'Customer', key: 'buyer' }, { header: 'Customer GSTIN', key: 'gstin' },
+          { header: 'Type', key: 'type' },
+          { header: 'Taxable', key: 'taxable', type: 'money' },
+          { header: 'CGST', key: 'cgst', type: 'money' },
+          { header: 'SGST', key: 'sgst', type: 'money' },
+          { header: 'IGST', key: 'igst', type: 'money' },
+          { header: 'Total', key: 'total', type: 'money' },
+          { header: 'Status', key: 'status' }
+        ],
+        rows: inv.map(row) },
+      { name: 'By month',
+        columns: [
+          { header: 'Month', key: 'k' }, { header: 'Bills', key: 'bills', type: 'number' },
+          { header: 'Taxable', key: 'taxable', type: 'money' },
+          { header: 'CGST', key: 'cgst', type: 'money' },
+          { header: 'SGST', key: 'sgst', type: 'money' },
+          { header: 'IGST', key: 'igst', type: 'money' },
+          { header: 'Total', key: 'total', type: 'money' }
+        ],
+        rows: Object.values(byMonth).sort((a, b) => a.k.localeCompare(b.k)) }
+    ];
+  }, isRegistered()
+      ? 'GSTIN ' + S('gstin') + ' · GST ' + S('gst_rate') + '% · HSN ' + S('hsn_code') +
+        '. Cancelled bills are listed and excluded from the totals.'
+      : 'Not GST registered — bills are issued as Bills of Supply with no tax charged.');
 
   $$('[data-bill]').forEach(b => b.onclick = async () => {
     const o = DB.orders.find(x => x.id === b.dataset.bill);

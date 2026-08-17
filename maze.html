@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="icon" href="images/logo/favicon-32.png" sizes="32x32">
-<link rel="stylesheet" href="css/maze.css?v=11">
+<link rel="stylesheet" href="css/maze.css?v=17">
 </head>
 <body>
 
@@ -29,7 +29,17 @@
 <!-- ---------- app ---------- -->
 <div id="shell" class="shell hide">
   <main class="main">
-    <div class="brand"><img src="images/logo/toss-mark-96.png" alt="" width="96" height="96"> Maze Room</div>
+    <div class="topbar">
+      <div class="brand"><img src="images/logo/toss-mark-96.png" alt="" width="96" height="96"> Maze Room</div>
+      <!-- always visible, so nobody works in the wrong account by accident -->
+      <div class="tb-right">
+        <span id="brSwitch"></span>
+        <div class="signed-as" id="signedAs">
+          <span class="sa-txt">Signed in as <b id="saName"></b></span>
+          <span id="saRole" class="role-chip"></span>
+        </div>
+      </div>
+    </div>
     <div id="banner" class="banner hide"></div>
     <div id="view"></div>
   </main>
@@ -51,8 +61,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="js/config.js?v=8"></script>
-<script src="js/maze-bill.js?v=8"></script>
-<script src="js/maze-ops.js?v=10"></script>
-<script src="js/maze.js?v=10"></script>
+<script src="js/maze-export.js?v=1"></script>
+<script src="js/maze-bill.js?v=9"></script>
+<script src="js/maze-ops.js?v=17"></script>
+<script src="js/maze.js?v=17"></script>
 </body>
 </html>

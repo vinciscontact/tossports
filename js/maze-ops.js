@@ -8,17 +8,37 @@
    ============================================================ */
 
 /* ---------- role model ---------- */
+/* Founder is the top of the hierarchy — 'owner' is the same rank under its
+   old name, kept working so an un-migrated row never locks anyone out.
+   Settings and Finance are founder-only: payment keys, GST identity and
+   profit are ownership decisions, not daily work. Activity (the audit
+   trail) is founder-only for the same reason. */
+/* Founder-only sections sit LAST in this list on purpose — the dock draws
+   them in order, so they group themselves at the right behind a divider. */
 const ROLE_NAV = {
-  owner:    ['dash','sales','billing','finance','products','team','tasks','sops','boards','coupons','scores','settings'],
-  manager:  ['dash','sales','billing','products','team','tasks','sops','boards','coupons','scores','settings'],
+  founder:  ['dash','sales','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
+  owner:    ['dash','sales','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
+  manager:  ['dash','sales','billing','products','team','tasks','sops','boards','coupons','scores'],
   sales:    ['dash','sales','tasks','sops','boards'],
   workshop: ['dash','tasks','sops']
 };
 const NAV_LABEL = {
   dash:'Dashboard', sales:'Sales', billing:'Billing', finance:'Finance', products:'Products',
   team:'Team', tasks:'Tasks', sops:'SOPs', boards:'Leaderboards',
-  coupons:'Rewards', scores:'Game scores', settings:'Settings'
+  coupons:'Rewards', scores:'Game scores', insights:'Insights',
+  activity:'Activity', branches:'Branches', settings:'Settings'
 };
+
+/* what each rank is called on screen */
+const ROLE_LABEL = {
+  founder: 'Founder', owner: 'Founder', manager: 'Manager',
+  sales: 'Sales', workshop: 'Workshop'
+};
+
+/* Sections nobody below founder can open at all. These get the warm tint
+   in the dock. Team is deliberately absent: a manager can open it, they
+   just see less inside — so marking it would say the wrong thing. */
+const FOUNDER_ONLY = ['finance', 'insights', 'activity', 'branches', 'settings'];
 
 let ME = null;            // my staff row
 let OPS = { staff: [], attendance: [], tasks: [], payroll: [], sops: [], expenses: [], targets: [], customers: [] };
@@ -73,7 +93,11 @@ function sparkLine(values) {
 }
 
 /* ---------- sales maths ---------- */
-function liveOrders() { return DB.orders.filter(o => o.status !== 'cancelled'); }
+/* Every figure on the dashboard, finance page and charts flows through
+   here, so switching branch re-cuts the whole business view at once. */
+function liveOrders() {
+  return branchOrders(DB.orders.filter(o => o.status !== 'cancelled'));
+}
 
 function salesByDay(days) {
   const out = [];
@@ -87,10 +111,99 @@ function salesByDay(days) {
   return out;
 }
 
+/* Month-wise is the honest view for finance: at a few orders a week a
+   daily chart is mostly empty columns with two lonely spikes, which reads
+   as "the business is broken" rather than "this is a young business".
+   Months aggregate that into a trend you can actually judge. */
+function monthsBack(n) {
+  const out = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    /* the year only when it changes, so the axis stays readable */
+    const label = d.toLocaleDateString('en-IN', { month: 'short' }) +
+      (d.getMonth() === 0 || i === n - 1 ? ' ’' + String(d.getFullYear()).slice(2) : '');
+    out.push({ key, label, date: d });
+  }
+  return out;
+}
+
+function salesByMonth(n) {
+  return monthsBack(n).map(m => ({
+    k: m.label,
+    key: m.key,
+    v: liveOrders()
+      .filter(o => (o.created_at || '').slice(0, 7) === m.key)
+      .reduce((s, o) => s + (o.total || 0), 0)
+  }));
+}
+
+function expensesByMonth(n) {
+  return monthsBack(n).map(m => ({
+    k: m.label,
+    key: m.key,
+    v: OPS.expenses
+      .filter(e => (e.on_date || '').slice(0, 7) === m.key)
+      .reduce((s, e) => s + (e.amount || 0), 0)
+  }));
+}
+
+/* revenue, expenses and what is left, month by month */
+function monthTable(n) {
+  const rev = salesByMonth(n), exp = expensesByMonth(n);
+  const pay = {};
+  OPS.payroll.filter(p => p.status === 'paid').forEach(p =>
+    pay[(p.month || '').slice(0, 7)] = (pay[(p.month || '').slice(0, 7)] || 0) + (p.net || 0));
+
+  const cost = {};
+  liveOrders().forEach(o => {
+    const k = (o.created_at || '').slice(0, 7);
+    (o.items || []).forEach(it => {
+      const p = DB.products.find(x => x.id === it.id);
+      if (p && p.cost != null) cost[k] = (cost[k] || 0) + p.cost * (it.qty || 1);
+    });
+  });
+
+  return rev.map((r, i) => {
+    const e = exp[i].v, c = cost[r.key] || 0, s = pay[r.key] || 0;
+    const orders = liveOrders().filter(o => (o.created_at || '').slice(0, 7) === r.key).length;
+    return { k: r.k, key: r.key, orders, revenue: r.v, cogs: c, expenses: e,
+             salaries: s, net: r.v - c - e - s };
+  });
+}
+
 function salesByChannel() {
   const m = {};
   liveOrders().forEach(o => { const c = o.channel || 'web'; m[c] = (m[c] || 0) + (o.total || 0); });
   return Object.entries(m).map(([k, v]) => ({ k, v })).sort((a, b) => b.v - a.v);
+}
+
+/* Staff belonging to the branch being viewed. Founders are unpinned and
+   work across all of them, so they only appear in the combined view. */
+function branchStaff(activeOnly) {
+  let list = OPS.staff;
+  if (activeOnly !== false) list = list.filter(s => s.active);
+  return BRANCH ? list.filter(s => s.branch_id === BRANCH) : list;
+}
+
+/* Customers, derived from the orders on screen rather than the database's
+   all-branch view — otherwise a branch dashboard reports the company's
+   customer count, which is simply the wrong number for that shop. */
+function branchCustomers() {
+  if (!BRANCH) return OPS.customers;          /* server view: complete, all branches */
+  const m = {};
+  liveOrders().forEach(o => {
+    const c = o.customer || {};
+    const key = c.phone || c.name || 'unknown';
+    const r = m[key] || (m[key] = { phone: c.phone || '', name: c.name || 'Unknown',
+      city: c.city || '', order_count: 0, spend: 0, last_order: null });
+    r.order_count++;
+    r.spend += o.total || 0;
+    if (!r.last_order || (o.created_at || '') > r.last_order) r.last_order = o.created_at;
+    if (!r.city && c.city) r.city = c.city;
+  });
+  return Object.values(m).sort((a, b) => b.spend - a.spend);
 }
 
 function staffSales(staffId, from) {
@@ -114,6 +227,86 @@ function cogs() {
    "what do I need to do?", not "how are we trending?" — and a bar chart
    with a single bar reads as broken rather than informative, so the charts
    stay hidden until there is enough activity for them to say something. */
+
+/* ---------- best seller, month by month ----------
+   One card per month showing which bat led it, ranked by units. The
+   months are ordered newest first and each card carries its position in
+   the ranking of ALL months, so a founder can see at a glance whether
+   this month is their best ever or a quiet one. */
+function bestSellerCards() {
+  const rows = anBranch(AN.bestSeller);
+  if (!rows.length) return '';
+
+  /* combine branches when viewing all: the top bat of the month overall */
+  const byMonth = {};
+  rows.forEach(r => {
+    const m = byMonth[r.month] || (byMonth[r.month] = {});
+    const k = r.product_id;
+    m[k] = (m[k] || 0) + Number(r.units || 0);
+  });
+  const months = Object.keys(byMonth).sort().reverse().slice(0, 6).map(month => {
+    const top = Object.entries(byMonth[month]).sort((a, b) => b[1] - a[1])[0];
+    const p = DB.products.find(x => x.id === top[0]);
+    const mp = anMonths().find(x => x.month === month) || {};
+    return { month, id: top[0], name: p ? p.name : top[0], units: top[1],
+             revenue: Number(mp.revenue) || 0 };
+  });
+  /* rank the months against each other by that month's revenue */
+  const order = months.slice().sort((a, b) => b.revenue - a.revenue).map(m => m.month);
+
+  return `
+    <div class="panel">
+      <h3>Best seller each month</h3>
+      <p class="muted" style="margin:-4px 0 14px">The bat that led each month, and how that
+        month ranks against the others${BRANCH ? ' at ' + esc(branchName(BRANCH)) : ''}.</p>
+      <div class="bs-grid">
+        ${months.map(m => {
+          const rank = order.indexOf(m.month) + 1;
+          return `<button class="bs-card${rank === 1 ? ' top' : ''}" data-go="products"
+                          title="${esc(m.name)} led ${esc(monthLabel(m.month))}">
+            <span class="bs-month">${esc(monthLabel(m.month))}
+              <i class="bs-rank r${Math.min(rank, 4)}">#${rank}</i></span>
+            <b>${esc(m.name)}</b>
+            <span class="bs-units">${m.units} sold · ${money(m.revenue)} that month</span>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+/* Side by side, this month — the question a founder with two shops
+   actually asks. Clicking a branch switches the whole panel to it. */
+function branchCompare() {
+  const m = monthKey();
+  const rows = DB.branches.filter(b => b.active).map(b => {
+    const orders = DB.orders.filter(o => o.status !== 'cancelled'
+      && (o.branch_id || defaultBranch()) === b.id);
+    const month = orders.filter(o => (o.created_at || '') >= m);
+    return {
+      b, orders: month.length,
+      revenue: month.reduce((s, o) => s + (o.total || 0), 0),
+      all: orders.reduce((s, o) => s + (o.total || 0), 0),
+      stock: DB.stock.filter(s => s.branch_id === b.id).reduce((t, s) => t + (s.stock || 0), 0),
+      staff: OPS.staff.filter(s => s.active && s.branch_id === b.id).length
+    };
+  });
+  const best = Math.max(1, ...rows.map(r => r.revenue));
+
+  return `
+    <div class="panel">
+      <h3>Branches this month</h3>
+      <div class="br-grid">
+        ${rows.map(r => `
+          <button class="br-card" data-branch="${esc(r.b.id)}">
+            <span class="br-nm">${esc(r.b.name)}<i>${esc(r.b.code)}</i></span>
+            <b>${money(r.revenue)}</b>
+            <span class="br-sub">${r.orders} order${r.orders === 1 ? '' : 's'} this month</span>
+            <div class="prog sm" style="max-width:none"><i style="width:${r.revenue / best * 100}%"></i></div>
+            <span class="br-meta">${r.stock} in stock · ${r.staff} on the team</span>
+          </button>`).join('')}
+      </div>
+    </div>`;
+}
 
 function goTab(t) {
   const prev = TAB;
@@ -200,7 +393,12 @@ function viewOpsDash() {
   const setup = setupList();
 
   return `
-    <div class="head"><h2>Dashboard</h2><span class="muted">${monthName(monthKey())}</span></div>
+    <div class="head"><h2>Dashboard</h2>
+      <span class="muted">${monthName(monthKey())}${multiBranch()
+        ? ' · ' + (BRANCH ? esc(branchName(BRANCH)) : 'all branches') : ''}</span></div>
+
+    ${multiBranch() && !BRANCH ? branchCompare() : ''}
+    ${bestSellerCards()}
 
     <div class="todo">
       <div class="todo-h"><h3>What needs doing</h3>
@@ -231,8 +429,8 @@ function viewOpsDash() {
       <div class="card hot"><b>${money(revMonth)}</b><span>Revenue this month</span></div>
       ${revAll !== revMonth ? `<div class="card"><b>${money(revAll)}</b><span>All time</span></div>` : ''}
       <div class="card"><b>${thisMonth.length}</b><span>Orders this month</span></div>
-      <div class="card"><b>${OPS.customers.length}</b><span>Customers</span></div>
-      <div class="card good"><b>${OPS.staff.filter(s => s.active).length}</b><span>Active staff</span></div>
+      <div class="card"><b>${branchCustomers().length}</b><span>Customers</span></div>
+      <div class="card good"><b>${branchStaff().length}</b><span>Active staff</span></div>
     </div>
 
     ${enoughToChart() ? `
@@ -250,11 +448,18 @@ function viewOpsDash() {
 
 function wireDash() {
   $$('[data-go]').forEach(b => b.onclick = () => goTab(b.dataset.go));
+  $$('[data-branch]').forEach(b => b.onclick = () => {
+    BRANCH = b.dataset.branch;
+    buildNav();            /* the switcher must follow the click */
+    render();
+  });
 }
 
 
-function isAdminRole() { return ME && (ME.role === 'owner' || ME.role === 'manager'); }
-function isOwner() { return ME && ME.role === 'owner'; }
+/* 'owner' and 'founder' are the same rank — the database says the same
+   thing in is_founder(), so the UI and the policies can never disagree. */
+function isAdminRole() { return !!ME && ['founder','owner','manager'].includes(ME.role); }
+function isOwner() { return !!ME && ['founder','owner'].includes(ME.role); }
 
 function topProductsTable() {
   const m = {};
@@ -274,23 +479,26 @@ function topProductsTable() {
 /* ---------- sales ---------- */
 function viewSales() {
   const mine = !isAdminRole();
-  const list = (mine ? DB.orders.filter(o => o.staff_id === (ME && ME.id)) : DB.orders);
+  const list = branchOrders(mine ? DB.orders.filter(o => o.staff_id === (ME && ME.id)) : DB.orders);
   return `
     <div class="head"><h2>${mine ? 'My sales' : 'Sales'}</h2>
       <span class="muted">${list.length} orders</span>
-      <div class="sp"><button class="btn primary" id="newSale">+ Log a sale</button></div>
+      <div class="sp">${exportBar('sales')}
+        <button class="btn primary" id="newSale">+ Log a sale</button></div>
     </div>
     <p class="muted" style="margin-bottom:16px">Website orders arrive automatically.
       Use <b>Log a sale</b> for WhatsApp, phone and walk-in orders so the dashboards
       reflect your whole business, not just online.</p>
     ${list.length ? `<div class="tbl-wrap"><table>
-      <thead><tr><th>Order</th><th>Customer</th><th>Channel</th><th>Sold by</th>
+      <thead><tr><th>Order</th><th>Customer</th>${multiBranch() ? '<th>Branch</th>' : ''}
+        <th>Channel</th><th>Sold by</th>
         <th class="num">Total</th><th>Paid</th><th>Status</th><th>When</th></tr></thead>
       <tbody>${list.map(o => {
         const c = o.customer || {}, s = OPS.staff.find(x => x.id === o.staff_id);
         return `<tr>
           <td><button class="od-open pid" data-order="${esc(o.id)}">${esc(o.id)}</button></td>
           <td><div>${esc(c.name || '—')}</div><div class="pid">${esc(c.phone || '')}</div></td>
+          ${multiBranch() ? `<td class="muted">${esc(branchName(o.branch_id || defaultBranch()))}</td>` : ''}
           <td><span class="pill ${esc(o.channel || 'web')}">${esc(o.channel || 'web')}</span></td>
           <td class="muted">${esc(s ? s.name : '—')}</td>
           <td class="num">${money(o.total)}</td>
@@ -387,6 +595,45 @@ function orderDetail(o) {
 
 function wireSales() {
   const b = $('#newSale'); if (b) b.onclick = logSaleModal;
+
+  wireExport('sales', 'Sales report' + (BRANCH ? ' — ' + branchName(BRANCH) : ''), () => {
+    const mine = !isAdminRole();
+    const list = branchOrders(mine ? DB.orders.filter(o => o.staff_id === (ME && ME.id)) : DB.orders);
+    const live = list.filter(o => o.status !== 'cancelled');
+    return [{
+      name: mine ? 'My sales' : 'Sales',
+      summary: [
+        { k: 'Orders', v: list.length },
+        { k: 'Revenue', v: '₹' + live.reduce((s, o) => s + (o.total || 0), 0).toLocaleString('en-IN') },
+        { k: 'Unpaid', v: live.filter(o => !o.paid).length },
+        { k: 'Cancelled', v: list.filter(o => o.status === 'cancelled').length }
+      ],
+      columns: [
+        { header: 'Order', key: 'id' },
+        { header: 'Date', key: 'created_at', type: 'date' },
+        { header: 'Branch', key: 'branch' },
+        { header: 'Customer', key: 'customer' },
+        { header: 'Phone', key: 'phone' },
+        { header: 'City', key: 'city' },
+        { header: 'Items', key: 'items' },
+        { header: 'Channel', key: 'channel' },
+        { header: 'Sold by', key: 'soldBy' },
+        { header: 'Status', key: 'status' },
+        { header: 'Paid', key: 'paid' },
+        { header: 'Total', key: 'total', type: 'money' }
+      ],
+      rows: list.map(o => {
+        const c = o.customer || {}, s = OPS.staff.find(x => x.id === o.staff_id);
+        return {
+          id: o.id, created_at: o.created_at, branch: branchName(o.branch_id || defaultBranch()),
+          customer: c.name || '', phone: c.phone || '',
+          city: c.city || '', channel: o.channel || 'web', soldBy: s ? s.name : '',
+          status: o.status, paid: o.paid ? 'Paid' : 'Unpaid', total: o.total || 0,
+          items: (o.items || []).map(i => `${i.name || i.id} x${i.qty || 1}`).join(', ')
+        };
+      })
+    }];
+  }, 'Every order recorded in the Maze Room — website, WhatsApp, phone and counter.');
   $$('[data-order]').forEach(t => t.onclick = () => {
     const o = DB.orders.find(x => x.id === t.dataset.order);
     if (o) orderDetail(o);
@@ -458,6 +705,72 @@ function logSaleModal() {
 }
 
 /* ---------- finance ---------- */
+/* The month-wise view. Revenue and expenses share one scale so their bars
+   are comparable at a glance — two charts with independent scales would
+   make ₹2,000 of expenses look the same height as ₹40,000 of revenue.
+   Months before the first order are dropped; showing eight empty columns
+   to a business that started in July is just noise. */
+function monthWisePanel() {
+  const rows = monthTable(12);
+
+  const first = liveOrders().concat(OPS.expenses.map(e => ({ created_at: e.on_date })))
+    .map(o => (o.created_at || '').slice(0, 7)).filter(Boolean).sort()[0];
+  const shown = first ? rows.filter(r => r.key >= first) : rows.slice(-3);
+  if (!shown.length) return '';
+
+  const scale = Math.max(1, ...shown.map(r => Math.max(r.revenue, r.expenses + r.salaries)));
+  const totals = shown.reduce((t, r) => ({
+    revenue: t.revenue + r.revenue, cogs: t.cogs + r.cogs,
+    expenses: t.expenses + r.expenses, salaries: t.salaries + r.salaries, net: t.net + r.net
+  }), { revenue: 0, cogs: 0, expenses: 0, salaries: 0, net: 0 });
+
+  return `
+    <div class="panel">
+      <h3>Month by month</h3>
+      <p class="muted" style="margin:-4px 0 14px">Revenue against what it cost to earn it.
+        ${shown.length} month${shown.length === 1 ? '' : 's'} of trading.</p>
+
+      <div class="mw-chart">
+        ${shown.map(r => `
+          <div class="mw-col" title="${esc(r.k)} — revenue ${money(r.revenue)}, out ${money(r.expenses + r.salaries)}">
+            <div class="mw-pair">
+              <div class="mw-bar rev" style="height:${Math.max(2, r.revenue / scale * 100)}%"></div>
+              <div class="mw-bar out" style="height:${Math.max(2, (r.expenses + r.salaries) / scale * 100)}%"></div>
+            </div>
+            <span class="mw-lbl">${esc(r.k)}</span>
+          </div>`).join('')}
+        <div class="mw-max">${money(scale)}</div>
+      </div>
+      <div class="mw-key">
+        <span><i class="rev"></i>Revenue</span>
+        <span><i class="out"></i>Expenses + salaries</span>
+      </div>
+
+      <div class="tbl-wrap" style="margin-top:16px"><table>
+        <thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Revenue</th>
+          <th class="num">Cost of goods</th><th class="num">Expenses</th>
+          <th class="num">Salaries</th><th class="num">Net</th></tr></thead>
+        <tbody>${shown.slice().reverse().map(r => `<tr>
+          <td><b>${esc(r.k)}</b></td>
+          <td class="num">${r.orders}</td>
+          <td class="num">${money(r.revenue)}</td>
+          <td class="num muted">${money(r.cogs)}</td>
+          <td class="num muted">${money(r.expenses)}</td>
+          <td class="num muted">${money(r.salaries)}</td>
+          <td class="num ${r.net >= 0 ? 'good-cell' : 'warn-cell'}"><b>${money(r.net)}</b></td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr>
+          <td><b>Total</b></td><td class="num">${shown.reduce((s, r) => s + r.orders, 0)}</td>
+          <td class="num"><b>${money(totals.revenue)}</b></td>
+          <td class="num muted">${money(totals.cogs)}</td>
+          <td class="num muted">${money(totals.expenses)}</td>
+          <td class="num muted">${money(totals.salaries)}</td>
+          <td class="num ${totals.net >= 0 ? 'good-cell' : 'warn-cell'}"><b>${money(totals.net)}</b></td>
+        </tr></tfoot>
+      </table></div>
+    </div>`;
+}
+
 function viewFinance() {
   const orders = liveOrders();
   const revenue = orders.reduce((s, o) => s + (o.total || 0), 0);
@@ -472,7 +785,8 @@ function viewFinance() {
 
   return `
     <div class="head"><h2>Finance</h2>
-      <div class="sp"><button class="btn primary" id="newExpense">+ Record expense</button></div></div>
+      <div class="sp">${exportBar('finance')}
+        <button class="btn primary" id="newExpense">+ Record expense</button></div></div>
 
     ${noCost ? `<div class="banner">
       <b>${noCost} of ${DB.products.length} bats have no cost price.</b>
@@ -487,12 +801,17 @@ function viewFinance() {
       <div class="card ${profit >= 0 ? 'good' : 'warn'}"><b>${money(profit)}</b><span>Net position</span></div>
     </div>
 
+    ${monthWisePanel()}
+
     <div class="grid-2">
       <div class="panel"><h3>Expenses by category</h3>
         ${Object.keys(byCat).length
           ? barChart(Object.entries(byCat).map(([k, v]) => ({ k, v })))
           : '<div class="empty">No expenses recorded.</div>'}</div>
-      <div class="panel"><h3>Revenue, last 14 days</h3>${barChart(salesByDay(14))}</div>
+      <div class="panel"><h3>Revenue by channel</h3>
+        ${salesByChannel().length
+          ? barChart(salesByChannel())
+          : '<div class="empty">No sales recorded.</div>'}</div>
     </div>
 
     <div class="panel"><h3>Expense log</h3>
@@ -504,6 +823,60 @@ function viewFinance() {
 }
 
 function wireFinance() {
+  /* Three sheets, because a finance report that is only a total cannot be
+     checked. Summary shows the position; the other two show the workings. */
+  wireExport('finance', 'Finance report', () => {
+    const orders = liveOrders();
+    const revenue = orders.reduce((s, o) => s + (o.total || 0), 0);
+    const exp = OPS.expenses.reduce((s, e) => s + e.amount, 0);
+    const c = cogs();
+    const pay = OPS.payroll.filter(p => p.status === 'paid').reduce((s, p) => s + p.net, 0);
+    const profit = revenue - c.known - exp - pay;
+    const byCat = {};
+    OPS.expenses.forEach(e => byCat[e.category] = (byCat[e.category] || 0) + e.amount);
+
+    return [
+      { name: 'Summary',
+        summary: [
+          { k: 'Revenue', v: money(revenue) }, { k: 'Cost of goods', v: money(c.known) },
+          { k: 'Expenses', v: money(exp) }, { k: 'Salaries paid', v: money(pay) },
+          { k: 'Net position', v: money(profit) }
+        ],
+        columns: [{ header: 'Line', key: 'k' }, { header: 'Amount', key: 'v', type: 'money' }],
+        rows: [
+          { k: 'Revenue (excluding cancelled orders)', v: revenue },
+          { k: 'Cost of goods sold', v: -c.known },
+          { k: 'Operating expenses', v: -exp },
+          { k: 'Salaries paid', v: -pay },
+          { k: 'Net position', v: profit }
+        ] },
+      { name: 'Month by month',
+        columns: [
+          { header: 'Month', key: 'k' },
+          { header: 'Orders', key: 'orders', type: 'number' },
+          { header: 'Revenue', key: 'revenue', type: 'money' },
+          { header: 'Cost of goods', key: 'cogs', type: 'money' },
+          { header: 'Expenses', key: 'expenses', type: 'money' },
+          { header: 'Salaries', key: 'salaries', type: 'money' },
+          { header: 'Net', key: 'net', type: 'money' }
+        ],
+        rows: monthTable(12) },
+      { name: 'Expenses',
+        columns: [
+          { header: 'Date', key: 'on_date', type: 'date' },
+          { header: 'Category', key: 'category' },
+          { header: 'Detail', key: 'detail' },
+          { header: 'Amount', key: 'amount', type: 'money' }
+        ],
+        rows: OPS.expenses.slice().sort((a, b) => (b.on_date || '').localeCompare(a.on_date || '')) },
+      { name: 'By category',
+        columns: [{ header: 'Category', key: 'k' }, { header: 'Total', key: 'v', type: 'money' }],
+        rows: Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ k, v })) }
+    ];
+  }, cogs().unknown
+      ? 'Cost of goods counts only products with a cost price filled in, so the net position is optimistic.'
+      : 'Cost of goods covers every product sold.');
+
   $('#newExpense').onclick = () => openModal('Record expense', `
     <div class="f"><div class="grid2">
       <div class="row"><label>Date</label><input id="e_date" type="date" value="${today()}"></div>
@@ -533,7 +906,8 @@ function viewTeam() {
   const tabs = ['staff', 'attendance'].concat(isOwner() ? ['payroll'] : []);
   return `
     <div class="head"><h2>Team</h2>
-      <div class="sp">${teamTab === 'staff' && isOwner()
+      <div class="sp">${isOwner() ? exportBar('team') : ''}
+        ${teamTab === 'staff' && isOwner()
         ? '<button class="btn primary" id="newStaff">+ Add person</button>' : ''}
         ${teamTab === 'attendance' ? '<button class="btn primary" id="markAtt">Mark today</button>' : ''}
         ${teamTab === 'payroll' ? '<button class="btn primary" id="runPay">Generate this month</button>' : ''}
@@ -552,7 +926,7 @@ function staffTable() {
       <th class="num">Sales this month</th><th>Active</th>${isOwner() ? '<th></th>' : ''}</tr></thead>
     <tbody>${OPS.staff.map(s => `<tr>
       <td><div>${esc(s.name)}</div><div class="pid">${esc(s.email || s.uid || 'no login yet')}</div></td>
-      <td><span class="pill ${esc(s.role)}">${esc(s.role)}</span></td>
+      <td><span class="pill ${esc(s.role)}">${esc(ROLE_LABEL[s.role] || s.role)}</span></td>
       <td class="muted">${esc(s.phone || '—')}</td>
       ${isOwner() ? `<td class="num">${money(s.base_salary)}</td>
         <td class="num">${s.commission_pct}%</td>` : ''}
@@ -598,6 +972,54 @@ function payrollTable() {
 function wireTeam() {
   $$('[data-team]').forEach(b => b.onclick = () => { teamTab = b.dataset.team; render(); });
 
+  /* founder-only: salaries and payslips are in here */
+  wireExport('team', 'Team & payroll report', () => [
+    { name: 'Staff',
+      summary: [
+        { k: 'People', v: OPS.staff.length },
+        { k: 'Active', v: OPS.staff.filter(s => s.active).length },
+        { k: 'Monthly salary bill', v: money(OPS.staff.filter(s => s.active)
+            .reduce((t, s) => t + (s.base_salary || 0), 0)) }
+      ],
+      columns: [
+        { header: 'Name', key: 'name' }, { header: 'Role', key: 'role' },
+        { header: 'Email', key: 'email' }, { header: 'Phone', key: 'phone' },
+        { header: 'Base salary', key: 'base_salary', type: 'money' },
+        { header: 'Commission %', key: 'commission_pct', type: 'number' },
+        { header: 'Sales this month', key: 'sales', type: 'money' },
+        { header: 'Joined', key: 'joined_on', type: 'date' },
+        { header: 'Active', key: 'act' }, { header: 'Has login', key: 'login' }
+      ],
+      rows: OPS.staff.map(s => Object.assign({}, s, {
+        role: ROLE_LABEL[s.role] || s.role,
+        sales: staffSales(s.id, monthKey()),
+        act: s.active ? 'Yes' : 'No', login: s.uid ? 'Yes' : 'No'
+      })) },
+    { name: 'Payroll',
+      columns: [
+        { header: 'Month', key: 'month' }, { header: 'Person', key: 'who' },
+        { header: 'Base', key: 'base', type: 'money' },
+        { header: 'Commission', key: 'commission', type: 'money' },
+        { header: 'Bonus', key: 'bonus', type: 'money' },
+        { header: 'Deduction', key: 'deduction', type: 'money' },
+        { header: 'Net', key: 'net', type: 'money' },
+        { header: 'Status', key: 'status' }
+      ],
+      rows: OPS.payroll.map(p => Object.assign({}, p, {
+        month: monthName(p.month),
+        who: (OPS.staff.find(s => s.id === p.staff_id) || {}).name || ''
+      })) },
+    { name: 'Attendance',
+      columns: [
+        { header: 'Date', key: 'on_date', type: 'date' },
+        { header: 'Person', key: 'who' }, { header: 'Status', key: 'status' },
+        { header: 'Hours', key: 'hours', type: 'number' }, { header: 'Note', key: 'note' }
+      ],
+      rows: OPS.attendance.map(a => Object.assign({}, a, {
+        who: (OPS.staff.find(s => s.id === a.staff_id) || {}).name || ''
+      })) }
+  ], 'Confidential — contains salary and payroll information.');
+
   const ns = $('#newStaff'); if (ns) ns.onclick = () => staffModal(null);
   $$('[data-sedit]').forEach(b => b.onclick = () =>
     staffModal(OPS.staff.find(s => s.id === b.dataset.sedit)));
@@ -609,28 +1031,47 @@ function wireTeam() {
 }
 
 function staffModal(s) {
-  /* Belt and braces: the UI only shows this to owners, and the database
+  /* Belt and braces: the UI only shows this to founders, and the database
      refuses staff writes from anyone else regardless (staff_owner_write
-     policy). Founder and co-founder = the accounts holding the owner role. */
-  if (!isOwner()) { toast('Only an owner can change the team', true); return; }
+     policy keyed on is_founder()). */
+  if (!isOwner()) { toast('Only a founder can change the team', true); return; }
   const isNew = !s;
   openModal(isNew ? 'Add person' : 'Edit — ' + esc(s.name), `
     <div class="f">
       <div class="grid2">
         <div class="row"><label>Name</label><input id="st_name" value="${esc(s ? s.name : '')}"></div>
         <div class="row"><label>Role</label><select id="st_role">
-          ${['owner','manager','sales','workshop'].map(r =>
-            `<option ${s && s.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
+          ${['founder','manager','sales','workshop'].map(r =>
+            `<option value="${r}" ${s && (s.role === r || (r === 'founder' && s.role === 'owner')) ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>
+          <div class="hint"><b>Founder</b> — everything, including salaries, payroll, settings and this screen.<br>
+            <b>Manager</b> — products, stock, orders, billing and the team roster; no salaries, profit or settings.<br>
+            <b>Sales</b> — their own sales, targets and tasks.<br>
+            <b>Workshop</b> — their own tasks and the SOPs.</div></div>
+        ${multiBranch() ? `<div class="row"><label>Branch</label><select id="st_branch">
+          <option value="">All branches (founder)</option>
+          ${DB.branches.filter(b => b.active).map(b => `<option value="${esc(b.id)}"
+            ${s && s.branch_id === b.id ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}
+        </select><div class="hint">A manager or salesperson sees only their own branch.
+          Leave on "All branches" for founders.</div></div>` : ''}
         <div class="row"><label>Phone</label><input id="st_phone" value="${esc(s ? s.phone || '' : '')}"></div>
         <div class="row"><label>Email</label><input id="st_email" value="${esc(s ? s.email || '' : '')}"></div>
         <div class="row"><label>Base salary (₹/month)</label><input id="st_base" type="number" min="0" value="${s ? s.base_salary : 0}"></div>
         <div class="row"><label>Commission (%)</label><input id="st_comm" type="number" min="0" step="0.5" value="${s ? s.commission_pct : 0}"></div>
       </div>
-      <div class="row"><label>Firebase login</label><input id="st_uid" value="${esc(s ? s.uid || '' : '')}"
-        placeholder="Binds automatically on their first sign-in" ${s && s.uid ? '' : 'readonly'}>
-        <div class="hint">${s && s.uid
-          ? 'Linked to a Firebase login. Clear this only if they need to sign in from a new account.'
-          : 'Nothing to do here. Create their login in Firebase Console → Authentication → Users using the <b>same email address</b> as above — it links itself the first time they sign in.'}</div></div>
+      <div class="row"><label>Login</label>
+        ${s && s.uid
+          ? `<input id="st_uid" value="${esc(s.uid)}">
+             <div class="hint">This person has a working login. Clear this box only if they
+               need to sign in from a different account.</div>`
+          : `<input id="st_uid" value="" placeholder="No login yet" readonly>
+             <div class="up" style="margin-top:8px">
+               <span class="up-hint">They cannot sign in until a login exists.</span>
+               <button type="button" class="btn primary sm" id="mkLogin"
+                 style="margin-left:auto">Create login</button>
+             </div>
+             <div class="hint">Creates the account and sets a temporary password you hand over.
+               Nothing is emailed.</div>`}
+      </div>
       <div class="row"><label class="check"><input type="checkbox" id="st_active" ${!s || s.active ? 'checked' : ''}> Active</label>
         <div class="hint">Someone who left the team should be switched off here, not deleted —
           that keeps their attendance and payslip history.</div></div>
@@ -640,6 +1081,7 @@ function staffModal(s) {
     const row = {
       name: $('#st_name').value.trim(), role: $('#st_role').value,
       phone: $('#st_phone').value.trim(), email: $('#st_email').value.trim(),
+      ...($('#st_branch') ? { branch_id: $('#st_branch').value || null } : {}),
       base_salary: Number($('#st_base').value || 0),
       commission_pct: Number($('#st_comm').value || 0),
       uid: $('#st_uid').value.trim() || null,
@@ -663,6 +1105,9 @@ function staffModal(s) {
      remove your own login (lockout), and the confirmation says exactly
      what is destroyed. "They left" is what the Active switch is for. */
   setTimeout(() => {
+    const mk = $('#mkLogin');
+    if (mk) mk.onclick = () => createLogin($('#st_email').value.trim(), $('#st_name').value.trim());
+
     const del = $('#stDel');
     if (!del) return;
     del.onclick = async () => {
@@ -680,6 +1125,72 @@ function staffModal(s) {
       } catch (e) { toast(writeError(e), true); }
     };
   }, 20);
+}
+
+/* ---------- creating a login ----------
+   Firebase accounts are created through a SECOND app instance. Creating a
+   user on the main instance signs you in as them and throws the founder
+   out mid-job; a secondary instance keeps this session untouched.
+
+   Why this is safe: a Firebase account on its own grants nothing at all.
+   Every policy in the database keys off my_role(), which reads the `staff`
+   table — and only a founder can write that table. The account is the
+   doorbell; the staff row is the key. */
+function randomPassword() {
+  const a = 'abcdefghijkmnpqrstuvwxyz', A = 'ABCDEFGHJKLMNPQRSTUVWXYZ', n = '23456789';
+  const pool = a + A + n, buf = new Uint32Array(10);
+  crypto.getRandomValues(buf);
+  /* guaranteed one of each class, then filled out */
+  let out = a[buf[0] % a.length] + A[buf[1] % A.length] + n[buf[2] % n.length];
+  for (let i = 3; i < 10; i++) out += pool[buf[i] % pool.length];
+  return out;
+}
+
+async function createLogin(email, name) {
+  if (!isOwner()) { toast('Only a founder can create a login', true); return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    toast('Enter a valid email address first', true); return;
+  }
+  const btn = $('#mkLogin');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+
+  const pw = randomPassword();
+  try {
+    /* a throwaway app instance, torn down straight after */
+    const secondary = firebase.apps.find(a => a.name === 'mk')
+      || firebase.initializeApp(FIREBASE_CONFIG, 'mk');
+    const cred = await secondary.auth().createUserWithEmailAndPassword(email, pw);
+    const uid = cred.user.uid;
+    await secondary.auth().signOut();
+    await secondary.delete().catch(() => {});
+
+    const box = $('#st_uid');
+    if (box) box.value = uid;               /* saved with the form */
+
+    /* shown once — Firebase will never reveal this password again */
+    const zone = $('#mkLogin') && $('#mkLogin').parentElement;
+    if (zone) zone.innerHTML = `
+      <div style="width:100%">
+        <b style="display:block;margin-bottom:6px">Login created — hand these over now</b>
+        <div class="pos-total" style="margin:0">
+          <span>Email</span><b style="font-size:1rem">${esc(email)}</b>
+          <span style="margin-left:14px">Password</span><b style="font-size:1rem">${esc(pw)}</b>
+        </div>
+        <div class="hint" style="margin-top:6px">This password is shown once and cannot be
+          recovered — copy it before closing. ${esc(name || 'They')} should change it after
+          signing in. Press <b>Save changes</b> to finish adding them to the team.</div>
+      </div>`;
+    toast('Login created');
+  } catch (e) {
+    const c = (e && e.code) || '';
+    const msg =
+      c === 'auth/email-already-in-use' ? 'That email already has a login — paste their existing UID instead, or use another address.'
+      : c === 'auth/operation-not-allowed' ? 'Firebase is refusing new accounts. Turn on Email/Password sign-up in Firebase Console → Authentication → Sign-in method.'
+      : c === 'auth/weak-password' ? 'Firebase rejected the generated password. Try again.'
+      : (e && e.message) || 'Could not create the login';
+    toast(msg, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Create login'; }
+  }
 }
 
 function markAttendance() {
@@ -890,7 +1401,7 @@ function viewBoards() {
 
 function staffBoard() {
   const m = monthKey();
-  const rows = OPS.staff.filter(s => s.active).map(s => {
+  const rows = branchStaff().map(s => {
     const month = staffSales(s.id, m), all = staffSales(s.id);
     const t = (OPS.targets.find(x => x.staff_id === s.id && x.month === m) || {}).amount || 0;
     const att = OPS.attendance.filter(a => a.staff_id === s.id && a.on_date >= m);
@@ -916,12 +1427,16 @@ function staffBoard() {
 }
 
 function customerBoard() {
-  if (!OPS.customers.length) return `<div class="empty">
-    No customers yet — this fills up as orders come in, online or logged by hand.</div>`;
-  return `<div class="tbl-wrap"><table>
+  const list = branchCustomers();
+  if (!list.length) return `<div class="empty">
+    No customers${BRANCH ? ' at ' + esc(branchName(BRANCH)) : ''} yet — this fills up as
+    orders come in, online or logged by hand.</div>`;
+  return `${BRANCH ? `<p class="muted" style="margin-bottom:12px">Customers who bought at
+      <b>${esc(branchName(BRANCH))}</b>. Someone who shops at both branches appears under each.</p>` : ''}
+    <div class="tbl-wrap"><table>
     <thead><tr><th class="num">#</th><th>Customer</th><th>City</th>
       <th class="num">Orders</th><th class="num">Spend</th><th>Last order</th></tr></thead>
-    <tbody>${OPS.customers.map((c, i) => `<tr>
+    <tbody>${list.map((c, i) => `<tr>
       <td class="num"><b class="${i < 3 ? 'rank' : ''}">${i + 1}</b></td>
       <td><div>${esc(c.name || 'Unknown')}</div><div class="pid">${esc(c.phone)}</div></td>
       <td class="muted">${esc(c.city || '—')}</td>
