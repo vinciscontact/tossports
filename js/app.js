@@ -331,7 +331,7 @@ function cardHTML(p) {
   <article class="card">
     <a href="#/product/${p.id}" class="card-art" aria-label="${esc(p.name)}">
       <div class="badges">${badges}${offBadge}</div>
-      ${batSVG(p)}
+      ${batArt(p)}
     </a>
     <div class="card-b">
       <span class="card-meta">${WOOD[p.wood].short} · ${(PROFILE_WORDS[p.profile] || PROFILE_WORDS.standard).b}</span>
@@ -502,7 +502,7 @@ function viewHome() {
           </div>
           <div class="hv-stage" id="hvStage">
             <span class="hv-ball"></span>
-            <div class="hv-bat">${batSVG(px || PRODUCTS[0], { glow: true })}</div>
+            <div class="hv-bat">${batArt(px || PRODUCTS[0], { glow: true, eager: true })}</div>
             <span class="hv-shadow"></span>
           </div>
         </div>
@@ -584,7 +584,7 @@ function viewHome() {
     <div class="wrap flag-grid">
       <div class="flag-art">
         <div class="flag-burst"></div>
-        ${batSVG(px)}
+        ${batArt(px)}
       </div>
       <div class="rv">
         <p class="eyebrow">The flagship</p>
@@ -1589,7 +1589,7 @@ function viewFinder() {
         <div class="fdr-reveal">
           <div class="fdr-stage win">
             <span class="fdr-spot"></span>
-            <div class="fdr-bat">${batSVG(win, { glow: true, trueScale: true })}</div>
+            <div class="fdr-bat">${batArt(win, { glow: true, trueScale: true })}</div>
             <span class="fdr-plinth"></span>
           </div>
           <div class="fdr-verdict">
@@ -2030,7 +2030,7 @@ function viewCheckout() {
             ${cart.map(i => {
               const p = byId(i.id), v = variantName(p, i.variant);
               return `<div class="mini-item">
-                <div class="mini-art">${batSVG(p, { glow: false })}</div>
+                <div class="mini-art">${batArt(p, { glow: false })}</div>
                 <b>${esc(p.name)}${v ? `<br><span style="color:var(--ink-50);font-weight:600;font-size:.78rem">${esc(v)}</span>` : ''}
                    <br><span style="color:var(--ink-50);font-weight:600;font-size:.78rem">Qty ${i.qty}</span></b>
                 <i class="num">${hasPrice(p) ? fmt(p.price * i.qty) : '—'}</i>
@@ -2089,7 +2089,7 @@ function viewDone() {
           ${o.items.map(i => {
             const p = byId(i.id), v = variantName(p, i.variant);
             return `<div class="mini-item">
-              <div class="mini-art">${batSVG(p, { glow: false })}</div>
+              <div class="mini-art">${batArt(p, { glow: false })}</div>
               <b>${esc(p.name)}${v ? ' — ' + esc(v) : ''}<br>
                 <span style="color:var(--ink-50);font-weight:600;font-size:.78rem">Qty ${i.qty}</span></b>
               <i class="num">${hasPrice(p) ? fmt(p.price * i.qty) : '—'}</i>
@@ -2129,7 +2129,7 @@ function renderCart() {
   body.innerHTML = cart.map(i => {
     const p = byId(i.id), v = variantName(p, i.variant);
     return `<div class="ci">
-      <a class="ci-art" href="#/product/${p.id}" data-close>${batSVG(p, { glow: false })}</a>
+      <a class="ci-art" href="#/product/${p.id}" data-close>${batArt(p, { glow: false })}</a>
       <div class="ci-b">
         <h4><a href="#/product/${p.id}" data-close>${esc(p.name)}</a></h4>
         ${v ? `<div class="v">${esc(v)}</div>` : ''}
@@ -2180,7 +2180,7 @@ function runSearch(q) {
     (p.features || []).join(' ')].filter(Boolean).join(' ').toLowerCase();
   const hits = PRODUCTS.filter(p => hay(p).includes(q)).slice(0, 8);
   const art = p => prodCat(p) === 'bats'
-    ? batSVG(p, { glow: false })
+    ? batArt(p, { glow: false })
     : ((p.images || [])[0] ? `<img src="${esc(p.images[0])}" alt="" loading="lazy">` : '📦');
   box.innerHTML = hits.length
     ? hits.map(p => `<a class="ci" href="#/product/${p.id}" data-close style="text-decoration:none">

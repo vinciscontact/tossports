@@ -1115,6 +1115,16 @@ function editProduct(id) {
           <span class="up-hint">or drop them here · JPG or PNG · face, back, edge, toe</span>
           <span class="up-stat" id="upStat"></span>
         </div>
+        <!-- Photos uploaded before the background knockout existed have no
+             cut-out companion, so the shop falls back to the studio original
+             and shows a white block on the dark sections. This re-processes
+             them in place; it only ever adds the "-cut" file and never
+             touches or replaces the photo itself, so it is safe to re-run. -->
+        <div class="up-fix">
+          <button type="button" class="btn ghost sm" id="upRecut">Remove photo backgrounds</button>
+          <span class="up-hint">For photos uploaded earlier. New uploads do this automatically.</span>
+          <span class="up-stat" id="upRecutStat"></span>
+        </div>
         <div class="up-grid" id="upGrid"></div>
         <textarea id="f_images" class="up-urls">${esc((p.images || []).join('\n'))}</textarea>
         <div class="hint">The first photo is the one shown on the shop and product page.
@@ -1249,6 +1259,87 @@ function resizeToBlob(img, targetW, quality) {
   });
 }
 
+/* ------------------------------------------------------------
+   Knock the white studio sweep out and trim to the bat.
+
+   Every product shot comes off a seamless white backdrop, which
+   leaves roughly 85-90% of the frame empty. The shop puts these
+   photos on dark bands, so the raw file reads as a white card with
+   a small bat stranded in the middle. The "-cut" companion is what
+   the storefront actually shows; the untouched original still backs
+   the product gallery, where a studio white plate is honest.
+
+   The fill walks inward from the border and only clears backdrop it
+   can reach that way. Keying on colour alone would punch holes
+   through the blade — Kashmir willow is very pale and the varnish
+   throws near-white highlights. This is the same algorithm as
+   seo/cutout-photos.js, kept in step with it deliberately so a
+   photo added today matches the 63 processed by hand.
+   ------------------------------------------------------------ */
+const CUT_TOL = 30;
+
+function cutoutToBlob(img, targetW, quality) {
+  const scale = Math.min(1, targetW / img.naturalWidth);
+  const w = Math.round(img.naturalWidth * scale);
+  const h = Math.round(img.naturalHeight * scale);
+
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, w, h);
+
+  const id = ctx.getImageData(0, 0, w, h);
+  const d = id.data;
+  const seen = new Uint8Array(w * h);
+  const stack = [];
+  const near = i => d[i * 4] >= 255 - CUT_TOL && d[i * 4 + 1] >= 255 - CUT_TOL
+                 && d[i * 4 + 2] >= 255 - CUT_TOL;
+  const push = i => { if (!seen[i] && near(i)) { seen[i] = 1; stack.push(i); } };
+
+  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+  while (stack.length) {
+    const i = stack.pop(), x = i % w, y = (i / w) | 0;
+    if (x > 0)     push(i - 1);
+    if (x < w - 1) push(i + 1);
+    if (y > 0)     push(i - w);
+    if (y < h - 1) push(i + w);
+  }
+
+  let cleared = 0;
+  for (let i = 0; i < seen.length; i++) if (seen[i]) cleared++;
+  /* An action or lifestyle frame has no edge-connected sweep. Cutting one
+     out would be wrong, so leave it whole and let the shop show it as-is. */
+  if (cleared / (w * h) < 0.15) return null;
+
+  /* bounding box of what survives, so the bat fills its box */
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (seen[i]) { d[i * 4 + 3] = 0; continue; }
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < x0 || y1 < y0) return null;
+  ctx.putImageData(id, 0, 0);
+
+  const cw = x1 - x0 + 1, chh = y1 - y0 + 1;
+  const out = document.createElement('canvas');
+  out.width = cw; out.height = chh;
+  out.getContext('2d').drawImage(cv, x0, y0, cw, chh, 0, 0, cw, chh);
+
+  return new Promise(resolve => {
+    /* WebP only — a JPEG fallback cannot carry the alpha that is the
+       whole point here, so if WebP is unavailable we simply skip the
+       cut-out and the storefront falls back to the original. */
+    out.toBlob(b => resolve(b ? { blob: b, type: 'image/webp', ext: 'webp', w: cw, h: chh } : null),
+      'image/webp', quality);
+  });
+}
+
 async function optimiseImage(file) {
   const img = await readImage(file);
   const out = [];
@@ -1257,6 +1348,11 @@ async function optimiseImage(file) {
        writing a 1600px file from a 900px photo */
     if (img.naturalWidth < s.w && s.tag !== 'sm' && out.length) continue;
     out.push(Object.assign({ tag: s.tag }, await resizeToBlob(img, s.w, s.q)));
+
+    let cut = null;
+    try { cut = await cutoutToBlob(img, s.w, s.q); }
+    catch (e) { console.warn('cut-out skipped for ' + s.tag + ':', e.message); }
+    if (cut) out.push(Object.assign({ tag: s.tag + '-cut', cut: true }, cut));
   }
   return { versions: out, original: { w: img.naturalWidth, h: img.naturalHeight } };
 }
@@ -1379,6 +1475,64 @@ function wirePhotoUpload(productId) {
     stat.textContent = `${done} photo${done === 1 ? '' : 's'} uploaded` +
       (pct > 0 ? ` · ${pct}% smaller, ${Math.round(saved / 1024)}KB saved` : '') +
       ' — save to keep them.';
+  };
+
+  /* ----------------------------------------------------------
+     Backfill the cut-outs for photos already in storage.
+
+     Purely additive: it reads each photo back, knocks the sweep
+     out and writes a "-cut" companion beside it. The original is
+     never overwritten and the saved image list is never touched,
+     so a half-finished run leaves nothing broken — the storefront
+     simply keeps falling back to the original for whatever has no
+     cut yet. That is also why it is safe to press twice.
+
+     Storage is read through a canvas, so the bucket has to answer
+     with CORS. If it does not we say so plainly rather than
+     leaving a spinner up: this is a maintenance tool, and a
+     silent no-op would be worse than an error. */
+  const recut = $('#upRecut'), recutStat = $('#upRecutStat');
+  if (recut) recut.onclick = async () => {
+    const list = urls.value.split('\n').map(s => s.trim()).filter(Boolean)
+      .filter(u => !/-cut\.webp$/i.test(u));
+    if (!list.length) { recutStat.textContent = 'No photos to process.'; return; }
+
+    recut.disabled = true;
+    let made = 0, already = 0, skipped = 0;
+    for (let i = 0; i < list.length; i++) {
+      recutStat.textContent = `Processing ${i + 1} of ${list.length}…`;
+      const src = list[i];
+      const dest = src.replace(/\.(webp|png|jpe?g)$/i, '-cut.webp');
+      try {
+        /* already done on an earlier run — leave it alone */
+        if ((await fetch(dest, { method: 'HEAD' })).ok) { already++; continue; }
+
+        const blob = await (await fetch(src, { mode: 'cors' })).blob();
+        const img = await readImage(new File([blob], 'photo', { type: blob.type }));
+        const cut = await cutoutToBlob(img, img.naturalWidth, 0.88);
+        if (!cut) { skipped++; continue; }
+
+        /* rebuild the storage path from the public URL we were given */
+        const key = decodeURIComponent(
+          dest.split('/storage/v1/object/public/products/')[1] || '');
+        if (!key) { skipped++; continue; }
+        await putObject_(key, cut.blob, cut.type);
+        made++;
+      } catch (e) {
+        recutStat.textContent = /Failed to fetch|tainted|cross-origin/i.test(e.message)
+          ? 'Storage would not hand the photo back for editing (CORS). ' +
+            'Re-upload the photo instead — new uploads are processed automatically.'
+          : e.message;
+        recut.disabled = false;
+        return;
+      }
+    }
+    recut.disabled = false;
+    recutStat.textContent =
+      `${made} background${made === 1 ? '' : 's'} removed` +
+      (already ? `, ${already} already done` : '') +
+      (skipped ? `, ${skipped} left as-is (not a studio shot)` : '') +
+      (made ? ' — reload the shop to see them.' : '.');
   };
 
   pick.onclick = () => input.click();

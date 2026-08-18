@@ -1,9 +1,89 @@
 /* ============================================================
    TOSS SPORTS — PROCEDURAL BAT RENDERER
-   Draws a bat from a product's own spec fields.
-   Replace batSVG() with <img src="images/product image/${p.id}.jpg">
-   once real photography exists.
+   Draws a bat from a product's own spec fields, and hands over to
+   real photography the moment a product has any. See batArt().
    ============================================================ */
+
+/* ------------------------------------------------------------
+   batArt — the one place that decides "photo or drawing".
+
+   The drawing is a stand-in, not a house style. It exists so a bat
+   with no photography yet still renders as something rather than an
+   empty box, and it should step aside as soon as a real photo is
+   uploaded in the Maze Room. 28 of 29 bats are still drawn today,
+   so both paths stay live for a while.
+
+   The photo it reaches for is the "-cut" variant: same shot with the
+   white studio sweep knocked out and the empty margin trimmed off
+   (see seo/cutout-photos.js). That matters because the raw studio
+   file is ~88% white backdrop, so on a dark section it would read as
+   a white card with a small bat marooned in it — the drawn art it
+   replaces floats free, and the photo has to do the same to be a
+   drop-in. If the cut file is somehow missing we fall back to the
+   original rather than showing a broken image.
+
+   It carries class="bat-art" deliberately: every sizing rule on the
+   site already targets that class, so a photo lands at the right
+   height in the hero, the flagship band, a card or the cart with no
+   per-context CSS at all.
+
+   Call sites that COMPARE or MORPH bats keep calling batSVG directly
+   — the Find My Bat bench redraws the blade as you answer and the
+   weight chooser scales it to true relative size. A photograph can
+   do neither, so a photo there would be a downgrade, not an upgrade.
+
+   If the cut file is missing the fallback is the DRAWING, not the
+   original photo. That looks backwards until you picture it: these
+   slots are all dark bands, and an uncut studio shot there is a
+   white slab with a small bat adrift in it — visibly worse than the
+   art it replaced. Falling back to the drawing means the worst case
+   is exactly today's page, never something broken. Photos uploaded
+   before the knockout existed can be backfilled from the Maze Room.
+   ------------------------------------------------------------ */
+const _batArtPending = {};
+
+function batArt(p, opts) {
+  opts = opts || {};
+  const photo = ((p && p.images) || []).filter(Boolean)[0];
+  if (!photo) return batSVG(p, opts);
+
+  const a = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                          .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const cut = photo.replace(/\.(webp|png|jpe?g)$/i, '-cut.webp');
+
+  /* Park the drawing rather than inlining it in an attribute — the SVG is
+     several kB of quotes and angle brackets, and no amount of escaping
+     makes that a sane thing to put inside onerror="". */
+  const key = 'k' + (_artUid++);
+  _batArtPending[key] = batSVG(p, opts);
+
+  return `<img class="bat-art bat-photo" src="${a(cut)}" alt="${a(p.name || '')}"
+    data-fallback="${key}" loading="${opts.eager ? 'eager' : 'lazy'}" decoding="async">`;
+}
+
+/* One delegated listener instead of an onerror attribute on every image.
+   Inline handlers resolve against the page's global object, which is not
+   somewhere a plain function declaration can be relied on to appear, and
+   they are the first thing a Content-Security-Policy blocks. Image errors
+   do not bubble, so this listens in the capture phase. */
+document.addEventListener('error', e => {
+  const img = e.target;
+  if (!img || img.tagName !== 'IMG' || !img.dataset || !img.dataset.fallback) return;
+  const svg = _batArtPending[img.dataset.fallback];
+  delete _batArtPending[img.dataset.fallback];
+  if (svg && img.parentNode) { img.insertAdjacentHTML('afterend', svg); img.remove(); }
+}, true);
+
+/* A page can render many bats before any of them fail. Nothing here is
+   large, but there is no reason to hold drawings for images that already
+   loaded, so release each one on success too. */
+document.addEventListener('load', e => {
+  const img = e.target;
+  if (img && img.tagName === 'IMG' && img.dataset && img.dataset.fallback) {
+    delete _batArtPending[img.dataset.fallback];
+    img.removeAttribute('data-fallback');
+  }
+}, true);
 
 const WOOD_TONE = {
   srilankan: { lo: '#8E5A28', mid: '#C9884A', hi: '#E7B87E', grain: '#7A4A1E' },

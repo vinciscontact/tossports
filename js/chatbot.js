@@ -233,7 +233,7 @@ const Bot = (function () {
   function productCards(items) {
     return `<div class="bot-cards">${items.map(p => `
       <a class="bot-card" href="#/product/${p.id}">
-        <div class="bot-card-art">${batSVG(p)}</div>
+        <div class="bot-card-art">${batArt(p)}</div>
         <div class="bot-card-t">${esc(p.name)}</div>
         <div class="bot-card-p">${p.price ? fmt(p.price) : 'On request'}</div>
       </a>`).join('')}</div>`;
