@@ -1013,7 +1013,10 @@ canvas.gp-cv{display:block;width:100%;height:auto;image-rendering:pixelated;
 /* The panel is centred and capped rather than spanning the viewport. On a
    wide monitor a full-width white box left the bat marooned in empty
    white with the other shots pushed out of sight below it. */
-.pdp-gal{display:grid;gap:14px;justify-content:center;grid-template-columns:minmax(0,600px)}
+/* position:relative so the whole gallery sits above any decorative
+   overlay in the section, whatever gets added to it later */
+.pdp-gal{position:relative;z-index:1;
+  display:grid;gap:14px;justify-content:center;grid-template-columns:minmax(0,600px)}
 .pdp-gal.with-thumbs{grid-template-columns:96px minmax(0,600px);align-items:start}
 /* Portrait, to match the shape of a bat, and CONTAIN not cover: a square
    thumbnail with cover crops a 2:3 bat photo down to a sliver of blade,
@@ -1604,7 +1607,13 @@ body.has-annc .filter-bar{top:var(--hdr)}
 
 /* ---------- PRODUCT PAGE ---------- */
 .pdp-top{background:var(--navy-900);color:#fff;padding:calc(var(--hdr) + 26px) 0 0;position:relative;overflow:hidden}
-.pdp-top::before{content:'';position:absolute;inset:0;
+/* pointer-events:none matters here. This is a decorative gradient laid
+   absolutely over the whole section, and without it the overlay swallows
+   clicks meant for anything inside that is not itself positioned. The
+   main photo escaped because .pdp-stage is position:relative; the
+   thumbnails are static, so every click on them was landing on this
+   pseudo-element instead and the gallery looked broken. */
+.pdp-top::before{content:'';position:absolute;inset:0;pointer-events:none;
   background:radial-gradient(620px 460px at 50% 30%,rgba(61,61,168,.4),transparent 68%)}
 .pdp-stage{position:relative;display:grid;place-items:center;padding:20px 0 34px;min-height:330px}
 .pdp-stage .bat-art{height:min(50vh,410px);width:auto;filter:drop-shadow(0 30px 50px rgba(0,0,0,.5))}
