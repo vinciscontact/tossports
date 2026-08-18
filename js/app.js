@@ -2357,9 +2357,6 @@ function wireHero() {
 /* ---------------- per-view wiring ---------------- */
 function mount(page, parts) {
   clearInterval(BOARD_TIMER);   /* the big screen only runs on the game page */
-  /* he is allowed on home and shop only — nothing moves while somebody
-     is deciding on a product page or typing an address at checkout */
-  if (typeof Fielder !== 'undefined') Fielder.setPage(page);
   if (page === 'home') { wireHero(); wireTrust(); }
 
   if (page === 'game') {
@@ -2650,7 +2647,6 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
   /* the playful bits, mounted last so nothing above depends on them */
   if (typeof NavPlay !== 'undefined') NavPlay.mount();
   if (typeof Bot !== 'undefined') Bot.mount();
-  if (typeof Fielder !== 'undefined') { Fielder.mount(); Fielder.greet(); }
 
   /* Live data is fetched AFTER the page is already interactive.
      This used to be awaited at the top of init(), which meant one hanging
