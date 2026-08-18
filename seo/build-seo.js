@@ -20,7 +20,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { SITE, BUSINESS, CLUSTERS, GUIDES, FAQS } = require('./seo-data');
+const { SITE, BUSINESS, CLUSTERS: C1, GUIDES: G1, FAQS } = require('./seo-data');
+const { TURF_PAGES, AREAS, CLUSTERS_2, GUIDES_2 } = require('./seo-data-extra');
+
+/* one map, so nothing can accidentally target the same phrase twice */
+const CLUSTERS = Object.assign({}, C1, CLUSTERS_2);
+const GUIDES = G1.concat(GUIDES_2);
 
 const ROOT = path.resolve(__dirname, '..');
 const INPLACE = process.argv.includes('--inplace');
@@ -471,7 +476,7 @@ function productPage(p) {
 /* ---------- category pages ---------- */
 
 function categoryPage(slug, c) {
-  const list = c.filter ? PRODUCTS.filter(c.filter) : [];
+  const list = c.allProducts ? PRODUCTS.slice() : (c.filter ? PRODUCTS.filter(c.filter) : []);
   const priced = list.filter(p => p.price != null);
   const from = priced.length ? Math.min(...priced.map(p => p.price)) : null;
 
@@ -493,6 +498,9 @@ function categoryPage(slug, c) {
     </ul>
     <p><a class="seo-btn" href="../#/shop">Filter and compare all ${PRODUCTS.length} bats</a></p>
   ` : ''}
+
+  ${(c.sections || []).map(([h, t]) =>
+      `<h2>${esc(h)}</h2><p>${esc(t)}</p>`).join('')}
 
   ${slug === 'cricket-bat-shop-chennai' ? chennaiBody() : ''}
 
@@ -641,6 +649,117 @@ function guideIndex() {
   });
 }
 
+/* ---------- the turf: a second business with its own searches ---------- */
+
+function turfPage(slug, t) {
+  const body = `
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="../">Home</a> / <span>${esc(t.h1)}</span></nav>
+
+  <h1>${esc(t.h1)}</h1>
+  <p class="seo-lede">${esc(t.intro)}</p>
+
+  <div class="seo-actions">
+    <a class="seo-btn" href="https://wa.me/${BUSINESS.whatsapp}?text=${
+      encodeURIComponent('Hi, I want to book a slot at Toss The Turf')}"
+      rel="nofollow">Book on WhatsApp</a>
+    <a class="seo-btn ghost" href="tel:${BUSINESS.phones[1]}">Call ${BUSINESS.phones[1]}</a>
+  </div>
+
+  ${t.sections.map(([h, p]) => `<h2>${esc(h)}</h2><p>${esc(p)}</p>`).join('')}
+
+  <h2>Where the ground is</h2>
+  <p>${esc(BUSINESS.turf.street)}<br>${esc(BUSINESS.turf.locality)},
+     ${esc(BUSINESS.turf.region)} ${esc(BUSINESS.turf.postal)}</p>
+
+  <h2>Bats, from the people who run the ground</h2>
+  <p>We make tennis ball cricket bats at our workshop in Nesapakkam and carry stock at the
+     turf. If you need one before a game, or yours breaks during it, there is a replacement
+     here rather than a wasted evening.</p>
+  <p><a class="seo-btn ghost" href="../tennis-ball-cricket-bats/">See the bats</a></p>`;
+
+  return shell({
+    path: '/' + slug + '/', depth: '../',
+    title: fitTitle(t.title), h1: t.h1, desc: fitDesc(t.desc), keywords: t.keywords,
+    body: body,
+    schema: [
+      TURF,
+      breadcrumbs([{ name: 'Home', url: '/' }, { name: t.h1, url: '/' + slug + '/' }])
+    ]
+  });
+}
+
+/* ---------- Chennai neighbourhoods ----------
+   Each page carries something true about that area's relationship to us.
+   A page that only swaps the place name is a doorway page, and Google
+   treats a set of those as spam rather than as local coverage. */
+
+function areaPage(a) {
+  const place = a.near === 'turf' ? BUSINESS.turf : BUSINESS.main;
+  const other = a.near === 'turf' ? BUSINESS.main : BUSINESS.turf;
+  const title = fitTitle('Cricket Bats in ' + a.name + ' — Toss Sports');
+
+  const body = `
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href="../../">Home</a> / <a href="../../cricket-bat-shop-chennai/">Chennai</a> /
+    <span>${esc(a.name)}</span>
+  </nav>
+
+  <h1>Cricket bats in ${esc(a.name)}</h1>
+  <p class="seo-lede">${esc(a.note)}</p>
+
+  <h2>Your nearest Toss</h2>
+  <p><b>${esc(place.name)}</b> — about ${esc(a.km)} from ${esc(a.name)}.<br>
+     ${esc(place.street)}<br>${esc(place.locality)}, ${esc(place.region)} ${esc(place.postal)}</p>
+  <p>Also at <b>${esc(other.name)}</b>, ${esc(other.locality)} ${esc(other.postal)}.</p>
+  <p class="seo-lede">Near ${esc(a.landmarks)}.</p>
+
+  <div class="seo-actions">
+    <a class="seo-btn" href="https://wa.me/${BUSINESS.whatsapp}?text=${
+      encodeURIComponent('Hi Toss Sports, I am in ' + a.name + ' — which bat do you suggest?')}"
+      rel="nofollow">Ask on WhatsApp</a>
+    <a class="seo-btn ghost" href="../../tennis-ball-cricket-bats/">See all bats</a>
+  </div>
+
+  <h2>What we make</h2>
+  <p>Tennis ball cricket bats, handmade in Chennai from ₹950 — Sri Lankan wood, Kashmir
+     Willow and Poplar, in six profiles. We shape them ourselves, so we can cut one to the
+     weight you ask for rather than sending whatever is in the box.</p>
+
+  <ul class="seo-grid wide">
+    ${PRODUCTS.filter(p => p.price != null).sort((x, y) => x.price - y.price)
+      .slice(0, 6).map(p => `<li><a href="../../product/${p.id}/">
+        <b>${esc(p.name)}</b><span>${inr(p.price)}</span></a></li>`).join('')}
+  </ul>
+
+  <h2>Delivery and pickup</h2>
+  <p>You can collect from ${esc(place.locality === 'Chennai' ? place.name : place.locality)},
+     or we deliver across Chennai and the rest of India — free over ₹1,500, usually 3–6 days.</p>
+
+  <h2>Other areas we serve</h2>
+  <ul class="seo-list">
+    ${AREAS.filter(x => x.slug !== a.slug).slice(0, 6).map(x =>
+      `<li><a href="../${x.slug}/">Cricket bats in ${esc(x.name)}</a></li>`).join('')}
+  </ul>`;
+
+  return shell({
+    path: '/cricket-bats/' + a.slug + '/', depth: '../../',
+    title: title, h1: 'Cricket bats in ' + a.name,
+    desc: fitDesc('Tennis ball cricket bats for ' + a.name + ', Chennai — handmade from ₹950, ' +
+      a.km + ' from our ' + a.near + '. Collect or get delivered. Call 91769 95707.'),
+    keywords: ['cricket bat ' + a.name, 'tennis ball bat ' + a.name,
+               'cricket bat shop near ' + a.name, 'cricket bat Chennai'],
+    body: body,
+    schema: [
+      a.near === 'turf' ? TURF : STORE,
+      breadcrumbs([
+        { name: 'Home', url: '/' },
+        { name: 'Chennai', url: '/cricket-bat-shop-chennai/' },
+        { name: a.name, url: '/cricket-bats/' + a.slug + '/' }
+      ])
+    ]
+  });
+}
+
 /* ---------- run ---------- */
 
 const written = [];
@@ -668,6 +787,20 @@ PRODUCTS.forEach(p => {
       SITE + '/product/' + p.id + '/', '0.8', 'weekly');
 });
 console.log('  ' + PRODUCTS.length + ' product pages');
+
+/* the turf */
+Object.keys(TURF_PAGES).forEach(slug => {
+  add(slug + '/index.html', turfPage(slug, TURF_PAGES[slug]),
+      SITE + '/' + slug + '/', '0.9', 'monthly');
+});
+console.log('  ' + Object.keys(TURF_PAGES).length + ' turf pages');
+
+/* Chennai areas */
+AREAS.forEach(a => {
+  add('cricket-bats/' + a.slug + '/index.html', areaPage(a),
+      SITE + '/cricket-bats/' + a.slug + '/', '0.6', 'monthly');
+});
+console.log('  ' + AREAS.length + ' Chennai area pages');
 
 /* guides */
 add('guides/index.html', guideIndex(), SITE + '/guides/', '0.7', 'monthly');
