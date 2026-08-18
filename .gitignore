@@ -9,3 +9,11 @@ Thumbs.db
 # Local tooling
 node_modules/
 .claude/
+
+# v2 build output — regenerate with: node v2-appsscript/build.js
+v2-appsscript/web/
+v2-appsscript/migrate/csv/
+v2-appsscript/migrate/*.csv
+
+# SEO build output — regenerate with: node seo/build-seo.js
+dist/

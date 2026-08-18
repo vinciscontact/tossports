@@ -1,0 +1,130 @@
+/* ============================================================
+   TOSS SPORTS — pre-rendered page styling
+
+   These pages are what a crawler and a first-time visitor from Google
+   actually land on, so they have to read well on their own: dark navy
+   like the rest of the brand, generous type, and no dependency on the
+   app having booted.
+   ============================================================ */
+
+.seo-page{
+  background:#0B0B1A;
+  color:#EDEEF6;
+  font:16px/1.65 Inter,system-ui,-apple-system,sans-serif;
+  margin:0;
+}
+.seo-page .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+.seo-page a{color:#FF8A1E;text-decoration:none}
+.seo-page a:hover{text-decoration:underline}
+.seo-page :focus-visible{outline:3px solid #FF8A1E;outline-offset:3px}
+
+/* ---------- header ---------- */
+.seo-hdr{border-bottom:1px solid rgba(255,255,255,.1);padding:14px 0;
+  position:sticky;top:0;background:rgba(11,11,26,.92);backdrop-filter:blur(10px);z-index:10}
+.seo-hdr .wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.seo-brand{display:flex;align-items:center;gap:9px;font-family:Anton,Impact,sans-serif;
+  font-size:1.3rem;letter-spacing:.02em;color:#fff!important;text-decoration:none!important}
+.seo-brand em{color:#FF8A1E;font-style:normal}
+.seo-nav{display:flex;gap:18px;margin-left:auto;flex-wrap:wrap;font-size:.9rem;font-weight:600}
+.seo-nav a{color:rgba(255,255,255,.75)}
+.seo-nav a:hover{color:#fff}
+.seo-nav .seo-cta{background:#FF8A1E;color:#160D00;padding:7px 16px;border-radius:100px}
+.seo-nav .seo-cta:hover{background:#ffa04a;text-decoration:none}
+
+/* ---------- body ---------- */
+.seo-main{padding:34px 22px 60px;max-width:1080px}
+.crumbs{font-size:.8rem;color:rgba(255,255,255,.45);margin-bottom:22px}
+.crumbs a{color:rgba(255,255,255,.6)}
+
+.seo-main h1{
+  font-family:Anton,Impact,sans-serif;text-transform:uppercase;
+  font-size:clamp(2rem,5.5vw,3.2rem);line-height:1.02;letter-spacing:.01em;
+  margin:0 0 16px;max-width:20ch;text-wrap:balance;
+}
+.seo-main h2{
+  font-family:Anton,Impact,sans-serif;text-transform:uppercase;
+  font-size:clamp(1.25rem,3vw,1.7rem);line-height:1.1;
+  margin:38px 0 12px;text-wrap:balance;
+}
+.seo-main h3{font-size:1.05rem;margin:0 0 8px;color:#fff}
+.seo-main p{margin:0 0 16px;color:rgba(255,255,255,.82);max-width:70ch}
+.seo-lede{font-size:1.08rem;color:rgba(255,255,255,.72)!important;max-width:66ch}
+
+/* the passage written to be quoted */
+.seo-answer{
+  font-size:1.12rem;line-height:1.6;color:#fff!important;
+  background:rgba(255,138,30,.09);border-left:3px solid #FF8A1E;
+  padding:18px 22px;border-radius:0 10px 10px 0;margin:0 0 28px!important;max-width:72ch;
+}
+
+.seo-list{margin:0 0 20px;padding-left:20px;color:rgba(255,255,255,.82);max-width:70ch}
+.seo-list li{margin-bottom:8px}
+
+/* ---------- price and actions ---------- */
+.seo-price{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 20px}
+.seo-price b{font-family:Anton,Impact,sans-serif;font-size:2.1rem;color:#FF8A1E;line-height:1}
+.seo-price s{color:rgba(255,255,255,.4)}
+.seo-price span{font-size:.82rem;color:rgba(255,255,255,.55)}
+
+.seo-actions{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.seo-btn{display:inline-block;background:#FF8A1E;color:#160D00!important;
+  padding:12px 22px;border-radius:100px;font-weight:800;font-size:.92rem}
+.seo-btn:hover{background:#ffa04a;text-decoration:none!important}
+.seo-btn.ghost{background:transparent;color:#fff!important;
+  border:1.5px solid rgba(255,255,255,.28)}
+.seo-btn.ghost:hover{border-color:#FF8A1E}
+
+/* ---------- specs ---------- */
+.seo-specs{width:100%;max-width:640px;border-collapse:collapse;margin:0 0 20px;font-size:.92rem}
+.seo-specs th,.seo-specs td{
+  text-align:left;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.09);vertical-align:top}
+.seo-specs th{color:rgba(255,255,255,.5);font-weight:600;width:38%}
+.seo-specs td{color:#fff}
+
+/* ---------- grids ---------- */
+.seo-grid{list-style:none;margin:0 0 24px;padding:0;display:grid;gap:12px;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.seo-grid.wide{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.seo-grid a{display:block;background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:15px 17px;
+  color:#fff!important;transition:.18s ease}
+.seo-grid a:hover{border-color:#FF8A1E;text-decoration:none!important;transform:translateY(-2px)}
+.seo-grid b{display:block;font-size:.98rem;line-height:1.3;margin-bottom:5px}
+.seo-grid em{display:block;font-style:normal;font-size:.78rem;
+  color:rgba(255,255,255,.55);line-height:1.45;margin-bottom:6px}
+.seo-grid span{font-weight:800;color:#FF8A1E;font-size:.9rem}
+
+/* ---------- faq ---------- */
+.seo-faq{max-width:76ch;margin-bottom:20px}
+.seo-faq details{border-bottom:1px solid rgba(255,255,255,.1);padding:14px 0}
+.seo-faq summary{cursor:pointer;font-weight:600;color:#fff;list-style:none}
+.seo-faq summary::-webkit-details-marker{display:none}
+.seo-faq summary::before{content:'+ ';color:#FF8A1E;font-weight:900}
+.seo-faq details[open] summary::before{content:'– '}
+.seo-faq p{margin:10px 0 0;font-size:.94rem}
+
+/* ---------- places ---------- */
+.seo-places{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  margin-bottom:24px}
+.seo-places > div{background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:18px 20px}
+
+/* ---------- author block ---------- */
+.seo-author{margin-top:36px;padding:20px 22px;border-radius:12px;
+  background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.1);max-width:72ch}
+.seo-author .seo-btn{margin-right:8px;margin-top:6px}
+
+/* ---------- footer ---------- */
+.seo-ftr{border-top:1px solid rgba(255,255,255,.1);padding:34px 0 0;margin-top:50px;
+  font-size:.88rem}
+.seo-ftr .wrap{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.seo-ftr b{display:block;margin-bottom:8px;color:#fff}
+.seo-ftr p{margin:0 0 6px;color:rgba(255,255,255,.6);line-height:1.5}
+.seo-ftr-bot{display:flex!important;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  border-top:1px solid rgba(255,255,255,.08);margin-top:26px;padding:16px 22px 26px;
+  color:rgba(255,255,255,.4);font-size:.78rem;grid-template-columns:none!important}
+
+@media (max-width:600px){
+  .seo-main{padding-top:24px}
+  .seo-nav{gap:12px;font-size:.84rem;width:100%;margin-left:0}
+}
