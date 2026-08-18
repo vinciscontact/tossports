@@ -17,3 +17,7 @@ v2-appsscript/migrate/*.csv
 
 # SEO build output — regenerate with: node seo/build-seo.js
 dist/
+
+# npm for the photo/SEO scripts
+package-lock.json
+package.json

@@ -1192,7 +1192,131 @@ function editProduct(id) {
 /* ---------- product photo upload ----------
    Straight to Supabase Storage. Writes are admin-only by policy, reads are
    public, so the returned URL can go on the storefront as-is. */
-async function uploadPhoto(file, productId) {
+/* ---------- image optimisation, in the browser ----------
+   A photo off a phone is 3–8MB. Uploading it raw means the customer
+   downloads it raw, which is the single worst thing you can do to page
+   speed — and page speed is a ranking factor, so it would quietly undo
+   the SEO work. Resizing here also means the upload itself is fast on
+   mobile data, which matters when someone is photographing bats in the
+   workshop.
+
+   Three sizes are produced so the storefront can pick the right one:
+     1600px  the product page
+      800px  cards and the shop grid
+      320px  thumbnails
+   WebP where the browser can encode it (every current one can), JPEG as
+   the fallback. Quality 0.82 is the point where a bat photo stops
+   improving visibly but keeps shrinking. */
+const IMG_SIZES = [
+  { w: 1600, tag: 'lg', q: 0.82 },
+  { w: 800,  tag: 'md', q: 0.82 },
+  { w: 320,  tag: 'sm', q: 0.80 }
+];
+
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not an image the browser can read.')); };
+    img.src = url;
+  });
+}
+
+/** Resize to a target width, keeping the aspect ratio. Never upscales. */
+function resizeToBlob(img, targetW, quality) {
+  const scale = Math.min(1, targetW / img.naturalWidth);
+  const w = Math.round(img.naturalWidth * scale);
+  const h = Math.round(img.naturalHeight * scale);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  /* white matte: product shots are on white, and a JPEG cannot hold
+     transparency — without this a PNG with alpha turns black */
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, w, h);
+
+  return new Promise(resolve => {
+    canvas.toBlob(blob => {
+      if (blob) return resolve({ blob: blob, type: 'image/webp', ext: 'webp', w: w, h: h });
+      /* Safari used to refuse WebP encoding — fall back rather than fail */
+      canvas.toBlob(b2 => resolve({ blob: b2, type: 'image/jpeg', ext: 'jpg', w: w, h: h }),
+        'image/jpeg', quality);
+    }, 'image/webp', quality);
+  });
+}
+
+async function optimiseImage(file) {
+  const img = await readImage(file);
+  const out = [];
+  for (const s of IMG_SIZES) {
+    /* skip a size the original is already smaller than — no point
+       writing a 1600px file from a 900px photo */
+    if (img.naturalWidth < s.w && s.tag !== 'sm' && out.length) continue;
+    out.push(Object.assign({ tag: s.tag }, await resizeToBlob(img, s.w, s.q)));
+  }
+  return { versions: out, original: { w: img.naturalWidth, h: img.naturalHeight } };
+}
+
+async function putObject_(path, blob, contentType) {
+  const res = await fetch(`${SUPA_URL}/storage/v1/object/products/${path}`, {
+    method: 'POST',
+    headers: Object.assign(supaHeaders(), {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000, immutable'
+    }),
+    body: blob
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(res.status === 403 || res.status === 401
+      ? 'Storage refused the upload — your account is not an admin.'
+      : (t || res.statusText).slice(0, 120));
+  }
+  return `${SUPA_URL}/storage/v1/object/public/products/${path}`;
+}
+
+/**
+ * Optimise, then upload every size. Returns the medium URL for the
+ * gallery — the other sizes sit beside it under predictable names, so a
+ * srcset can be built from the one URL without another database column.
+ */
+async function uploadPhoto(file, productId, onProgress) {
+  const base = file.name.replace(/\.[^.]+$/, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'photo';
+  const stamp = Date.now();
+
+  let opt;
+  try {
+    opt = await optimiseImage(file);
+  } catch (e) {
+    /* a file the canvas cannot read still gets uploaded rather than lost */
+    console.warn('optimise failed, uploading original:', e.message);
+    return uploadRaw_(file, productId);
+  }
+
+  const urls = {};
+  let total = 0;
+  for (const v of opt.versions) {
+    const path = `${productId}/${stamp}-${base}-${v.tag}.${v.ext}`;
+    urls[v.tag] = await putObject_(path, v.blob, v.type);
+    total += v.blob.size;
+    if (onProgress) onProgress(v.tag, v.blob.size);
+  }
+
+  const saved = Math.max(0, file.size - total);
+  console.info(`${file.name}: ${Math.round(file.size / 1024)}KB → ` +
+    `${Math.round(total / 1024)}KB across ${opt.versions.length} sizes ` +
+    `(${Math.round(saved / file.size * 100)}% smaller)`);
+
+  /* the medium is the one the shop shows; large exists for the product page */
+  return urls.md || urls.lg || urls.sm;
+}
+
+async function uploadRaw_(file, productId) {
   const clean = file.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-');
   const path = `${productId}/${Date.now()}-${clean}`;
   const res = await fetch(`${SUPA_URL}/storage/v1/object/products/${path}`, {
@@ -1233,17 +1357,28 @@ function wirePhotoUpload(productId) {
   const send = async files => {
     const list = [...files].filter(f => /^image\//.test(f.type));
     if (!list.length) return;
-    let done = 0;
+    let done = 0, saved = 0, original = 0;
     for (const f of list) {
-      stat.textContent = `Uploading ${done + 1} of ${list.length}…`;
+      stat.textContent = `Optimising ${done + 1} of ${list.length}…`;
       try {
-        const url = await uploadPhoto(f, productId);
+        let after = 0;
+        const url = await uploadPhoto(f, productId, (tag, bytes) => {
+          after += bytes;
+          stat.textContent = `Uploading ${done + 1} of ${list.length} — ${tag}…`;
+        });
+        original += f.size;
+        saved += Math.max(0, f.size - after);
         urls.value = (urls.value.trim() ? urls.value.trim() + '\n' : '') + url;
         paint();
         done++;
       } catch (e) { stat.textContent = e.message; return; }
     }
-    stat.textContent = `${done} photo${done === 1 ? '' : 's'} uploaded — save to keep them.`;
+    /* say what the optimisation actually achieved, so the saving is
+       visible rather than a silent background nicety */
+    const pct = original ? Math.round(saved / original * 100) : 0;
+    stat.textContent = `${done} photo${done === 1 ? '' : 's'} uploaded` +
+      (pct > 0 ? ` · ${pct}% smaller, ${Math.round(saved / 1024)}KB saved` : '') +
+      ' — save to keep them.';
   };
 
   pick.onclick = () => input.click();

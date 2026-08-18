@@ -1025,9 +1025,10 @@ function galleryHTML(p, off) {
     ? `<img id="pdpMain" src="${esc(imgs[0])}" alt="${esc(p.name)}" fetchpriority="high">`
     : `<div id="pdpMain" class="pdp-art">${batSVG(p)}</div>`;
 
+  /* the class carries the white-panel treatment on browsers without :has() */
   return `
   <div class="pdp-gal">
-    <div class="pdp-stage">${badges}${main}</div>
+    <div class="pdp-stage${imgs.length ? ' has-photo' : ''}">${badges}${main}</div>
     ${imgs.length > 1 ? `
       <div class="pdp-thumbs" role="group" aria-label="Product images">
         ${imgs.map((src, i) => `
