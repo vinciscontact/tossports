@@ -1026,19 +1026,128 @@ function galleryHTML(p, off) {
     ? `<img id="pdpMain" src="${esc(imgs[0])}" alt="${esc(p.name)}" fetchpriority="high">`
     : `<div id="pdpMain" class="pdp-art">${batSVG(p)}</div>`;
 
-  /* the class carries the white-panel treatment on browsers without :has() */
+  /* Thumbnails sit BESIDE the photo on a wide screen rather than under
+     it. On a 2000px monitor a full-width white panel left the bat
+     stranded in a sea of empty white with the other shots pushed so far
+     down they read as decoration. Beside it, they are the first thing
+     the eye finds after the product. */
   return `
-  <div class="pdp-gal">
-    <div class="pdp-stage${imgs.length ? ' has-photo' : ''}">${badges}${main}</div>
+  <div class="pdp-gal${imgs.length > 1 ? ' with-thumbs' : ''}">
     ${imgs.length > 1 ? `
       <div class="pdp-thumbs" role="group" aria-label="Product images">
         ${imgs.map((src, i) => `
           <button class="pdp-th${i === 0 ? ' on' : ''}" data-img="${esc(src)}"
-                  aria-label="View image ${i + 1}">
+                  aria-label="View image ${i + 1} of ${imgs.length}">
             <img src="${esc(src)}" alt="" loading="lazy" decoding="async">
           </button>`).join('')}
       </div>` : ''}
+    <div class="pdp-stage${imgs.length ? ' has-photo' : ''}">
+      ${badges}${main}
+      ${imgs.length ? `
+        <button class="pdp-zoom" id="pdpZoom" aria-label="Zoom this photo">
+          ${ICON.search}<span>Zoom</span>
+        </button>` : ''}
+    </div>
   </div>`;
+}
+
+/* ---------------- the zoom viewer ----------------
+   Opens the photo full screen. Scroll or pinch to zoom, drag to move
+   around, arrow keys or the strip to change shot, Escape to leave.
+   Built here rather than pulled in as a library because it is about
+   sixty lines and a library would be heavier than the photos. */
+function openZoom(images, startAt, name) {
+  if (!images || !images.length) return;
+  let i = startAt || 0, scale = 1, tx = 0, ty = 0;
+
+  const box = document.createElement('div');
+  box.className = 'zoom';
+  box.innerHTML = `
+    <div class="zoom-bar">
+      <span class="zoom-count">${i + 1} / ${images.length}</span>
+      <span class="zoom-hint">Scroll to zoom · drag to move</span>
+      <button class="zoom-x" aria-label="Close">${ICON.close}</button>
+    </div>
+    <div class="zoom-stage">
+      <img class="zoom-img" src="${esc(images[i])}" alt="${esc(name || '')}" draggable="false">
+    </div>
+    ${images.length > 1 ? `
+      <div class="zoom-strip">
+        ${images.map((s, k) => `<button class="zoom-th${k === i ? ' on' : ''}" data-k="${k}">
+          <img src="${esc(s)}" alt="" loading="lazy"></button>`).join('')}
+      </div>` : ''}`;
+  document.body.appendChild(box);
+  document.body.classList.add('no-scroll');
+
+  const img = box.querySelector('.zoom-img');
+  const count = box.querySelector('.zoom-count');
+  const apply = () => {
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    img.classList.toggle('zoomed', scale > 1);
+  };
+  const clampPan = () => {
+    /* keep the photo from being dragged off screen entirely */
+    const lim = 160 * scale;
+    tx = Math.max(-lim, Math.min(lim, tx));
+    ty = Math.max(-lim, Math.min(lim, ty));
+  };
+  const zoomTo = v => {
+    scale = Math.max(1, Math.min(4, v));
+    if (scale === 1) { tx = 0; ty = 0; }
+    clampPan(); apply();
+  };
+  const show = k => {
+    i = (k + images.length) % images.length;
+    img.src = images[i];
+    scale = 1; tx = 0; ty = 0; apply();
+    if (count) count.textContent = (i + 1) + ' / ' + images.length;
+    $$('.zoom-th', box).forEach((t, n) => t.classList.toggle('on', n === i));
+  };
+
+  box.querySelector('.zoom-x').onclick = close;
+  $$('.zoom-th', box).forEach(t => t.onclick = () => show(+t.dataset.k));
+
+  /* click the photo to step the zoom, click the backdrop to leave */
+  box.querySelector('.zoom-stage').addEventListener('click', e => {
+    if (e.target === img) zoomTo(scale >= 4 ? 1 : scale + 1);
+    else close();
+  });
+
+  box.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoomTo(scale + (e.deltaY < 0 ? 0.3 : -0.3));
+  }, { passive: false });
+
+  /* drag to pan, mouse and touch through pointer events */
+  let dragging = false, px = 0, py = 0;
+  img.addEventListener('pointerdown', e => {
+    if (scale <= 1) return;
+    dragging = true; px = e.clientX; py = e.clientY;
+    img.setPointerCapture(e.pointerId);
+  });
+  img.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    tx += e.clientX - px; ty += e.clientY - py;
+    px = e.clientX; py = e.clientY;
+    clampPan(); apply();
+  });
+  ['pointerup', 'pointercancel'].forEach(ev =>
+    img.addEventListener(ev, () => dragging = false));
+
+  function onKey(e) {
+    if (e.key === 'Escape') close();
+    if (e.key === 'ArrowRight') show(i + 1);
+    if (e.key === 'ArrowLeft') show(i - 1);
+    if (e.key === '+' || e.key === '=') zoomTo(scale + 0.5);
+    if (e.key === '-') zoomTo(scale - 0.5);
+  }
+  document.addEventListener('keydown', onKey);
+
+  function close() {
+    box.remove();
+    document.body.classList.remove('no-scroll');
+    document.removeEventListener('keydown', onKey);
+  }
 }
 
 /* Real customer messages instead of a paid endorsement. Chosen by product
@@ -2453,6 +2562,23 @@ function mount(page, parts) {
       if (main && main.tagName === 'IMG') main.src = t.dataset.img;
       $$('.pdp-th').forEach(x => x.classList.toggle('on', x === t));
     });
+
+    /* zoom — the photo itself and the button both open it, at whichever
+       shot is currently showing */
+    (function wireZoom() {
+      const p = byId(parts[1]);
+      const imgs = (p && p.images || []).filter(Boolean);
+      if (!imgs.length) return;
+      const openHere = () => {
+        const cur = $('#pdpMain');
+        const at = Math.max(0, imgs.findIndex(s => cur && cur.src.endsWith(s)));
+        openZoom(imgs, at, p.name);
+      };
+      const main = $('#pdpMain');
+      if (main && main.tagName === 'IMG') main.onclick = openHere;
+      const zb = $('#pdpZoom');
+      if (zb) zb.onclick = openHere;
+    })();
     /* the review screenshot opens full size, same lightbox as the trust band */
     $$('.pdp-rev [data-note], .pdp-rev-img').forEach(b => b.onclick = () => {
       const src = b.dataset.note || b.querySelector('img').src;
