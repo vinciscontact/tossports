@@ -1012,9 +1012,13 @@ canvas.gp-cv{display:block;width:100%;height:auto;image-rendering:pixelated;
 /* ---------- PRODUCT PAGE ---------- */
 .pdp-gal{display:grid;gap:12px}
 .pdp-thumbs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
-.pdp-th{flex:none;width:68px;height:68px;border-radius:10px;overflow:hidden;padding:0;
-  border:2px solid transparent;background:rgba(255,255,255,.06);transition:.18s var(--ease)}
-.pdp-th img{width:100%;height:100%;object-fit:cover;display:block}
+/* Portrait, to match the shape of a bat, and CONTAIN not cover: a square
+   thumbnail with cover crops a 2:3 bat photo down to a sliver of blade,
+   which made every thumbnail look identical. White ground because the
+   shots are on white. */
+.pdp-th{flex:none;width:62px;height:88px;border-radius:10px;overflow:hidden;padding:5px;
+  border:2px solid transparent;background:#fff;transition:.18s var(--ease)}
+.pdp-th img{width:100%;height:100%;object-fit:contain;display:block}
 .pdp-th:hover{border-color:rgba(255,255,255,.4)}
 .pdp-th.on{border-color:var(--orange)}
 .pdp-th:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
@@ -1865,3 +1869,90 @@ body.pdp-open .fab{bottom:82px}
   .ws-card{animation:none}
   .ws-burst{animation:none}
 }
+
+/* ---------- THE FIELDER ON THE PAGE ----------
+   Lives in a strip along the very bottom of the viewport, which nothing
+   else occupies, so he can never cover a price, a button or a photo.
+   The stage ignores the pointer entirely; only the figure takes a click. */
+.fd-stage{position:fixed;left:0;right:0;bottom:0;height:150px;z-index:45;
+  pointer-events:none;overflow:hidden;opacity:0;transition:opacity .25s var(--ease)}
+.fd-stage.on{opacity:1}
+/* the reaction pops in a corner instead of running the full width */
+.fd-stage.corner{left:auto;right:14px;width:210px}
+
+.fd-guy{position:absolute;bottom:14px;left:0;width:52px;height:68px;padding:0;
+  pointer-events:auto;cursor:pointer;background:none;border:0;
+  transform:translateX(var(--gx,-60px)) scaleX(var(--flip,1));
+  filter:drop-shadow(0 10px 18px rgba(0,0,0,.45))}
+.fd-guy:focus-visible{outline:3px solid var(--orange);outline-offset:4px;border-radius:10px}
+.fd-svg{width:100%;height:100%;display:block;overflow:visible}
+.fd-shadow{fill:rgba(0,0,0,.28)}
+
+/* run in, run out */
+.fd-guy.in{animation:fdIn 1.2s cubic-bezier(.25,.6,.3,1) forwards}
+.fd-guy.out{animation:fdOut .95s cubic-bezier(.5,0,.75,1) forwards}
+@keyframes fdIn{to{transform:translateX(var(--gx-end)) scaleX(var(--flip,1))}}
+@keyframes fdOut{to{transform:translateX(calc(var(--gx-end) + (var(--flip) * -320px)))
+  scaleX(calc(var(--flip,1) * -1))}}
+
+/* the corner reaction */
+.fd-guy.pop{left:auto;right:18px;transform:none;animation:fdPop .4s var(--ease) both}
+@keyframes fdPop{from{transform:translateY(80px) scale(.85)}to{transform:none}}
+
+/* legs and arms, driven by pose */
+.fd-guy[data-pose="run"] .fd-leg.l{animation:fdStride .26s linear infinite}
+.fd-guy[data-pose="run"] .fd-leg.r{animation:fdStride .26s linear infinite reverse}
+.fd-guy[data-pose="run"] .fd-arm.l{animation:fdSwing .26s linear infinite reverse}
+.fd-guy[data-pose="run"] .fd-arm.r{animation:fdSwing .26s linear infinite}
+@keyframes fdStride{0%,100%{transform:rotate(24deg)}50%{transform:rotate(-24deg)}}
+@keyframes fdSwing{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(18deg)}}
+.fd-leg,.fd-arm{transform-origin:center 3px;fill:#1b1b3d}
+.fd-arm{transform-origin:center 4px}
+
+.fd-guy[data-pose="catch"] .fd-arms,
+.fd-guy[data-pose="appeal"] .fd-arms{transform:translateY(-11px) rotate(0)}
+.fd-guy[data-pose="catch"] .fd-arm.l{transform:rotate(-52deg)}
+.fd-guy[data-pose="catch"] .fd-arm.r{transform:rotate(52deg)}
+.fd-guy[data-pose="appeal"] .fd-arm.l{transform:rotate(-78deg)}
+.fd-guy[data-pose="appeal"] .fd-arm.r{transform:rotate(78deg)}
+.fd-guy[data-pose="throw"] .fd-arm.r{transform:rotate(-120deg)}
+.fd-guy[data-pose="clap"] .fd-arm.l{animation:fdClapL .3s ease-in-out infinite}
+.fd-guy[data-pose="clap"] .fd-arm.r{animation:fdClapR .3s ease-in-out infinite}
+@keyframes fdClapL{0%,100%{transform:rotate(-40deg)}50%{transform:rotate(-8deg)}}
+@keyframes fdClapR{0%,100%{transform:rotate(40deg)}50%{transform:rotate(8deg)}}
+.fd-guy[data-pose="catch"] .fd-mouth,
+.fd-guy[data-pose="appeal"] .fd-mouth{d:path("M18 19q4 4 8 0")}
+
+/* the ball */
+.fd-ball{position:absolute;width:13px;height:13px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#f2ff9e,#c9d949 55%,#8fa32c);
+  box-shadow:0 3px 8px rgba(0,0,0,.4);opacity:0;left:0;bottom:0}
+.fd-ball.drop{opacity:1;animation:fdDrop 1.25s cubic-bezier(.4,0,.7,1) forwards}
+@keyframes fdDrop{
+  0%{transform:translate(var(--bx),-90vh) scale(.8)}
+  70%{transform:translate(var(--bx),22px)}
+  84%{transform:translate(var(--bx),4px)}
+  100%{transform:translate(var(--bx),22px)}
+}
+.fd-ball.caught{opacity:0}
+.fd-ball.thrown{opacity:1;animation:fdThrow .6s ease-in forwards}
+@keyframes fdThrow{
+  from{transform:translate(var(--bx),22px)}
+  to{transform:translate(calc(var(--bx) + 90px),-90vh) scale(.6);opacity:0}
+}
+
+/* what he says */
+/* The figure is flipped with scaleX(-1) to face the way he is running,
+   and that flips his speech with him — the text came out mirrored.
+   Multiplying by --flip again cancels it, because 1/-1 is -1. */
+.fd-bubble{position:absolute;bottom:calc(100% + 8px);left:50%;
+  transform:translateX(-50%) scaleX(var(--flip,1)) translateY(6px) scale(.9);
+  background:#fff;color:#14141f;font-size:.74rem;font-weight:800;
+  padding:6px 11px;border-radius:100px;white-space:nowrap;opacity:0;
+  transition:.22s var(--ease);box-shadow:0 8px 20px rgba(0,0,0,.3)}
+.fd-bubble.on{opacity:1;transform:translateX(-50%) scaleX(var(--flip,1)) translateY(0) scale(1)}
+.fd-bubble::after{content:'';position:absolute;top:100%;left:50%;margin-left:-5px;
+  border:5px solid transparent;border-top-color:#fff}
+
+@media (prefers-reduced-motion:reduce){.fd-stage{display:none}}
+@media (max-width:719px){.fd-stage{display:none}}

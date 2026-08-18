@@ -161,7 +161,13 @@ const NavPlay = (function () {
         outcome = roll < 0.5 ? 'four' : roll < 0.8 ? 'caught' : 'bowled';
         st = outcome; t0 = now;
         if (outcome === 'bowled') { bat.dataset.pose = 'beaten'; say('BOWLED!', 'bad', batAt, gy); }
-        if (outcome === 'four')   say('FOUR!', 'good', batAt, gy);
+        if (outcome === 'four') {
+          say('FOUR!', 'good', batAt, gy);
+          /* the ball has left the bar — tell the page, so a fielder can
+             come down and chase it. Fired as an event rather than a
+             direct call so the navbar keeps working with or without him. */
+          document.dispatchEvent(new CustomEvent('toss:four'));
+        }
         if (outcome === 'caught') field.dataset.pose = 'run';
       }
     }

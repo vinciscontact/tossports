@@ -91,6 +91,7 @@ function addToCart(id, variant) {
   else cart.push({ key, id, variant: variant || null, qty: 1 });
   saveCart(); syncCart();
   toast(p.name + ' added to bag');
+  document.dispatchEvent(new CustomEvent('toss:cart'));
 }
 function setQty(key, d) {
   const i = cart.find(x => x.key === key);
@@ -2356,6 +2357,9 @@ function wireHero() {
 /* ---------------- per-view wiring ---------------- */
 function mount(page, parts) {
   clearInterval(BOARD_TIMER);   /* the big screen only runs on the game page */
+  /* he is allowed on home and shop only — nothing moves while somebody
+     is deciding on a product page or typing an address at checkout */
+  if (typeof Fielder !== 'undefined') Fielder.setPage(page);
   if (page === 'home') { wireHero(); wireTrust(); }
 
   if (page === 'game') {
@@ -2388,7 +2392,10 @@ function mount(page, parts) {
         };
         refresh(won);
         /* the board reveals quietly behind; the splash is the moment */
-        if (wonAll.length) rewardSplash(wonAll);
+        if (wonAll.length) {
+          rewardSplash(wonAll);
+          document.dispatchEvent(new CustomEvent('toss:reward'));
+        }
 
         /* the database is the authority on what a score earns; if it grants
            something the bundled table did not, reveal that too */
@@ -2643,6 +2650,7 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
   /* the playful bits, mounted last so nothing above depends on them */
   if (typeof NavPlay !== 'undefined') NavPlay.mount();
   if (typeof Bot !== 'undefined') Bot.mount();
+  if (typeof Fielder !== 'undefined') { Fielder.mount(); Fielder.greet(); }
 
   /* Live data is fetched AFTER the page is already interactive.
      This used to be awaited at the top of init(), which meant one hanging
