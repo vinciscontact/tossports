@@ -41,6 +41,17 @@ function loadProducts() {
 
 const { products: PRODUCTS, WOOD, PROFILE } = loadProducts();
 
+/* Take the cache-busting version from index.html rather than repeating it
+   here — it had already drifted to v=56 while the site served v=59, which
+   would have shown these pages an old stylesheet. */
+const CSS_V = (function () {
+  try {
+    const m = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
+      .match(/styles\.css\?v=(\d+)/);
+    return m ? m[1] : '1';
+  } catch (e) { return '1'; }
+})();
+
 /* ---------- helpers ---------- */
 const esc = s => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -239,7 +250,7 @@ ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords.join(', '))}">` 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="${o.depth}css/styles.css?v=56">
+<link rel="stylesheet" href="${o.depth}css/styles.css?v=${CSS_V}">
 <link rel="stylesheet" href="${o.depth}css/seo.css?v=1">
 <link rel="icon" href="${o.depth}images/logo/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="${o.depth}images/logo/favicon-180.png">
@@ -281,7 +292,15 @@ ${o.body}
       <p><a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a></p>
     </div>
     <div>
-      <b>Guides</b>
+      <b>Bats</b>
+      ${Object.keys(CLUSTERS).map(k =>
+        `<p><a href="${o.depth}${k}/">${esc(CLUSTERS[k].h1)}</a></p>`).join('')}
+    </div>
+    <div>
+      <b>The turf</b>
+      ${Object.keys(TURF_PAGES).map(k =>
+        `<p><a href="${o.depth}${k}/">${esc(TURF_PAGES[k].h1)}</a></p>`).join('')}
+      <b style="margin-top:14px">Guides</b>
       ${GUIDES.slice(0, 4).map(g =>
         `<p><a href="${o.depth}guides/${g.slug}/">${esc(g.h1)}</a></p>`).join('')}
     </div>
@@ -344,13 +363,12 @@ function productSchema(p) {
         }
       }
     };
-  } else {
-    s.offers = {
-      '@type': 'Offer', url: SITE + '/product/' + p.id + '/',
-      priceCurrency: 'INR', availability: 'https://schema.org/PreOrder',
-      seller: { '@id': SITE + '/#organization' }
-    };
   }
+  /* No offers block at all for a price-on-request bat. Google requires a
+     price inside an Offer, and inventing one to win a rich result is
+     exactly the kind of thing that earns a manual action. The product is
+     still described; it simply is not eligible for a price snippet, which
+     is correct, because there is no price. */
 
   /* Ratings are only declared where they are real. Inventing an
      aggregateRating is a manual-action risk, not a clever trick. */
@@ -604,6 +622,7 @@ function guidePage(g) {
         '@id': SITE + '/guides/' + g.slug + '/#article',
         headline: g.title,
         description: g.desc,
+        image: [SITE + '/images/hero/slide-1-1280.jpg'],
         author: { '@id': SITE + '/#organization' },
         publisher: { '@id': SITE + '/#organization' },
         inLanguage: 'en-IN',
@@ -737,7 +756,7 @@ function areaPage(a) {
 
   <h2>Other areas we serve</h2>
   <ul class="seo-list">
-    ${AREAS.filter(x => x.slug !== a.slug).slice(0, 6).map(x =>
+    ${AREAS.filter(x => x.slug !== a.slug).map(x =>
       `<li><a href="../${x.slug}/">Cricket bats in ${esc(x.name)}</a></li>`).join('')}
   </ul>`;
 
