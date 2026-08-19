@@ -1779,6 +1779,23 @@ body.has-annc .filter-bar{top:var(--hdr)}
   display:grid;place-items:center;transition:.2s}
 .socials a svg{width:19px;height:19px}
 .socials a:hover{background:var(--orange);color:var(--navy-900);transform:translateY(-3px)}
+/* The pre-JS homepage frame. Sized and coloured like the hero that replaces
+   it so the swap does not jump the page — this is the first paint a visitor
+   on a slow connection sees, not a hidden SEO block. */
+.hero-boot{background:var(--navy-900);color:#fff;
+  padding:calc(var(--hdr) + 74px) 0 96px;min-height:62vh}
+.hero-boot .lede{max-width:46ch;margin-top:14px}
+.hero-boot-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
+.hero-boot-proof{margin-top:22px;font-size:.8rem;color:rgba(255,255,255,.6)}
+
+/* Deliberately quiet — a wrapped row of text links, not a fifth nav column.
+   These earn their place by being crawlable, and a visitor who wants them
+   will find them; making them loud would push the real navigation down. */
+.ftr-seo{margin-top:30px;padding-top:22px;border-top:1px solid rgba(255,255,255,.1)}
+.ftr-seo ul{display:flex;flex-wrap:wrap;gap:8px 20px}
+.ftr-seo li{list-style:none}
+.ftr-seo a{font-size:.8rem;color:rgba(255,255,255,.55)}
+.ftr-seo a:hover{color:var(--orange)}
 .ftr-bot{border-top:1px solid rgba(255,255,255,.1);margin-top:34px;padding-top:20px;
   display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;
   font-size:.76rem;color:rgba(255,255,255,.4)}

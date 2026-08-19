@@ -61,7 +61,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/styles.css?v=64">
+<link rel="stylesheet" href="css/styles.css?v=65">
 <link rel="icon" href="images/logo/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="images/logo/favicon-180.png">
 </head>
@@ -123,8 +123,37 @@
   </div>
 </header>
 
-<!-- ===== app ===== -->
-<main id="app"></main>
+<!-- ===== app =====
+  This shipped empty. Every one of the 57 generated pages carries real
+  HTML, and the homepage — the page that collects the external links and
+  should rank for the brand — was the only one that did not, with no H1
+  in the source at all.
+
+  Google does render JavaScript, so this was never invisible, but
+  rendering is a deferred second pass: the first crawl of the most
+  important page on the site saw a blank element.
+
+  The router replaces these contents on mount, so this is a starting
+  frame, not a separate page. It says exactly what the rendered hero
+  says — same headline, same claims, same links — because content shown
+  to a crawler that differs from what a visitor sees is cloaking. It
+  also paints something real before app.js has parsed.
+-->
+<main id="app">
+  <section class="hero-boot">
+    <div class="wrap">
+      <p class="eyebrow">India's gully cricket ecosystem</p>
+      <h1 class="d1">From street cricket <span class="hl-2">to greatness.</span></h1>
+      <p class="lede">29 bats shaped by hand in our own unit — Sri Lankan wood,
+        Kashmir Willow and Poplar. From ₹950.</p>
+      <p class="hero-boot-cta">
+        <a class="btn btn-primary" href="#/shop">Shop All Bats</a>
+        <a class="btn btn-ghost" href="#/finder">Find My Bat — 30s</a>
+      </p>
+      <p class="hero-boot-proof">36.9K on Instagram · 4M reel reach · played by 170-player clubs</p>
+    </div>
+  </section>
+</main>
 
 <!-- ===== footer ===== -->
 <footer class="ftr">
@@ -175,6 +204,37 @@
         </ul>
       </div>
     </div>
+    <!--
+      Every other link in this footer is a hash route (#/shop?wood=…), and
+      Google discards everything after the #. So to a crawler the whole
+      storefront was one URL that linked nowhere, and the 57 pre-rendered
+      landing pages were an island: they linked to each other and back to
+      this homepage, but nothing on the site ever linked out to them.
+
+      These are real crawlable URLs, and they sit in the footer rather than
+      inside <main id="app"> on purpose — the router replaces that element's
+      contents on every navigation, which would destroy the links on mount.
+      Here they survive, and they appear on every route rather than only the
+      homepage.
+    -->
+    <nav class="ftr-seo" aria-label="Popular searches">
+      <h4>Popular searches</h4>
+      <ul>
+        <li><a href="tennis-ball-cricket-bats/">Tennis ball cricket bats</a></li>
+        <li><a href="gully-cricket-bats/">Gully cricket bats</a></li>
+        <li><a href="hard-tennis-ball-bats/">Hard tennis ball bats</a></li>
+        <li><a href="sri-lankan-tennis-ball-bats/">Sri Lankan willow bats</a></li>
+        <li><a href="scoop-mongoose-bats/">Scoop &amp; mongoose bats</a></li>
+        <li><a href="wooden-cricket-bats/">Wooden cricket bats</a></li>
+        <li><a href="cricket-bats-under-1500/">Cricket bats under ₹1500</a></li>
+        <li><a href="bulk-cricket-bats-for-clubs/">Bulk bats for clubs</a></li>
+        <li><a href="cricket-bat-shop-chennai/">Cricket bat shop in Chennai</a></li>
+        <li><a href="cricket-turf-chennai/">Cricket turf in Chennai</a></li>
+        <li><a href="box-cricket-chennai/">Box cricket Chennai</a></li>
+        <li><a href="guides/">Buying guides</a></li>
+      </ul>
+    </nav>
+
     <div class="ftr-bot">
       <span>© <span id="yr"></span> Toss Sports. Handcrafted in India.</span>
       <span>Prices inclusive of taxes · Free shipping over ₹1500</span>
