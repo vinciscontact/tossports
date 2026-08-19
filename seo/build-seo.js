@@ -41,6 +41,56 @@ function loadProducts() {
 
 const { products: PRODUCTS, WOOD, PROFILE } = loadProducts();
 
+/* ------------------------------------------------------------
+   Product URLs.
+
+   These used to be /product/<id>/, where the id is an internal code:
+   /product/jhl/, /product/cws/, /product/ys-bat/. That tells a
+   searcher nothing and gives Google nothing to match, while the
+   category pages beside it already read as English.
+
+   So the slug is built from the product NAME instead, with "bat"
+   appended when the name does not already end in it. Deliberately
+   short: the head terms — "tennis ball cricket bats", "gully cricket
+   bats" — belong to the category pages, and repeating them across 29
+   product URLs would set our own pages competing with each other for
+   the same phrase while reading as keyword stuffing.
+
+   Flat, with no /product/ prefix, which is what puts the words
+   closest to the domain. That removes the namespace the prefix used
+   to provide, so nothing structurally stops a product slug from
+   colliding with a category slug. assertNoSlugClashes() below is
+   what replaces it, and it runs on every build rather than trusting
+   that today's names stay unique.
+   ------------------------------------------------------------ */
+const kebab = s => String(s).toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+function productSlug(p) {
+  const base = kebab(p.name);
+  /* "bat" anywhere in the name, not just at the end — "Flat Bat — Kashmir
+     Willow" would otherwise become flat-bat-kashmir-willow-bat. */
+  return /(^|-)bats?(-|$)/.test(base) ? base : base + '-bat';
+}
+
+const productPath = p => '/' + productSlug(p) + '/';
+
+function assertNoSlugClashes(reserved) {
+  const seen = new Map();
+  for (const p of PRODUCTS) {
+    const s = productSlug(p);
+    if (seen.has(s)) {
+      throw new Error(`Two products produce the URL /${s}/ — "${seen.get(s)}" and ` +
+        `"${p.name}". Rename one, or the second would overwrite the first.`);
+    }
+    if (reserved.has(s)) {
+      throw new Error(`Product "${p.name}" wants /${s}/, which is already a ` +
+        `category or guide page. Rename the product.`);
+    }
+    seen.set(s, p.name);
+  }
+}
+
 /* Take the cache-busting version from index.html rather than repeating it
    here — it had already drifted to v=56 while the site served v=59, which
    would have shown these pages an old stylesheet. */
@@ -320,7 +370,7 @@ ${o.body}
 function productSchema(p) {
   const s = {
     '@type': 'Product',
-    '@id': SITE + '/product/' + p.id + '/#product',
+    '@id': SITE + productPath(p) + '#product',
     name: p.name,
     description: productDescription(p),
     sku: p.id,
@@ -345,7 +395,7 @@ function productSchema(p) {
   if (p.price != null) {
     s.offers = {
       '@type': 'Offer',
-      url: SITE + '/product/' + p.id + '/',
+      url: SITE + productPath(p),
       priceCurrency: 'INR',
       price: p.price,
       availability: 'https://schema.org/InStock',
@@ -426,7 +476,7 @@ function productPage(p) {
 
   const body = `
   <nav class="crumbs" aria-label="Breadcrumb">
-    <a href="../../">Home</a> / <a href="../../tennis-ball-cricket-bats/">Tennis ball bats</a> /
+    <a href="../">Home</a> / <a href="../tennis-ball-cricket-bats/">Tennis ball bats</a> /
     <span>${esc(p.name)}</span>
   </nav>
 
@@ -444,7 +494,7 @@ function productPage(p) {
     <p>${esc(productDescription(p))}</p>
 
     <div class="seo-actions">
-      <a class="seo-btn" href="../../#/product/${p.id}">See photos and order</a>
+      <a class="seo-btn" href="../#/product/${p.id}">See photos and order</a>
       <a class="seo-btn ghost" href="https://wa.me/${BUSINESS.whatsapp}?text=${
         encodeURIComponent('Hi Toss Sports, I want to know about the ' + p.name)}"
         rel="nofollow">Ask on WhatsApp</a>
@@ -468,14 +518,14 @@ function productPage(p) {
     ${related.length ? `
       <h2>Similar bats</h2>
       <ul class="seo-grid">
-        ${related.map(r => `<li><a href="../${r.id}/">
+        ${related.map(r => `<li><a href="..${productPath(r)}">
           <b>${esc(r.name)}</b>
           <span>${r.price != null ? inr(r.price) : 'On request'}</span></a></li>`).join('')}
       </ul>` : ''}
   </article>`;
 
   return shell({
-    path: '/product/' + p.id + '/', depth: '../../',
+    path: productPath(p), depth: '../',
     title: title, h1: p.name, desc: fitDesc(productDescription(p)),
     ogType: 'product', body: body,
     image: (p.images && p.images[0]) ? (p.images[0].startsWith('http')
@@ -485,7 +535,7 @@ function productPage(p) {
       breadcrumbs([
         { name: 'Home', url: '/' },
         { name: 'Tennis ball cricket bats', url: '/tennis-ball-cricket-bats/' },
-        { name: p.name, url: '/product/' + p.id + '/' }
+        { name: p.name, url: productPath(p) }
       ])
     ]
   });
@@ -508,7 +558,7 @@ function categoryPage(slug, c) {
 
   ${list.length ? `
     <ul class="seo-grid wide">
-      ${list.map(p => `<li><a href="../product/${p.id}/">
+      ${list.map(p => `<li><a href="..${productPath(p)}">
         <b>${esc(p.name)}</b>
         <em>${esc(WOOD[p.wood] ? WOOD[p.wood].short : '')} ·
             ${esc(PROFILE[p.profile] ? PROFILE[p.profile].label : '')}</em>
@@ -545,7 +595,7 @@ function categoryPage(slug, c) {
       numberOfItems: list.length,
       itemListElement: list.map((p, i) => ({
         '@type': 'ListItem', position: i + 1,
-        url: SITE + '/product/' + p.id + '/', name: p.name
+        url: SITE + productPath(p), name: p.name
       }))
     });
   }
@@ -746,7 +796,7 @@ function areaPage(a) {
 
   <ul class="seo-grid wide">
     ${PRODUCTS.filter(p => p.price != null).sort((x, y) => x.price - y.price)
-      .slice(0, 6).map(p => `<li><a href="../../product/${p.id}/">
+      .slice(0, 6).map(p => `<li><a href="../..${productPath(p)}">
         <b>${esc(p.name)}</b><span>${inr(p.price)}</span></a></li>`).join('')}
   </ul>
 
@@ -793,6 +843,16 @@ console.log('Toss Sports — SEO pre-render\n');
 console.log('Domain: ' + SITE + (SITE.includes('tossports.in')
   ? '   <-- change SITE in seo/seo-data.js if this is wrong' : ''));
 
+/* Product URLs are flat, so they share one namespace with every other
+   top-level page. Check before writing anything: a clash would silently
+   overwrite one page with the other, and the sitemap would still list
+   both. Failing the build is the only outcome that cannot go unnoticed. */
+assertNoSlugClashes(new Set([
+  ...Object.keys(CLUSTERS),
+  ...Object.keys(TURF_PAGES),
+  'guides', 'cricket-bats', 'images', 'css', 'js'
+]));
+
 /* category pages */
 Object.keys(CLUSTERS).forEach(slug => {
   add(slug + '/index.html', categoryPage(slug, CLUSTERS[slug]),
@@ -802,8 +862,8 @@ console.log('  ' + Object.keys(CLUSTERS).length + ' category pages');
 
 /* product pages */
 PRODUCTS.forEach(p => {
-  add('product/' + p.id + '/index.html', productPage(p),
-      SITE + '/product/' + p.id + '/', '0.8', 'weekly');
+  add(productSlug(p) + '/index.html', productPage(p),
+      SITE + productPath(p), '0.8', 'weekly');
 });
 console.log('  ' + PRODUCTS.length + ' product pages');
 
