@@ -11,6 +11,22 @@ let FREE_SHIP_OVER = 1500;
 let SHIP_FEE = 99;
 let STORE_NOTE = '';
 
+/* Announcement marquee — a list of plain-text lines shown in the top bar,
+   edited in Maze Room → Settings → Announcement bar. These defaults show
+   offline or before live settings arrive; live data replaces them at boot.
+   on:false or an empty list hides the bar entirely. See renderMarquee(). */
+let MARQUEE = {
+  on: true,
+  items: [
+    '🏏 Handcrafted in-house — not resold',
+    '🎮 Play Gully Cricket — score 30, unlock a discount',
+    '🚚 Free shipping over ₹1,500',
+    '💬 Order on WhatsApp — 9176995707',
+    '🏆 Beat the leaderboard — ₹100 off at 50 runs',
+    '⚡ Toss Power X — 3 months warranty'
+  ]
+};
+
 /* Set the live key in Maze Room → Settings → Razorpay key id. */
 let RAZORPAY_KEY = 'rzp_test_REPLACE_WITH_YOUR_KEY';
 
@@ -23,7 +39,7 @@ let cart = [];
 try { cart = JSON.parse(localStorage.getItem('toss_cart') || '[]'); } catch (e) { cart = []; }
 const saveCart = () => localStorage.setItem('toss_cart', JSON.stringify(cart));
 
-let filters = { wood: [], profile: [], ball: [], tier: [], sort: 'pop', cat: 'bats' };
+let filters = { wood: [], profile: [], ball: [], tier: [], division: [], sort: 'pop', cat: 'bats' };
 let lastOrder = null;
 
 /* ---------- coupons earned in the gully cricket game ---------- */
@@ -69,26 +85,51 @@ function toast(msg) {
   toast._t = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
+/* ---------------- engraving ----------------
+   An engraving is { text, position, font }. Older carts (and older order
+   rows) may hold a bare string — engNorm() upgrades both to the object shape
+   and drops anything with no text, so `line.engrave` is either a full object
+   or null and every caller can treat it uniformly. */
+const ENG_POS_DEFAULT = 'front', ENG_FONT_DEFAULT = 'classic';
+function engNorm(e) {
+  if (!e) return null;
+  if (typeof e === 'string') { const t = e.trim(); return t ? { text: t, position: ENG_POS_DEFAULT, font: ENG_FONT_DEFAULT } : null; }
+  const t = String(e.text || '').trim();
+  return t ? { text: t, position: e.position || ENG_POS_DEFAULT, font: e.font || ENG_FONT_DEFAULT } : null;
+}
+function engLabel(kind, id) {
+  const list = SERVICES.engraving[kind === 'font' ? 'fonts' : 'positions'] || [];
+  const hit = list.find(x => x.id === id);
+  return hit ? hit.label : id;
+}
+
 /* ---------------- cart ---------------- */
 function cartCount() { return cart.reduce((n, i) => n + i.qty, 0); }
 function cartSubtotal() {
   return cart.reduce((n, i) => {
     const p = byId(i.id);
-    return n + (p && p.price ? p.price * i.qty : 0);
+    if (!p || !p.price) return n;
+    /* engraving is priced per bat, so it multiplies with qty like the bat does */
+    return n + (p.price + (i.engrave ? SERVICES.engraving.price : 0)) * i.qty;
   }, 0);
 }
 function shipFee() {
   const s = cartSubtotal();
   return (s === 0 || s >= FREE_SHIP_OVER) ? 0 : SHIP_FEE;
 }
-function addToCart(id, variant) {
+function addToCart(id, variant, engrave) {
   const p = byId(id);
   if (!p) return;
   if (!hasPrice(p)) { enquire(p); return; }
-  const key = id + '|' + (variant || '');
+  /* Engraving is part of the line identity, not an attribute of it — two bats
+     with different names (or the same name in a different font/position) are
+     two lines, and must never merge into a quantity of 2. */
+  const eng = engNorm(engrave);
+  if (eng) eng.text = eng.text.slice(0, SERVICES.engraving.maxChars);
+  const key = id + '|' + (variant || '') + '|' + (eng ? `${eng.text}~${eng.position}~${eng.font}` : '');
   const hit = cart.find(i => i.key === key);
   if (hit) hit.qty++;
-  else cart.push({ key, id, variant: variant || null, qty: 1 });
+  else cart.push({ key, id, variant: variant || null, engrave: eng, qty: 1 });
   saveCart(); syncCart();
   toast(p.name + ' added to bag');
   document.dispatchEvent(new CustomEvent('toss:cart'));
@@ -135,6 +176,9 @@ function cartWaText(info) {
     const p = byId(i.id);
     const v = variantName(p, i.variant);
     t += `${n + 1}. *${p.name}*${v ? ' — ' + v : ''}\n`;
+    const eng = engNorm(i.engrave);
+    if (eng) t += `   Engraved: "${eng.text}" — ${engLabel('font', eng.font)}, ${engLabel('position', eng.position)} (+${fmt(SERVICES.engraving.price)} each)
+`;
     t += `   Qty ${i.qty}`;
     t += hasPrice(p) ? ` × ${fmt(p.price)} = ${fmt(p.price * i.qty)}\n` : `  (price on request)\n`;
   });
@@ -154,6 +198,27 @@ function cartWaText(info) {
 /* ---------------- filtering ---------------- */
 const prodCat = p => p.category || 'bats';
 
+/* ------------------------------------------------------------
+   Divisions.
+
+   Derived from the ball a bat is built for, which is data we
+   already hold, rather than a new field somebody has to maintain
+   for 29 products. A bat rated only for a soft tennis ball is a
+   gully bat; one that will take a medium or hard ball is built
+   for turf and tournament play.
+
+   `p.division` overrides it, so the Maze Room can correct any bat
+   the derivation gets wrong without touching this code.
+   ------------------------------------------------------------ */
+const DIVISION = {
+  gully: { label: 'Gully & street', note: 'Soft tennis ball, concrete and matting' },
+  pro:   { label: 'Turf & tournament', note: 'Medium and hard tennis ball' }
+};
+function division(p) {
+  if (p.division) return p.division;
+  return (p.ball || []).includes('medium') ? 'pro' : 'gully';
+}
+
 function filtered() {
   let list = PRODUCTS.filter(p => prodCat(p) === filters.cat);
   /* the spec filters describe bats — other categories are a plain grid */
@@ -161,7 +226,8 @@ function filtered() {
     (!filters.wood.length    || filters.wood.includes(p.wood)) &&
     (!filters.profile.length || filters.profile.includes(p.profile)) &&
     (!filters.ball.length    || filters.ball.some(b => (p.ball || []).includes(b))) &&
-    (!filters.tier.length    || filters.tier.includes(p.tier))
+    (!filters.tier.length    || filters.tier.includes(p.tier)) &&
+    (!filters.division.length || filters.division.includes(division(p)))
   );
   const s = filters.sort;
   /* "price on request" items always sink to the bottom, whichever way we sort */
@@ -180,10 +246,11 @@ function activeChips() {
   filters.profile.forEach(v => out.push({ g: 'profile', v, l: PROFILE[v].label }));
   filters.ball.forEach(v => out.push({ g: 'ball', v, l: BALL_LABEL[v] }));
   filters.tier.forEach(v => out.push({ g: 'tier', v, l: TIER_LABEL[v] }));
+  filters.division.forEach(v => out.push({ g: 'division', v, l: DIVISION[v].label }));
   return out;
 }
 /* filter state lives in the URL so filtered views are shareable and Back works */
-const FKEYS = ['wood', 'profile', 'ball', 'tier'];
+const FKEYS = ['wood', 'profile', 'ball', 'tier', 'division'];
 
 function shopURL() {
   const q = [];
@@ -360,7 +427,9 @@ function cardHTML(p) {
 
 function filterPanelHTML() {
   const count = (g, v) => PRODUCTS.filter(p => prodCat(p) === 'bats' &&
-    (g === 'ball' ? (p.ball || []).includes(v) : p[g] === v)).length;
+    (g === 'ball'     ? (p.ball || []).includes(v)
+     : g === 'division' ? division(p) === v
+     : p[g] === v)).length;
   const grp = (title, g, opts) => `
     <div class="fgroup">
       <b>${title}</b>
@@ -371,6 +440,8 @@ function filterPanelHTML() {
         </label>`).join('')}
     </div>`;
   return (
+    grp('Division', 'division',
+      Object.keys(DIVISION).map(k => ({ v: k, l: DIVISION[k].label }))) +
     grp('Wood', 'wood', Object.values(WOOD).map(w => ({ v: w.key, l: w.label }))) +
     grp('Profile', 'profile', Object.values(PROFILE).map(w => ({ v: w.key, l: w.label }))) +
     grp('Ball Type', 'ball', [{ v: 'soft', l: 'Soft Tennis' }, { v: 'medium', l: 'Medium Tennis' }]) +
@@ -607,6 +678,10 @@ function viewHome() {
       </div>
     </div>
   </section>
+
+  ${communityHTML()}
+
+  ${servicesBandHTML()}
 
   <section class="sec">
     <div class="wrap">
@@ -1043,6 +1118,8 @@ function galleryHTML(p, off) {
       </div>` : ''}
     <div class="pdp-stage${imgs.length ? ' has-photo' : ''}">
       ${badges}${main}
+      <!-- live engraving preview, filled and positioned by the product wiring -->
+      <div class="eng-preview hide" id="engPreview" aria-hidden="true"><span></span></div>
       ${imgs.length ? `
         <button class="pdp-zoom" id="pdpZoom" aria-label="Zoom this photo">
           ${ICON.search}<span>Zoom</span>
@@ -1347,6 +1424,33 @@ function viewProduct(id) {
               </p>
             </div>` : ''}
 
+          ${hasPrice(p) && SERVICES.engraving.enabled ? `
+            <div class="opts engrave">
+              <label class="svc-check">
+                <input type="checkbox" id="engOn">
+                <span><b>Engrave it</b> — your name, a number, your team
+                  <i>+${fmt(SERVICES.engraving.price)}</i></span>
+              </label>
+              <div id="engFields" class="eng-fields hide">
+                <input id="engTxt" type="text" class="eng-txt"
+                       maxlength="${SERVICES.engraving.maxChars}"
+                       placeholder="Up to ${SERVICES.engraving.maxChars} characters">
+                <div class="eng-opts">
+                  <label class="eng-opt">Position
+                    <select id="engPos">
+                      ${SERVICES.engraving.positions.map(o => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('')}
+                    </select>
+                  </label>
+                  <label class="eng-opt">Style
+                    <select id="engFont">
+                      ${SERVICES.engraving.fonts.map(o => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('')}
+                    </select>
+                  </label>
+                </div>
+                <p class="eng-note">Preview is indicative — the workshop engraves exactly the text, style and position you pick.</p>
+              </div>
+            </div>` : ''}
+
           <div class="buy-row">
             ${hasPrice(p)
               ? `<button class="btn btn-primary btn-block" id="addBtn">${ICON.cart} Add to Bag</button>
@@ -1431,6 +1535,8 @@ function viewProduct(id) {
       </div>` : ''}
     </div>
   </section>
+
+  ${qaHTML(p.id)}
 
   <!-- follows you down the page. Unpriced bats get one too — they previously
        had no sticky action at all, so the only way to enquire was to scroll
@@ -2029,11 +2135,14 @@ function viewCheckout() {
             <p class="sub">${cartCount()} item${cartCount() === 1 ? '' : 's'}</p>
             ${cart.map(i => {
               const p = byId(i.id), v = variantName(p, i.variant);
+              const eo = engNorm(i.engrave);
+              const eng = eo ? SERVICES.engraving.price : 0;
               return `<div class="mini-item">
                 <div class="mini-art">${batArt(p, { glow: false })}</div>
                 <b>${esc(p.name)}${v ? `<br><span style="color:var(--ink-50);font-weight:600;font-size:.78rem">${esc(v)}</span>` : ''}
+                   ${eo ? `<br><span style="color:var(--orange);font-weight:700;font-size:.78rem">Engraved “${esc(eo.text)}” · ${esc(engLabel('font', eo.font))}, ${esc(engLabel('position', eo.position))}</span>` : ''}
                    <br><span style="color:var(--ink-50);font-weight:600;font-size:.78rem">Qty ${i.qty}</span></b>
-                <i class="num">${hasPrice(p) ? fmt(p.price * i.qty) : '—'}</i>
+                <i class="num">${hasPrice(p) ? fmt((p.price + eng) * i.qty) : '—'}</i>
               </div>`;
             }).join('')}
             <div class="coupon">
@@ -2128,18 +2237,21 @@ function renderCart() {
   }
   body.innerHTML = cart.map(i => {
     const p = byId(i.id), v = variantName(p, i.variant);
+    const eng = engNorm(i.engrave);
+    const unit = (p.price || 0) + (eng ? SERVICES.engraving.price : 0);
     return `<div class="ci">
       <a class="ci-art" href="#/product/${p.id}" data-close>${batArt(p, { glow: false })}</a>
       <div class="ci-b">
         <h4><a href="#/product/${p.id}" data-close>${esc(p.name)}</a></h4>
         ${v ? `<div class="v">${esc(v)}</div>` : ''}
+        ${eng ? `<div class="v ci-eng">✎ “${esc(eng.text)}” · ${esc(engLabel('font', eng.font))}, ${esc(engLabel('position', eng.position))}</div>` : ''}
         <div class="ci-foot">
           <div class="qty">
             <button data-q="-1" data-key="${i.key}" aria-label="Decrease">−</button>
             <i class="num">${i.qty}</i>
             <button data-q="1" data-key="${i.key}" aria-label="Increase">+</button>
           </div>
-          <span class="ci-price num">${hasPrice(p) ? fmt(p.price * i.qty) : 'On request'}</span>
+          <span class="ci-price num">${hasPrice(p) ? fmt(unit * i.qty) : 'On request'}</span>
         </div>
         <button class="ci-rm" data-rm="${i.key}">Remove</button>
       </div>
@@ -2307,6 +2419,9 @@ function route(keepScroll) {
   else if (page === 'finder')     { html = viewFinder();        dark = true; }
   else if (page === 'game')       { html = viewGame();          dark = true; }
   else if (page === 'checkout')   { html = viewCheckout();      dark = false; }
+  else if (page === 'service')    { html = viewService(parts[1]); dark = true; }
+  else if (page === 'track')      { html = viewTrack();         dark = true; }
+  else if (page === 'junior')     { html = viewJunior();        dark = true; }
   else                            { html = viewNotFound();      dark = false; }
 
   stopCarousel();
@@ -2467,6 +2582,8 @@ function wireHero() {
 function mount(page, parts) {
   clearInterval(BOARD_TIMER);   /* the big screen only runs on the game page */
   if (page === 'home') { wireHero(); wireTrust(); }
+  if (page === 'service') wireService(parts[1]);
+  if (page === 'track')   wireTrack();
 
   if (page === 'game') {
     BOARD_TIMER = setInterval(boardTick, 250);
@@ -2605,8 +2722,39 @@ function mount(page, parts) {
       variant = b.dataset.v;
     });
 
-    const add = () => addToCart(p.id, variant);
+    /* engraving: fields and live preview appear once the option is on */
+    const engOn = $('#engOn'), engFields = $('#engFields'), engTxt = $('#engTxt');
+    const engPos = $('#engPos'), engFont = $('#engFont'), engPrev = $('#engPreview');
+    function paintEng() {
+      const on = engOn && engOn.checked;
+      if (engFields) engFields.classList.toggle('hide', !on);
+      if (!engPrev) return;
+      const txt = on && engTxt ? engTxt.value.trim() : '';
+      const pos = engPos ? engPos.value : ENG_POS_DEFAULT;
+      const font = engFont ? engFont.value : ENG_FONT_DEFAULT;
+      engPrev.className = 'eng-preview eng-pos-' + pos + (txt ? '' : ' hide');
+      const span = engPrev.querySelector('span');
+      span.className = 'eng-font-' + font;
+      span.textContent = txt;
+    }
+    if (engOn) engOn.onchange = () => { paintEng(); if (engOn.checked && engTxt) engTxt.focus(); };
+    [engTxt, engPos, engFont].forEach(el => { if (el) { el.oninput = paintEng; el.onchange = paintEng; } });
+
+    const engraving = () => (engOn && engOn.checked && engTxt && engTxt.value.trim())
+      ? { text: engTxt.value.trim(), position: engPos ? engPos.value : ENG_POS_DEFAULT, font: engFont ? engFont.value : ENG_FONT_DEFAULT }
+      : null;
+
+    const add = () => {
+      if (engOn && engOn.checked && (!engTxt || !engTxt.value.trim())) {
+        if (engTxt) { engTxt.classList.add('err'); engTxt.focus(); }
+        toast('Type what you want engraved');
+        return;
+      }
+      addToCart(p.id, variant, engraving());
+    };
     ['#addBtn', '#addBtn2'].forEach(s => { const el = $(s); if (el) el.onclick = add; });
+
+    wireQA(p.id);
 
     const wa = () => {
       if (!hasPrice(p)) { enquire(p); return; }
@@ -2702,6 +2850,42 @@ function mount(page, parts) {
   }
 }
 
+/* ---------------- announcement marquee ----------------
+   Rebuilds the .annc-track from MARQUEE. The CSS loop translates the track
+   by exactly -50%, so it must hold TWO identical halves for a seamless wrap;
+   the second half is aria-hidden so screen readers hear each line once.
+   Messages are inserted as text, never HTML — anything typed in the Maze
+   Room is safe by construction. */
+function renderMarquee() {
+  const bar = document.querySelector('.annc');
+  if (!bar) return;
+  const items = (MARQUEE && MARQUEE.on && Array.isArray(MARQUEE.items))
+    ? MARQUEE.items.map(s => String(s).trim()).filter(Boolean) : [];
+  const hdr = document.querySelector('#hdr');
+
+  if (!items.length) {                 // off, or nothing to say — remove the bar
+    bar.style.display = 'none';
+    document.body.classList.remove('has-annc');
+    if (hdr) hdr.style.top = '';        // undo the 34px offset onScroll may have set
+    return;
+  }
+
+  bar.style.display = '';
+  document.body.classList.add('has-annc');
+  let track = bar.querySelector('.annc-track');
+  if (!track) { track = document.createElement('div'); track.className = 'annc-track'; bar.appendChild(track); }
+  track.textContent = '';
+  for (let copy = 0; copy < 2; copy++) {
+    items.forEach(msg => {
+      const span = document.createElement('span');
+      span.textContent = msg;
+      if (copy === 1) span.setAttribute('aria-hidden', 'true');
+      track.appendChild(span);
+    });
+  }
+  if (typeof onScroll === 'function') onScroll();   // resync header offset to the bar
+}
+
 /* ---------------- global wiring ---------------- */
 function onScroll() {
   const y = window.scrollY;
@@ -2762,6 +2946,8 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
   $('#fWa').innerHTML       = ICON.whatsapp;
   $('#yr').textContent      = new Date().getFullYear();
 
+  renderMarquee();          // from defaults now; upgraded once live settings load
+
   $('#cartBtn').onclick   = () => { renderCart(); openDrawer('#cartDrawer'); };
   $('#searchBtn').onclick = () => { openDrawer('#searchDrawer'); setTimeout(() => $('#sInput').focus(), 320); runSearch(''); };
   $('#sInput').oninput    = e => runSearch(e.target.value);
@@ -2785,6 +2971,7 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
       if (typeof syncStore === 'function') {
         const live = await syncStore();
         if (live && (live.products || live.settings || live.categories)) route(true);
+        if (live && live.settings) renderMarquee();   // reflect the Maze Room's announcement
       }
     } catch (e) { console.warn('catalogue sync skipped:', e.message); }
 

@@ -1958,3 +1958,213 @@ body.pdp-open .fab{bottom:82px}
   .ws-burst{animation:none}
 }
 
+
+/* ============================================================
+   SERVICES — request forms, tracking, Q&A, community
+   ============================================================ */
+
+.svc-top{background:var(--navy-900);color:#fff;padding:calc(var(--hdr) + 40px) 0 40px;
+  position:relative}
+.svc-top::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(680px 380px at 22% 10%,rgba(61,61,168,.42),transparent 66%)}
+.svc-top>*{position:relative}
+.svc-top .lede{max-width:56ch;margin-top:12px}
+.svc-min{margin-top:16px;font-size:.84rem;color:rgba(255,255,255,.62)}
+
+.svc-slabs{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.svc-slab{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+  border-radius:12px;padding:10px 16px;display:grid;gap:2px}
+.svc-slab b{color:var(--orange);font-size:1.05rem}
+.svc-slab span{font-size:.76rem;color:rgba(255,255,255,.6)}
+
+.svc-wrap{max-width:720px}
+.svc-sub{color:var(--ink-70);margin:6px 0 22px;max-width:60ch}
+.svc-form{display:grid;gap:20px}
+.svc-grid{display:grid;gap:20px;grid-template-columns:1fr}
+@media (min-width:640px){.svc-grid{grid-template-columns:1fr 1fr}}
+
+.svc-f{display:grid;gap:8px}
+.svc-f>label{font-weight:800;font-size:.86rem}
+.svc-f>label i{font-style:normal;font-weight:700;font-size:.72rem;color:var(--ink-40);
+  margin-left:6px}
+.svc-f input[type=text],.svc-f input[type=tel],.svc-f input[type=number],
+.svc-f select,.svc-f textarea{
+  width:100%;padding:13px 15px;border:1.5px solid var(--line);border-radius:12px;
+  font:inherit;font-size:.95rem;background:#fff;color:var(--ink);transition:.18s var(--ease)}
+.svc-f input:focus,.svc-f select:focus,.svc-f textarea:focus{
+  outline:none;border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,138,30,.16)}
+.svc-f textarea{resize:vertical;min-height:84px}
+
+/* The invalid field announces itself, rather than a message sitting far
+   down the form describing a box the reader then has to hunt for. */
+.svc-f.err input,.svc-f.err select,.svc-f.err textarea,.svc-f.err .svc-radios{
+  border-color:#e5484d;box-shadow:0 0 0 3px rgba(229,72,77,.14)}
+.svc-hint{margin:0;font-size:.78rem;color:var(--ink-50)}
+
+.svc-radios{display:grid;gap:9px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  border:1.5px solid transparent;border-radius:12px}
+.svc-radio{position:relative;display:block;cursor:pointer}
+.svc-radio input{position:absolute;opacity:0;pointer-events:none}
+.svc-radio-b{display:grid;gap:3px;padding:13px 15px;border:1.5px solid var(--line);
+  border-radius:12px;transition:.16s var(--ease);height:100%}
+.svc-radio-b b{font-size:.9rem}
+.svc-radio-b i{font-style:normal;font-size:.76rem;color:var(--ink-50)}
+.svc-radio:hover .svc-radio-b{border-color:var(--ink-30)}
+.svc-radio input:checked+.svc-radio-b{border-color:var(--orange);
+  background:rgba(255,138,30,.07);box-shadow:0 0 0 2px rgba(255,138,30,.18)}
+/* the real input is hidden, so the focus ring has to be drawn on its label */
+.svc-radio input:focus-visible+.svc-radio-b{outline:2px solid var(--orange);outline-offset:2px}
+
+.svc-up{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:15px;
+  border:1.5px dashed var(--line);border-radius:12px}
+.svc-thumbs{display:flex;gap:9px;flex-wrap:wrap}
+.svc-th{position:relative;margin:0;width:82px}
+.svc-th img{width:82px;height:82px;object-fit:cover;border-radius:10px;
+  border:1px solid var(--line);display:block}
+.svc-vid{display:grid;place-items:center;width:82px;height:82px;border-radius:10px;
+  background:var(--navy-900);color:#fff;font-size:1.4rem}
+.svc-th figcaption{font-size:.68rem;color:var(--ink-50);margin-top:4px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.svc-th button{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border:0;
+  border-radius:50%;background:var(--ink);color:#fff;font-size:15px;line-height:1;
+  cursor:pointer}
+
+.svc-check{display:flex;gap:11px;align-items:flex-start;cursor:pointer;font-size:.88rem}
+.svc-check input{margin-top:3px;width:17px;height:17px;accent-color:var(--orange);flex:none}
+.svc-check i{font-style:normal;color:var(--orange);font-weight:800}
+.svc-consent.err{outline:2px solid #e5484d;outline-offset:6px;border-radius:8px}
+
+.svc-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.svc-stat{margin:0;font-size:.84rem;font-weight:700;color:var(--ink-50);min-height:1.2em}
+.svc-stat.bad{color:#c92a2e}
+.svc-stat a{color:var(--orange);text-decoration:underline}
+
+.svc-done{text-align:center;padding:40px 20px;display:grid;gap:14px;justify-items:center}
+.svc-tick{display:grid;place-items:center;width:56px;height:56px;border-radius:50%;
+  background:rgba(46,160,67,.12);color:#2ea043}
+.svc-tick svg{width:28px;height:28px}
+.svc-done p{color:var(--ink-70);max-width:44ch;margin:0}
+
+/* engraving on the product page */
+.opts.engrave{display:grid;gap:11px}
+.eng-fields{display:grid;gap:11px}
+.eng-fields.hide{display:none}
+.eng-txt{width:100%;padding:12px 14px;border:1.5px solid var(--orange);border-radius:11px;
+  font:inherit;font-size:.94rem}
+.eng-txt.err{border-color:#e5484d}
+.eng-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.eng-opt{display:grid;gap:5px;font-size:.72rem;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-60)}
+.eng-opt select{padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;
+  font:inherit;font-size:.9rem;background:#fff;color:var(--ink)}
+.eng-opt select:focus{outline:none;border-color:var(--orange)}
+.eng-note{margin:0;font-size:.74rem;color:var(--ink-50);line-height:1.5}
+
+/* live engraving preview — a text layer over the product photo. Position is
+   indicative; the workshop carves exactly what was chosen. */
+.eng-preview{position:absolute;left:50%;transform:translateX(-50%);
+  z-index:4;pointer-events:none;max-width:70%;text-align:center;
+  transition:top .25s var(--ease)}
+.eng-preview.hide{display:none}
+.eng-preview.eng-pos-front{top:46%}
+.eng-preview.eng-pos-back{top:38%}
+.eng-preview.eng-pos-toe{top:78%}
+.eng-preview span{display:inline-block;color:#1a1206;font-size:clamp(.9rem,2.4vw,1.35rem);
+  line-height:1.05;white-space:nowrap;
+  /* engraved-into-wood look: a light top edge and a dark inset shadow */
+  text-shadow:0 1px 0 rgba(255,255,255,.45),0 -1px 1px rgba(0,0,0,.4);opacity:.9}
+.eng-preview .eng-font-classic{font-family:Georgia,'Times New Roman',serif;font-style:italic;font-weight:700}
+.eng-preview .eng-font-block{font-family:'Anton',Impact,sans-serif;text-transform:uppercase;letter-spacing:.06em}
+.eng-preview .eng-font-signature{font-family:'Dancing Script','Segoe Script',cursive;font-weight:700;
+  font-size:clamp(1.1rem,3vw,1.7rem)}
+.ci-eng{color:var(--orange)!important;font-weight:700}
+
+/* ---------- services band ---------- */
+.svcband-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.svcband-card{position:relative;display:grid;gap:7px;align-content:start;padding:22px 20px 46px;
+  border:1px solid var(--line);border-radius:16px;background:#fff;
+  text-decoration:none;color:inherit;transition:.2s var(--ease)}
+.svcband-card:hover{transform:translateY(-3px);border-color:var(--orange);
+  box-shadow:0 16px 34px rgba(11,11,36,.1)}
+.svcband-ico{display:grid;place-items:center;width:40px;height:40px;border-radius:11px;
+  background:rgba(255,138,30,.12);color:var(--orange);margin-bottom:5px}
+.svcband-ico svg{width:21px;height:21px}
+.svcband-card b{font-size:1.02rem}
+.svcband-card p{margin:0;font-size:.87rem;color:var(--ink-70)}
+.svcband-go{position:absolute;left:20px;bottom:18px;color:var(--orange);opacity:0;
+  transform:translateX(-6px);transition:.2s var(--ease)}
+.svcband-go svg{width:19px;height:19px}
+.svcband-card:hover .svcband-go{opacity:1;transform:none}
+
+/* ---------- community ---------- */
+.comm-grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.comm-card{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;
+  padding:22px;border-radius:18px;text-decoration:none;color:#fff;
+  background:linear-gradient(120deg,#101a35,#12331f);
+  border:1px solid rgba(255,255,255,.12);transition:.2s var(--ease)}
+.comm-card:hover{transform:translateY(-3px);border-color:#25d366}
+.comm-ico{display:grid;place-items:center;width:46px;height:46px;border-radius:13px;
+  background:#25d366;color:#0b2016}
+.comm-ico svg{width:25px;height:25px}
+.comm-card h3{margin:2px 0 5px;font-size:1.12rem}
+.comm-card p{margin:0;font-size:.85rem;color:rgba(255,255,255,.68)}
+.comm-go{color:#25d366}
+
+/* ---------- tracking ---------- */
+.trk{margin-top:26px;border:1px solid var(--line);border-radius:18px;padding:24px;background:#fff}
+.trk-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;
+  flex-wrap:wrap;margin-bottom:22px}
+.trk-total{font-size:1.4rem;color:var(--orange)}
+.trk-steps{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.trk-step{display:grid;grid-template-columns:auto 1fr;gap:14px;padding-bottom:22px;
+  position:relative}
+
+/* The connecting spine is drawn from each step except the last, so the
+   timeline ends on the final dot instead of trailing into nothing. */
+.trk-step:not(:last-child)::before{content:'';position:absolute;left:13px;top:28px;bottom:0;
+  width:2px;background:var(--line)}
+.trk-step.past:not(:last-child)::before{background:var(--orange)}
+.trk-dot{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;
+  border:2px solid var(--line);background:#fff;color:#fff;z-index:1}
+.trk-dot svg{width:14px;height:14px}
+.trk-step.past .trk-dot{background:var(--orange);border-color:var(--orange)}
+.trk-step.now .trk-dot{border-color:var(--orange);box-shadow:0 0 0 4px rgba(255,138,30,.18)}
+.trk-step b{display:block;font-size:.95rem}
+.trk-step i{font-style:normal;font-size:.83rem;color:var(--ink-50)}
+.trk-step:not(.past):not(.now) b,.trk-step:not(.past):not(.now) i{opacity:.5}
+.trk-items{list-style:none;margin:6px 0 0;padding:16px 0 0;border-top:1px solid var(--line);
+  display:grid;gap:8px}
+.trk-items li{display:flex;justify-content:space-between;font-size:.88rem}
+.trk-foot{margin:14px 0 0;font-size:.78rem;color:var(--ink-50)}
+
+/* ---------- Q&A ---------- */
+.qa-list{display:grid;gap:14px;margin-bottom:26px}
+.qa-item{border-left:3px solid var(--orange);padding:2px 0 2px 16px}
+.qa-q{margin:0;font-weight:800;font-size:.95rem}
+.qa-a{margin:6px 0 0;color:var(--ink-70);font-size:.92rem}
+.qa-by{margin:6px 0 0;font-size:.74rem;color:var(--ink-40)}
+.qa-empty{color:var(--ink-50);font-size:.9rem}
+.qa-form{display:grid;gap:10px;max-width:560px}
+.qa-form label{font-weight:800;font-size:.86rem}
+.qa-form textarea,.qa-row input{width:100%;padding:12px 14px;border:1.5px solid var(--line);
+  border-radius:11px;font:inherit;font-size:.93rem}
+.qa-row{display:flex;gap:10px;flex-wrap:wrap}
+.qa-row input{flex:1;min-width:160px}
+.qa-thanks{display:flex;gap:9px;align-items:center;color:#2ea043;font-weight:700;font-size:.92rem}
+.qa-thanks svg{width:18px;height:18px}
+
+/* ---------- junior ---------- */
+.jr-table-wrap{overflow-x:auto;margin:6px 0 30px}
+.jr-table{width:100%;border-collapse:collapse;min-width:460px}
+.jr-table th,.jr-table td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);
+  font-size:.9rem}
+.jr-table th{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-50)}
+.jr-table tr.jr-full{background:rgba(255,138,30,.06)}
+.jr-check{border:1px solid var(--line);border-radius:16px;padding:22px;margin-bottom:26px}
+.jr-check h3{margin:0 0 8px}
+.jr-check p{margin:0;color:var(--ink-70);font-size:.93rem}
+.jr-cta{display:grid;gap:20px;padding:26px;border-radius:18px;background:var(--navy-900);
+  color:#fff}
+.jr-cta h3{margin:4px 0 8px}
+.jr-cta p{color:rgba(255,255,255,.72);font-size:.93rem;margin:0}
+@media (min-width:820px){.jr-cta{grid-template-columns:1.5fr 1fr;align-items:center}}

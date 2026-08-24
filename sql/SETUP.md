@@ -17,41 +17,67 @@ Re-run it in the SQL Editor only if you ever need to reset.
 
 ---
 
-## 2. Turn on Firebase email login — ✅ already done
+## 2. Auth is Supabase's own — no Firebase (changed Aug 2026)
 
-Verified against your project `toss-cb8c0`: Email/Password sign-in is enabled.
-Nothing to do here.
+The Maze Room used to sign in through Firebase and hand the token to
+Supabase as a third-party JWT. That handoff failed silently — tokens got
+rejected, the session degraded to anonymous, and every admin write
+(including photo uploads) was refused with an opaque 403.
+
+Login is now **Supabase Auth email+password** directly: the token that
+signs you in is the token RLS checks. If you migrated from the Firebase
+setup, run `sql/012-supabase-auth.sql` once.
+
+The old Firebase project and the Third-Party Auth entry in Supabase are
+unused and can be deleted once everyone has signed in.
 
 ---
 
 ## 3. Create your admin user
 
-Firebase Console → **Authentication** → **Users** → **Add user**.
+Supabase Dashboard → **Authentication** → **Users** → **Add user**.
 
-Use a real email and a strong password. This is the login for the Maze Room,
-so treat it like the key to your till.
+- Use the **same email** as your staff row (the seeded owner is the email
+  in `sql/003-claim-by-email.sql`).
+- Tick **Auto Confirm** so the login works immediately.
+- Use a strong password — this is the key to your till.
 
-Then **copy that user's UID** — the long string in the Users table.
+No UID copying is needed: the first successful sign-in binds the login to
+the staff row by email (`claim_staff`).
+
+### Forgot password (one-time config)
+
+The gate has a **Forgot password?** link. For the emailed reset link to come
+back to the Maze Room, tell Supabase where the page lives:
+
+Supabase Dashboard → **Authentication** → **URL Configuration**:
+- **Site URL**: `https://tossports.in/maze.html` (the production Maze Room)
+- **Additional redirect URLs**: add `http://localhost:4321/maze.html` for
+  local work.
+
+Emails are sent by Supabase's built-in mailer — fine for a small team, but
+rate-limited to a few per hour. If resets ever need to come from
+`@tossports.in`, plug SMTP credentials into **Authentication → Emails**.
+
+### Backup owner (do this once)
+
+If the only owner loses both the password **and** the email inbox, the
+reset link cannot help. Guard against it now: add a second owner on a
+different mailbox (personal vs business), from **Team → Add person** →
+role **owner** → Create login. Either owner can then rescue the other.
 
 ---
 
-## 4. Let Supabase trust Firebase
+## 4. ~~Let Supabase trust Firebase~~ — no longer needed
 
-This is the step that makes the security real rather than cosmetic.
-
-Supabase Dashboard → **Authentication** → **Sign In / Providers** →
-**Third Party Auth** → **Add provider** → **Firebase**.
-
-Enter your Firebase project ID: `toss-cb8c0`
-
-Without this, Supabase ignores your Firebase login and the admin lock would
-only be a hidden screen, not an actual permission.
+Kept only so old links to "step 4" make sense. There is no third-party
+token handoff any more.
 
 ---
 
 ## 5. Put yourself on the staff list — ✅ already done
 
-You're on it as **owner**, by email. Your Firebase UID binds itself the first
+You're on it as **owner**, by email. Your login UID binds itself the first
 time you sign in successfully — nothing to copy or paste.
 
 The rest of this section is for adding your team later.
@@ -73,8 +99,8 @@ anyone who reads the publishable key out of the page source — can read active
 products and place an order, and nothing more.
 
 Once you're in, add the rest of your team from **Team → Add person**. Each one
-needs a Firebase user created the same way as step 3; paste their UID into their
-staff record so they can log in.
+needs a Supabase Auth user created the same way as step 3; binding to their
+staff record happens by email on their first sign-in.
 
 ### The four roles
 
@@ -108,7 +134,7 @@ it names the actual failure.
 
 ## 6. Open it
 
-Firebase auth will not run from a `file://` page, so serve the folder:
+Serve the folder rather than opening the file directly:
 
 ```bash
 npx serve "C:/TheVincis/Toss analysis/Toss core website"
@@ -124,7 +150,6 @@ Then open the address it prints and add `/maze.html`.
 |---|---|---|
 | Supabase project URL | yes | public endpoint |
 | `sb_publishable_...` key | yes | protected by RLS, not secrecy |
-| Firebase web config | yes | identifiers, not credentials |
 | **Postgres password** | **NO** | full database access, bypasses every policy |
 | **`service_role` key** | **NO** | same — bypasses every policy |
 

@@ -16,14 +16,15 @@
 /* Founder-only sections sit LAST in this list on purpose — the dock draws
    them in order, so they group themselves at the right behind a divider. */
 const ROLE_NAV = {
-  founder:  ['dash','sales','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
-  owner:    ['dash','sales','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
-  manager:  ['dash','sales','billing','products','team','tasks','sops','boards','coupons','scores'],
-  sales:    ['dash','sales','tasks','sops','boards'],
-  workshop: ['dash','tasks','sops']
+  founder:  ['dash','sales','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
+  owner:    ['dash','sales','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
+  manager:  ['dash','sales','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores'],
+  sales:    ['dash','sales','requests','qa','tasks','sops','boards'],
+  workshop: ['dash','requests','tasks','sops']
 };
 const NAV_LABEL = {
-  dash:'Dashboard', sales:'Sales', billing:'Billing', finance:'Finance', products:'Products',
+  dash:'Dashboard', sales:'Sales', requests:'Requests', qa:'Questions',
+  billing:'Billing', finance:'Finance', products:'Products',
   team:'Team', tasks:'Tasks', sops:'SOPs', boards:'Leaderboards',
   coupons:'Rewards', scores:'Game scores', insights:'Insights',
   activity:'Activity', branches:'Branches', settings:'Settings'
@@ -1128,14 +1129,14 @@ function staffModal(s) {
 }
 
 /* ---------- creating a login ----------
-   Firebase accounts are created through a SECOND app instance. Creating a
-   user on the main instance signs you in as them and throws the founder
-   out mid-job; a secondary instance keeps this session untouched.
+   Accounts are created against Supabase Auth's signup endpoint, which does
+   not touch the founder's own session.
 
-   Why this is safe: a Firebase account on its own grants nothing at all.
-   Every policy in the database keys off my_role(), which reads the `staff`
+   Why this is safe: an account on its own grants nothing at all. Every
+   policy in the database keys off my_role(), which reads the `staff`
    table — and only a founder can write that table. The account is the
-   doorbell; the staff row is the key. */
+   doorbell; the staff row is the key. The uid binds itself on their first
+   sign-in (claim_staff, matched by email), so no UID copying is needed. */
 function randomPassword() {
   const a = 'abcdefghijkmnpqrstuvwxyz', A = 'ABCDEFGHJKLMNPQRSTUVWXYZ', n = '23456789';
   const pool = a + A + n, buf = new Uint32Array(10);
@@ -1156,18 +1157,14 @@ async function createLogin(email, name) {
 
   const pw = randomPassword();
   try {
-    /* a throwaway app instance, torn down straight after */
-    const secondary = firebase.apps.find(a => a.name === 'mk')
-      || firebase.initializeApp(FIREBASE_CONFIG, 'mk');
-    const cred = await secondary.auth().createUserWithEmailAndPassword(email, pw);
-    const uid = cred.user.uid;
-    await secondary.auth().signOut();
-    await secondary.delete().catch(() => {});
+    const r = await authCall('signup', { email, password: pw });
+    const uid = (r.user && r.user.id) || r.id || '';
+    const confirmed = !!(r.access_token || (r.user && r.user.email_confirmed_at) || r.email_confirmed_at);
 
     const box = $('#st_uid');
-    if (box) box.value = uid;               /* saved with the form */
+    if (box && uid) box.value = uid;        /* saved with the form */
 
-    /* shown once — Firebase will never reveal this password again */
+    /* shown once — the password cannot be revealed again */
     const zone = $('#mkLogin') && $('#mkLogin').parentElement;
     if (zone) zone.innerHTML = `
       <div style="width:100%">
@@ -1178,16 +1175,20 @@ async function createLogin(email, name) {
         </div>
         <div class="hint" style="margin-top:6px">This password is shown once and cannot be
           recovered — copy it before closing. ${esc(name || 'They')} should change it after
-          signing in. Press <b>Save changes</b> to finish adding them to the team.</div>
+          signing in. Press <b>Save changes</b> to finish adding them to the team.${confirmed ? '' : `
+          <br><b>One more step:</b> email confirmation is on for this project, so either they
+          click the link Supabase just emailed them, or you confirm them by hand in
+          Supabase → Authentication → Users.`}</div>
       </div>`;
     toast('Login created');
   } catch (e) {
-    const c = (e && e.code) || '';
+    const m = String(e && e.message || ''), c = String(e && e.code || '');
     const msg =
-      c === 'auth/email-already-in-use' ? 'That email already has a login — paste their existing UID instead, or use another address.'
-      : c === 'auth/operation-not-allowed' ? 'Firebase is refusing new accounts. Turn on Email/Password sign-up in Firebase Console → Authentication → Sign-in method.'
-      : c === 'auth/weak-password' ? 'Firebase rejected the generated password. Try again.'
-      : (e && e.message) || 'Could not create the login';
+      /already registered|already exists/i.test(m) || c === 'user_already_exists'
+        ? 'That email already has a login — they can sign in with it as-is.'
+      : c === 'signup_disabled' || /signups? not allowed/i.test(m)
+        ? 'Sign-ups are disabled for this project. Create the user in Supabase → Authentication → Users → Add user (tick “Auto Confirm”), or enable sign-ups.'
+      : m || 'Could not create the login';
     toast(msg, true);
     if (btn) { btn.disabled = false; btn.textContent = 'Create login'; }
   }
@@ -1466,4 +1467,251 @@ function wireBoards() {
       } catch (e) { toast(writeError(e), true); return false; }
     });
   };
+}
+
+/* ============================================================
+   REQUESTS — the queue behind the storefront's service forms
+
+   One screen for all six kinds rather than six screens, because
+   the work is identical whatever was asked for: read it, quote
+   it, reply on WhatsApp, mark it done. The kind is a filter, not
+   a section.
+   ============================================================ */
+
+let REQ = { rows: [], loaded: false, kind: '', status: 'open' };
+
+const REQ_KIND = {
+  bat_doctor: 'Bat Doctor',  custom_bat: 'Custom bat', jersey: 'Jerseys',
+  wholesale:  'Wholesale',   trade_in:   'Trade-in',   video:  'Videos'
+};
+const REQ_STATUS = ['new', 'quoted', 'accepted', 'done', 'declined'];
+
+async function loadRequests() {
+  try {
+    REQ.rows = await supa('requests?select=*&order=created_at.desc&limit=300') || [];
+  } catch (e) { REQ.rows = []; toast(e.message, true); }
+  REQ.loaded = true;
+}
+
+function reqFiltered() {
+  return REQ.rows.filter(r =>
+    (!REQ.kind || r.kind === REQ.kind) &&
+    (REQ.status === 'all' ||
+     (REQ.status === 'open' ? !['done', 'declined'].includes(r.status) : r.status === REQ.status)));
+}
+
+function viewRequests() {
+  const rows = reqFiltered();
+  const open = REQ.rows.filter(r => !['done', 'declined'].includes(r.status)).length;
+
+  return `
+    <div class="head"><h2>Requests</h2>
+      <span class="muted">${REQ.loaded ? open + ' open of ' + REQ.rows.length : 'loading…'}</span>
+      <span class="sp"><button class="btn ghost sm" id="reqRefresh">Refresh</button></span>
+    </div>
+
+    <div class="chips" id="reqKinds">
+      <button class="chip${!REQ.kind ? ' on' : ''}" data-k="">All</button>
+      ${Object.keys(REQ_KIND).map(k => {
+        const n = REQ.rows.filter(r => r.kind === k && !['done','declined'].includes(r.status)).length;
+        return `<button class="chip${REQ.kind === k ? ' on' : ''}" data-k="${k}">
+          ${REQ_KIND[k]}${n ? ` <b>${n}</b>` : ''}</button>`;
+      }).join('')}
+    </div>
+    <div class="chips" id="reqStates">
+      ${[['open','Open'],['all','All']].concat(REQ_STATUS.map(s => [s, s[0].toUpperCase() + s.slice(1)]))
+        .map(pair => `<button class="chip sm${REQ.status === pair[0] ? ' on' : ''}"
+          data-s="${pair[0]}">${pair[1]}</button>`).join('')}
+    </div>
+
+    ${!rows.length
+      ? `<div class="empty">${REQ.loaded ? 'Nothing here.' : 'Loading…'}</div>`
+      : `<div class="reqlist">${rows.map(reqCard).join('')}</div>`}
+  `;
+}
+
+function reqCard(r) {
+  const c = r.customer || {}, p = r.payload || {};
+  const when = new Date(r.created_at).toLocaleString('en-IN',
+    { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const phone = String(c.phone || '').replace(/\D/g, '').slice(-10);
+  const waText = 'Hi ' + String(c.name || '').split(' ')[0] + ', about your ' +
+    (REQ_KIND[r.kind] || 'request') + ' with Toss Sports — ';
+
+  return `
+  <article class="reqcard" data-id="${r.id}">
+    <header>
+      <div>
+        <span class="tag">${REQ_KIND[r.kind] || r.kind}</span>
+        <b>${esc(c.name || 'No name')}</b>
+        <span class="muted">${esc(c.phone || '')} · ${when}</span>
+      </div>
+      <span class="pill ${r.status}">${r.status}</span>
+    </header>
+
+    <dl class="reqfields">
+      ${Object.keys(p).filter(k => p[k]).map(k =>
+        `<div><dt>${esc(k)}</dt><dd>${esc(String(p[k]).slice(0, 220))}</dd></div>`).join('')}
+    </dl>
+
+    ${(r.photos || []).length ? `
+      <div class="reqshots">
+        ${r.photos.map(u => /\.(mp4|mov|webm|m4v)$/i.test(u)
+          ? `<a href="${esc(u)}" target="_blank" rel="noopener" class="reqvid">▶ video</a>`
+          : `<a href="${esc(u)}" target="_blank" rel="noopener">
+               <img src="${esc(u)}" alt="" loading="lazy"></a>`).join('')}
+      </div>` : ''}
+
+    ${r.staff_note ? `<p class="reqnote">${esc(r.staff_note)}</p>` : ''}
+    ${r.quote != null ? `<p class="reqquote">Quoted <b>₹${r.quote}</b>${
+      r.coupon ? ` · code <b>${esc(r.coupon)}</b>` : ''}</p>` : ''}
+
+    <footer>
+      ${phone.length === 10 ? `<a class="btn ghost sm" target="_blank" rel="noopener"
+        href="https://wa.me/91${phone}?text=${encodeURIComponent(waText)}">WhatsApp</a>` : ''}
+      <button class="btn ghost sm" data-quote="${r.id}">Quote</button>
+      <select class="reqstat" data-stat="${r.id}">
+        ${REQ_STATUS.map(s => `<option${r.status === s ? ' selected' : ''}>${s}</option>`).join('')}
+      </select>
+    </footer>
+  </article>`;
+}
+
+function wireRequests() {
+  if (!REQ.loaded) loadRequests().then(render);
+
+  const refresh = $('#reqRefresh');
+  if (refresh) refresh.onclick = async () => { REQ.loaded = false; await loadRequests(); render(); };
+
+  $$('#reqKinds .chip').forEach(b => b.onclick = () => { REQ.kind = b.dataset.k; render(); });
+  $$('#reqStates .chip').forEach(b => b.onclick = () => { REQ.status = b.dataset.s; render(); });
+
+  $$('[data-stat]').forEach(sel => sel.onchange = async () => {
+    const id = Number(sel.dataset.stat);
+    try {
+      await supa('requests?id=eq.' + id, { method: 'PATCH', body: { status: sel.value } });
+      const row = REQ.rows.find(r => r.id === id); if (row) row.status = sel.value;
+      toast('Updated');
+      render();
+    } catch (e) { toast(e.message, true); }
+  });
+
+  $$('[data-quote]').forEach(b => b.onclick = () => {
+    const id = Number(b.dataset.quote);
+    const row = REQ.rows.find(r => r.id === id);
+    if (!row) return;
+    modal('Quote this request', `
+      <div class="row"><label>Amount (₹)</label>
+        <input id="q_amt" type="number" value="${row.quote != null ? row.quote : ''}"></div>
+      <div class="row"><label>Discount code to give them</label>
+        <input id="q_code" type="text" value="${esc(row.coupon || '')}"
+               placeholder="Leave empty if none">
+        <div class="hint">The code must already exist under Rewards. This only records
+          which one you gave.</div></div>
+      <div class="row"><label>Note (internal)</label>
+        <textarea id="q_note" rows="3">${esc(row.staff_note || '')}</textarea></div>
+    `, async () => {
+      const amt = $('#q_amt').value.trim();
+      try {
+        await supa('requests?id=eq.' + id, { method: 'PATCH', body: {
+          quote: amt === '' ? null : Number(amt),
+          coupon: $('#q_code').value.trim() || null,
+          staff_note: $('#q_note').value.trim() || null,
+          status: row.status === 'new' ? 'quoted' : row.status
+        }});
+        await loadRequests(); render(); toast('Quoted');
+      } catch (e) { toast(e.message, true); return false; }
+    });
+  });
+}
+
+/* ============================================================
+   Q&A moderation
+
+   A question is invisible until someone answers it, so this
+   screen is the only path onto the product page. Answering and
+   publishing are one action deliberately — an approved question
+   with no answer would render as a bare question on a page that
+   is meant to look answered.
+   ============================================================ */
+
+let QA = { rows: [], loaded: false, only: 'pending' };
+
+async function loadQAAdmin() {
+  try {
+    QA.rows = await supa('product_questions?select=*&order=created_at.desc&limit=200') || [];
+  } catch (e) { QA.rows = []; toast(e.message, true); }
+  QA.loaded = true;
+}
+
+function viewQA() {
+  const rows = QA.only === 'pending' ? QA.rows.filter(r => !r.answer) : QA.rows;
+  const pending = QA.rows.filter(r => !r.answer).length;
+  return `
+    <div class="head"><h2>Questions</h2>
+      <span class="muted">${QA.loaded ? pending + ' waiting' : 'loading…'}</span>
+      <span class="sp"><button class="btn ghost sm" id="qaRefresh">Refresh</button></span>
+    </div>
+    <div class="chips" id="qaFilter">
+      <button class="chip${QA.only === 'pending' ? ' on' : ''}" data-o="pending">Unanswered</button>
+      <button class="chip${QA.only === 'all' ? ' on' : ''}" data-o="all">All</button>
+    </div>
+    ${!rows.length ? `<div class="empty">${QA.loaded ? 'Nothing waiting.' : 'Loading…'}</div>` : `
+    <table class="tbl">
+      <thead><tr><th>Product</th><th>Question</th><th>Answer</th><th></th></tr></thead>
+      <tbody>${rows.map(r => `
+        <tr>
+          <td><b>${esc(r.product_id)}</b><br><span class="muted">${esc(r.asker || 'anon')}</span></td>
+          <td>${esc(r.question)}</td>
+          <td>${r.answer
+            ? esc(r.answer) + (r.published ? ' <span class="pill done">live</span>'
+                                           : ' <span class="pill">hidden</span>')
+            : '<span class="muted">—</span>'}</td>
+          <td><button class="btn ghost sm" data-ans="${r.id}">${r.answer ? 'Edit' : 'Answer'}</button>
+              <button class="btn ghost sm" data-qadel="${r.id}">Delete</button></td>
+        </tr>`).join('')}</tbody>
+    </table>`}
+  `;
+}
+
+function wireQAAdmin() {
+  if (!QA.loaded) loadQAAdmin().then(render);
+  const rf = $('#qaRefresh');
+  if (rf) rf.onclick = async () => { QA.loaded = false; await loadQAAdmin(); render(); };
+  $$('#qaFilter .chip').forEach(b => b.onclick = () => { QA.only = b.dataset.o; render(); });
+
+  $$('[data-ans]').forEach(b => b.onclick = () => {
+    const id = Number(b.dataset.ans), row = QA.rows.find(r => r.id === id);
+    if (!row) return;
+    modal('Answer this question', `
+      <div class="row"><label>Question</label>
+        <p class="hint">${esc(row.question)}</p></div>
+      <div class="row"><label>Your answer</label>
+        <textarea id="a_txt" rows="4">${esc(row.answer || '')}</textarea>
+        <div class="hint">This becomes permanent content on the product page. Write it for
+          the next hundred people who ask, not just this one.</div></div>
+      <div class="row"><label class="check">
+        <input type="checkbox" id="a_pub" ${row.published ? 'checked' : ''}> Show it on the site
+      </label></div>
+    `, async () => {
+      const answer = $('#a_txt').value.trim();
+      if (!answer) { toast('Write an answer first', true); return false; }
+      try {
+        await supa('product_questions?id=eq.' + id, { method: 'PATCH', body: {
+          answer: answer, published: $('#a_pub').checked,
+          answered_by: (typeof ME !== 'undefined' && ME && ME.name) || 'Toss',
+          answered_at: new Date().toISOString()
+        }});
+        await loadQAAdmin(); render(); toast('Answered');
+      } catch (e) { toast(e.message, true); return false; }
+    });
+  });
+
+  $$('[data-qadel]').forEach(b => b.onclick = async () => {
+    if (!confirm('Delete this question?')) return;
+    try {
+      await supa('product_questions?id=eq.' + b.dataset.qadel, { method: 'DELETE' });
+      await loadQAAdmin(); render(); toast('Deleted');
+    } catch (e) { toast(e.message, true); }
+  });
 }

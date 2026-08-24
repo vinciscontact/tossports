@@ -36,6 +36,12 @@ a{color:var(--orange);text-decoration:none}
 .gate-card input:focus{outline:none;border-color:var(--orange)}
 .gate-err{margin-top:14px;background:rgba(229,72,77,.08);border:1px solid rgba(229,72,77,.3);
   color:#c22f34;border-radius:10px;padding:10px 12px;font-size:.8rem;text-align:left;line-height:1.5}
+.gate-ok{margin-top:14px;background:rgba(40,199,111,.08);border:1px solid rgba(40,199,111,.3);
+  color:#1a7f4b;border-radius:10px;padding:10px 12px;font-size:.8rem;text-align:left;line-height:1.5}
+.linklike{background:none;border:0;padding:8px 0 0;cursor:pointer;font:inherit;
+  font-size:.78rem;font-weight:600;color:var(--ink-60);text-decoration:underline;
+  text-underline-offset:3px}
+.linklike:hover{color:var(--orange)}
 
 /* ---------- buttons ---------- */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
@@ -251,6 +257,17 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .f .hint{font-size:.72rem;color:var(--ink-40);margin-top:5px;line-height:1.5}
 .check{display:flex;align-items:center;gap:9px;font-size:.85rem;font-weight:600}
 .check input{width:17px;height:17px;accent-color:var(--orange)}
+
+/* announcement marquee editor */
+.mq-toggle{display:flex;align-items:center;gap:9px;font-size:.85rem;font-weight:600;margin:4px 0 14px}
+.mq-toggle input{width:17px;height:17px;accent-color:var(--orange)}
+.mq-list{display:flex;flex-direction:column;gap:9px;margin-bottom:14px}
+.mq-row{display:flex;align-items:center;gap:8px}
+.mq-input{flex:1;background:var(--bg);border:1.5px solid var(--line);border-radius:9px;
+  padding:9px 11px;font:inherit;font-size:.85rem;color:var(--ink)}
+.mq-input:focus{outline:none;border-color:var(--orange)}
+.mq-move{display:flex;gap:5px;flex:none}
+.mq-actions{display:flex;gap:10px;flex-wrap:wrap}
 
 /* ---------- modal ---------- */
 .modal{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;
@@ -537,3 +554,53 @@ body.printing .inv{max-width:760px;margin:0 auto}
   .side-foot span{display:none}
   .main{padding:18px 16px 50px}
 }
+
+/* ---------- REQUESTS QUEUE ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:100px;
+  padding:7px 14px;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer;
+  color:var(--ink-70);transition:.16s var(--ease)}
+.chip:hover{border-color:var(--ink-30)}
+.chip.on{background:var(--orange);border-color:var(--orange);color:#fff}
+.chip.sm{padding:5px 11px;font-size:.76rem}
+.chip b{color:var(--orange);margin-left:3px}
+.chip.on b{color:#fff}
+
+.reqlist{display:grid;gap:14px}
+.reqcard{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:var(--panel)}
+.reqcard>header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+  flex-wrap:wrap;margin-bottom:12px}
+.reqcard>header b{display:block;font-size:1rem;margin:4px 0 2px}
+.reqcard .tag{display:inline-block;font-size:.68rem;font-weight:900;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--orange)}
+.reqcard .muted{font-size:.78rem}
+
+/* Two columns of label/value so a long custom-bat spec stays scannable
+   instead of becoming a wall of lines. */
+.reqfields{display:grid;gap:8px 22px;margin:0 0 12px;
+  grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.reqfields div{display:grid;gap:1px}
+.reqfields dt{font-size:.68rem;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-40)}
+.reqfields dd{margin:0;font-size:.88rem}
+
+.reqshots{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.reqshots img{width:72px;height:72px;object-fit:cover;border-radius:9px;
+  border:1px solid var(--line);display:block}
+.reqvid{display:grid;place-items:center;width:72px;height:72px;border-radius:9px;
+  background:var(--navy-900);color:#fff;font-size:.72rem;font-weight:700;text-decoration:none}
+.reqnote{margin:0 0 10px;font-size:.85rem;color:var(--ink-70);
+  border-left:3px solid var(--line);padding-left:11px}
+.reqquote{margin:0 0 12px;font-size:.88rem}
+.reqquote b{color:var(--orange)}
+
+.reqcard>footer{display:flex;gap:9px;align-items:center;flex-wrap:wrap;
+  border-top:1px solid var(--line);padding-top:12px}
+.reqstat{margin-left:auto;padding:7px 11px;border:1px solid var(--line);border-radius:9px;
+  font:inherit;font-size:.8rem;font-weight:700;background:var(--bg);text-transform:capitalize}
+
+.pill{display:inline-block;padding:4px 11px;border-radius:100px;font-size:.72rem;
+  font-weight:800;text-transform:capitalize;background:var(--panel-2);color:var(--ink-70)}
+.pill.new{background:rgba(255,138,30,.14);color:#b96407}
+.pill.quoted{background:rgba(61,61,168,.14);color:#3d3da8}
+.pill.accepted,.pill.done{background:rgba(46,160,67,.14);color:#1f7a33}
+.pill.declined{background:rgba(229,72,77,.13);color:#c92a2e}
