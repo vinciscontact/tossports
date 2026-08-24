@@ -63,15 +63,52 @@ const NavPlay = (function () {
     const el = document.createElement('div');
     el.className = 'actor ' + cls;
     el.innerHTML = person(shirt, opts);
-    el.title = 'Click to pause the players';
+    el.title = 'Click to pause the players — a stump icon appears to bring them back';
     el.onclick = e => { e.preventDefault(); togglePause(); };
     scene.appendChild(el);
     return el;
   }
 
+  /* ------------------------------------------------------------
+     The way back.
+
+     Pausing used to be a one-way door. Clicking any player wrote
+     'off' and hid the scene — which removed the only thing that
+     could be clicked to undo it. There was no control anywhere
+     else on the site, so a single accidental click on a figure
+     labelled "click to pause" silenced the navbar permanently on
+     that browser, and the only cure was clearing site data.
+
+     The choice is still remembered, because someone who turned
+     the players off meant it. But a small stump chip is left
+     behind in their place, so the door opens from both sides.
+     ------------------------------------------------------------ */
+  function restoreChip(show) {
+    /* Lives inside .hdr-act as an ordinary flex item, not absolutely
+       positioned in the header. Pinned to the right edge it sat on top of
+       the search and cart buttons and swallowed their clicks — the cart is
+       not something a decorative control gets to cover. As a sibling it
+       takes its own space and pushes nothing out of reach. */
+    const host = document.querySelector('.hdr-act') || arena;
+    let chip = host.querySelector('.nav-back');
+    if (!show) { if (chip) chip.remove(); return; }
+    if (chip) return;
+    chip = document.createElement('button');
+    chip.className = 'nav-back';
+    chip.type = 'button';
+    chip.title = 'Bring the players back';
+    chip.setAttribute('aria-label', 'Bring the cricket players back to the navigation bar');
+    chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+      <path d="M14.5 3.5 20 9l-8.5 8.5-5.5-5.5z"/><path d="m6 12-2.5 2.5 4 4L10 16"/></svg>`;
+    chip.onclick = e => { e.preventDefault(); togglePause(); };
+    host.insertBefore(chip, host.firstChild);
+  }
+
   function togglePause() {
     offByUser = !offByUser;
     localStorage.setItem('toss_nav_play', offByUser ? 'off' : 'on');
+    restoreChip(offByUser);
     if (offByUser) stop(true); else { scene.classList.remove('hide'); start(); }
   }
 
@@ -263,6 +300,9 @@ const NavPlay = (function () {
     scene.appendChild(ball);
 
     reset();
+    /* Someone arriving with the players already switched off from a previous
+       visit needs the chip too, not just the person who clicks it now. */
+    restoreChip(offByUser);
     window.addEventListener('resize', tick, { passive: true });
     window.addEventListener('scroll', tick, { passive: true });
     document.addEventListener('visibilitychange', tick);

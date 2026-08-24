@@ -2047,37 +2047,9 @@ body.pdp-open .fab{bottom:82px}
 
 /* engraving on the product page */
 .opts.engrave{display:grid;gap:11px}
-.eng-fields{display:grid;gap:11px}
-.eng-fields.hide{display:none}
 .eng-txt{width:100%;padding:12px 14px;border:1.5px solid var(--orange);border-radius:11px;
   font:inherit;font-size:.94rem}
 .eng-txt.err{border-color:#e5484d}
-.eng-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.eng-opt{display:grid;gap:5px;font-size:.72rem;font-weight:800;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--ink-60)}
-.eng-opt select{padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;
-  font:inherit;font-size:.9rem;background:#fff;color:var(--ink)}
-.eng-opt select:focus{outline:none;border-color:var(--orange)}
-.eng-note{margin:0;font-size:.74rem;color:var(--ink-50);line-height:1.5}
-
-/* live engraving preview — a text layer over the product photo. Position is
-   indicative; the workshop carves exactly what was chosen. */
-.eng-preview{position:absolute;left:50%;transform:translateX(-50%);
-  z-index:4;pointer-events:none;max-width:70%;text-align:center;
-  transition:top .25s var(--ease)}
-.eng-preview.hide{display:none}
-.eng-preview.eng-pos-front{top:46%}
-.eng-preview.eng-pos-back{top:38%}
-.eng-preview.eng-pos-toe{top:78%}
-.eng-preview span{display:inline-block;color:#1a1206;font-size:clamp(.9rem,2.4vw,1.35rem);
-  line-height:1.05;white-space:nowrap;
-  /* engraved-into-wood look: a light top edge and a dark inset shadow */
-  text-shadow:0 1px 0 rgba(255,255,255,.45),0 -1px 1px rgba(0,0,0,.4);opacity:.9}
-.eng-preview .eng-font-classic{font-family:Georgia,'Times New Roman',serif;font-style:italic;font-weight:700}
-.eng-preview .eng-font-block{font-family:'Anton',Impact,sans-serif;text-transform:uppercase;letter-spacing:.06em}
-.eng-preview .eng-font-signature{font-family:'Dancing Script','Segoe Script',cursive;font-weight:700;
-  font-size:clamp(1.1rem,3vw,1.7rem)}
-.ci-eng{color:var(--orange)!important;font-weight:700}
 
 /* ---------- services band ---------- */
 .svcband-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
@@ -2168,3 +2140,21 @@ body.pdp-open .fab{bottom:82px}
 .jr-cta h3{margin:4px 0 8px}
 .jr-cta p{color:rgba(255,255,255,.72);font-size:.93rem;margin:0}
 @media (min-width:820px){.jr-cta{grid-template-columns:1.5fr 1fr;align-items:center}}
+
+/* The stump chip that stands in for the players while they are paused.
+
+   It exists only when they are off, so it costs the header nothing in the
+   normal case. Deliberately faint until hovered — it is a way back, not a
+   feature asking to be noticed, and the alternative was a one-way door
+   that silenced the navbar until you cleared site data. */
+.nav-back{flex:none;display:grid;place-items:center;width:30px;height:30px;
+  border-radius:9px;color:rgba(255,255,255,.34);background:transparent;border:0;
+  cursor:pointer;transition:.18s var(--ease)}
+.nav-back svg{width:16px;height:16px}
+.nav-back:hover{color:var(--orange);background:rgba(255,138,30,.12)}
+.nav-back:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+/* the header goes light on non-dark routes, so the resting colour must too */
+.hdr:not(.onDark) .nav-back{color:rgba(11,11,36,.3)}
+.hdr:not(.onDark) .nav-back:hover{color:var(--orange)}
+/* the players never run at this width, so nothing needs bringing back */
+@media (max-width:900px){.nav-back{display:none}}
