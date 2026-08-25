@@ -63,7 +63,19 @@ async function loadOps() {
     get('customer_stats?select=*&order=spend.desc&limit=100', [])
   ]);
   Object.assign(OPS, { staff, attendance, tasks, payroll, sops, expenses, targets, customers });
-  ME = staff.find(s => s.uid === (USER && USER.uid)) || null;
+  /* Supabase user objects carry .id; .uid was Firebase's name for it, so
+     after the auth move this matched nothing and every signed-in person
+     looked like a stranger with no role and no navigation.
+
+     Email is a fallback for the moment between signing in and claim_staff()
+     writing the uid back. It only decides which navigation to draw — the
+     database still judges every read and write on the JWT, so a wrong guess
+     here shows someone a tab, not the data behind it. */
+  const uid = USER && (USER.id || USER.uid);
+  const mail = String((USER && USER.email) || '').toLowerCase();
+  ME = staff.find(s => uid && s.uid === uid)
+    || staff.find(s => mail && String(s.email || '').toLowerCase() === mail)
+    || null;
 }
 
 /* ---------- tiny inline charts (no libraries) ---------- */

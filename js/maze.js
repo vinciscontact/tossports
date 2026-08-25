@@ -221,9 +221,14 @@ async function loadAll() {
   (settings || []).forEach(s => DB.settings[s.key] = s.value);
   BILL.invoices = invoices || []; BILL.loaded = true;
 
-  await loadOps();
-  buildNav();
-  checkSetup();
+  /* Each of these can fail on incomplete data, and if one throws the
+     caller never calls render() — which is precisely how a recoverable
+     problem turned into a permanently blank panel. checkSetup() is the
+     part that TELLS the user what is wrong, so it must run even when the
+     steps before it did not. */
+  try { await loadOps(); } catch (e) { console.error('loadOps', e); }
+  try { buildNav(); }     catch (e) { console.error('buildNav', e); }
+  try { checkSetup(); }   catch (e) { console.error('checkSetup', e); }
 }
 
 /* Dock icons — 24×24 stroke, one per section. Monochrome so the dock
@@ -287,7 +292,13 @@ function buildNav() {
   const tabs = ROLE_NAV[ME && ME.role] || [];
   if (tabs.length && !tabs.includes(TAB)) TAB = tabs[0];
 
-  const initials = (ME && (ME.name || ME.email || '?'))
+  /* String(... || '?') and not (ME && ... || '?'). With ME null the old
+     expression evaluated to null — the '?' sat INSIDE the && and never
+     applied — so this line threw, loadAll() died before checkSetup(), and
+     the panel sat on "Loading store…" forever. The banner that would have
+     explained why never got the chance to render. A missing staff row has
+     to degrade into a diagnosable screen, not a blank one. */
+  const initials = String((ME && (ME.name || ME.email)) || '?')
     .split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
   $('#nav').innerHTML = `
