@@ -15,6 +15,57 @@
 -- ============================================================
 
 
+-- ============================================================
+--  STEP 0 — SAFETY COPY  (free tier, no backup feature needed)
+--
+--  Supabase only gives automatic backups on paid plans, so this
+--  makes its own: every table the reset empties is copied into a
+--  separate schema in the SAME database. Instant, free, and it
+--  turns an irreversible delete into a reversible one.
+--
+--  What it does NOT protect against: losing the project itself.
+--  It lives inside the same database, so it is a safety net for
+--  "the wipe removed something I wanted", not disaster recovery.
+--  For a real off-site copy, see the pg_dump note at the bottom.
+--
+--  Run this block on its own, first.
+-- ============================================================
+
+do $$
+declare t text;
+begin
+  drop schema if exists backup_pre_handover cascade;
+  create schema backup_pre_handover;
+
+  foreach t in array array[
+    'orders','invoices','invoice_counters','requests','product_questions',
+    'scores','tasks','attendance','payroll','expenses','targets',
+    'sop_acks','stock_transfers','coupons','staff'
+  ]
+  loop
+    -- create-table-as copies the rows, not the constraints or indexes.
+    -- That is all a restore needs here: the tables it would go back into
+    -- still exist with their keys intact.
+    execute format('create table backup_pre_handover.%I as select * from public.%I', t, t);
+  end loop;
+
+  -- Storage rows are copied too, but be clear about what that means: the
+  -- row is metadata, the file itself lives in object storage. Restoring
+  -- the row does not restore a deleted file. If any uploaded photo
+  -- matters, download it from the Storage browser before resetting.
+  create table backup_pre_handover.storage_requests as
+    select * from storage.objects where bucket_id = 'requests';
+
+  raise notice 'Snapshot taken into schema backup_pre_handover. Reset is now reversible.';
+end $$;
+
+-- See what was captured:
+--   select table_name, (xpath('/row/c/text()',
+--          query_to_xml(format('select count(*) c from backup_pre_handover.%I', table_name),
+--          false, true, '')))[1]::text::int as rows
+--   from information_schema.tables where table_schema = 'backup_pre_handover' order by 1;
+
+
 -- ------------------------------------------------------------
 --  STEP 1 — look before you leap.
 --
@@ -147,3 +198,60 @@ end $$;
 --  Re-run STEP 1. Every line above the KEPT rows should read 0,
 --  and the KEPT rows should be unchanged.
 -- ------------------------------------------------------------
+
+
+-- ============================================================
+--  IF SOMETHING WENT WRONG — restore from the snapshot
+--
+--  Put back only what you need. Each line is independent.
+--  Run the ones that matter, not the whole list.
+-- ============================================================
+--
+--   insert into public.orders            select * from backup_pre_handover.orders;
+--   insert into public.invoices          select * from backup_pre_handover.invoices;
+--   insert into public.invoice_counters  select * from backup_pre_handover.invoice_counters;
+--   insert into public.requests          select * from backup_pre_handover.requests;
+--   insert into public.product_questions select * from backup_pre_handover.product_questions;
+--   insert into public.scores            select * from backup_pre_handover.scores;
+--   insert into public.tasks             select * from backup_pre_handover.tasks;
+--   insert into public.attendance        select * from backup_pre_handover.attendance;
+--   insert into public.payroll           select * from backup_pre_handover.payroll;
+--   insert into public.expenses          select * from backup_pre_handover.expenses;
+--   insert into public.targets           select * from backup_pre_handover.targets;
+--   insert into public.sop_acks          select * from backup_pre_handover.sop_acks;
+--   insert into public.stock_transfers   select * from backup_pre_handover.stock_transfers;
+--   insert into public.staff             select * from backup_pre_handover.staff;
+--
+--  `requests` and `product_questions` have bigserial ids, so after a
+--  restore the sequence still points at 1 and the next insert would
+--  collide. Reset it:
+--    select setval(pg_get_serial_sequence('public.requests','id'),
+--                  coalesce((select max(id) from public.requests), 1));
+--    select setval(pg_get_serial_sequence('public.product_questions','id'),
+--                  coalesce((select max(id) from public.product_questions), 1));
+
+
+-- ============================================================
+--  WHEN THE CLIENT IS HAPPY — remove the snapshot
+--
+--  Do this only once they have used the live shop for a while.
+--  It holds real customer phone numbers from the test period, so
+--  it should not sit in their database indefinitely.
+-- ============================================================
+--
+--   drop schema backup_pre_handover cascade;
+
+
+-- ============================================================
+--  A REAL OFF-SITE BACKUP (optional, needs no paid plan)
+--
+--  The snapshot above lives in the same database. For a copy on
+--  your own machine, run pg_dump against the pooler:
+--
+--    set PGPASSWORD=your-db-password        (Windows)  /  export PGPASSWORD=...  (mac, Linux)
+--    pg_dump -Fc -f toss-backup.dump "postgresql://postgres.<project-ref>@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres"
+--
+--  Put the password in an environment variable rather than the
+--  command line — a shell history file is not a place for it, and
+--  it must never be committed to this repository.
+-- ============================================================
