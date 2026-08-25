@@ -643,3 +643,15 @@ body.printing .inv{max-width:760px;margin:0 auto}
 /* an order nobody has acknowledged for half a day should look wrong */
 .tbl tr.late{background:rgba(255,138,30,.07)}
 .tbl tr.late td:first-child{box-shadow:inset 3px 0 0 var(--orange)}
+
+/* the quiet link under the sign-in button — a button, not an <a>, because it
+   changes what is on screen rather than going anywhere */
+.gate-link{display:block;width:100%;margin-top:12px;padding:4px;
+  font-size:.8rem;font-weight:700;color:var(--ink-60);background:none;border:0;
+  cursor:pointer;transition:.15s var(--ease)}
+.gate-link:hover{color:var(--orange)}
+.gate-link:focus-visible{outline:2px solid var(--orange);outline-offset:2px;border-radius:6px}
+/* the same box carries the confirmation as well as the error, so it needs a
+   neutral state that does not shout */
+.gate-err{color:#c22f34}
+.gate-err b{color:inherit}

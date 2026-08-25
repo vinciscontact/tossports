@@ -252,6 +252,109 @@ async function refreshSession() {
   }
 }
 
+/* ------------------------------------------------------------
+   Forgotten passwords.
+
+   Supabase mails a link back to this page carrying a recovery
+   token in the URL FRAGMENT — everything after the #. That is not
+   an accident of the design: a fragment is never sent to the
+   server and never lands in server logs or a Referer header, the
+   way a query string would. It also means only JavaScript on the
+   page can read it, which is why this is parsed here rather than
+   handled by a redirect.
+
+   The token is consumed and the fragment wiped immediately, so a
+   working password-reset link cannot survive in the address bar
+   for the next person on a shared machine to press Back into.
+   ------------------------------------------------------------ */
+
+/** Where Supabase should send someone after they click the email. */
+function resetRedirectURL() {
+  /* Absolute, no fragment, no query — Supabase matches this against the
+     project's allow-list and appends its own fragment. */
+  return location.origin + location.pathname;
+}
+
+/** Always resolves. Never reveals whether an account exists. */
+async function requestPasswordReset(email) {
+  try {
+    await fetch(SUPA_URL + '/auth/v1/recover', {
+      method: 'POST',
+      headers: { apikey: SUPA_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: String(email).trim(), gotrue_meta_security: {} })
+    });
+  } catch (e) { /* deliberately swallowed — see below */ }
+  /* Reporting failure here would turn this box into an account checker:
+     ask it about an address, watch which answer comes back, learn who
+     works here. The caller says the same thing either way. */
+  return true;
+}
+
+/**
+ * Reads a recovery (or confirmation) token out of the URL fragment and
+ * adopts it as the session, then clears the fragment.
+ * Returns 'recovery' | 'error' | null.
+ */
+function consumeAuthFragment() {
+  const raw = String(location.hash || '').replace(/^#/, '');
+  if (!raw || raw.indexOf('=') < 0) return null;
+  const q = new URLSearchParams(raw);
+
+  const wipe = () => {
+    try {
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch (e) { location.hash = ''; }
+  };
+
+  if (q.get('error') || q.get('error_description')) {
+    lastAuthFragmentError = q.get('error_description') || q.get('error');
+    wipe();
+    return 'error';
+  }
+
+  const access = q.get('access_token');
+  if (!access) return null;
+
+  saveSession({
+    access_token: access,
+    refresh_token: q.get('refresh_token') || null,
+    expires_at: Math.floor(Date.now() / 1000) + Number(q.get('expires_in') || 3600),
+    user: null                    // filled in by fetchUser() below
+  });
+  const type = q.get('type') || 'recovery';
+  wipe();
+  return type;
+}
+
+let lastAuthFragmentError = null;
+
+/** The recovery fragment carries no user object, so ask for one. */
+async function fetchUser() {
+  if (!SESSION || !SESSION.access_token) return null;
+  try {
+    const r = await fetch(SUPA_URL + '/auth/v1/user', { headers: supaHeaders() });
+    if (!r.ok) return null;
+    const u = await r.json();
+    saveSession(Object.assign({}, SESSION, { user: { id: u.id, email: u.email } }));
+    return SESSION.user;
+  } catch (e) { return null; }
+}
+
+/** Sets a new password on the CURRENTLY signed-in session. */
+async function updatePassword(password) {
+  const r = await fetch(SUPA_URL + '/auth/v1/user', {
+    method: 'PUT', headers: supaHeaders(),
+    body: JSON.stringify({ password: password })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const e = new Error(j.msg || j.error_description || j.message || r.statusText);
+    e.code = j.error_code || j.error;
+    throw e;
+  }
+  return j;
+}
+
 async function signOut() {
   const tok = SESSION && SESSION.access_token;
   saveSession(null);

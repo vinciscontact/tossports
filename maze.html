@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="icon" href="images/logo/favicon-32.png" sizes="32x32">
-<link rel="stylesheet" href="css/maze.css?v=24">
+<link rel="stylesheet" href="css/maze.css?v=28">
 </head>
 <body>
 
@@ -22,7 +22,33 @@
     <label>Email<input type="email" id="email" autocomplete="username" required></label>
     <label>Password<input type="password" id="password" autocomplete="current-password" required></label>
     <button class="btn primary block" id="loginBtn" type="submit">Sign in</button>
+    <button type="button" class="gate-link" id="forgotLink">Forgot your password?</button>
     <div class="gate-err hide" id="loginErr"></div>
+  </form>
+
+  <!-- Asking for a reset email. Separate card rather than a mode toggle on
+       the form above, so the password manager is never shown a form whose
+       fields change out from under it. -->
+  <form class="gate-card hide" id="forgotForm">
+    <img class="gate-mark" src="images/logo/toss-mark-192.png" alt="Toss Sports" width="192" height="192">
+    <h1>Reset it</h1>
+    <p>We will email you a link</p>
+    <label>Email<input type="email" id="fpEmail" autocomplete="username" required></label>
+    <button class="btn primary block" id="fpBtn" type="submit">Send the link</button>
+    <button type="button" class="gate-link" id="fpBack">Back to sign in</button>
+    <div class="gate-err hide" id="fpMsg"></div>
+  </form>
+
+  <!-- Shown only when arriving back from the emailed link, which carries a
+       one-time token in the URL fragment. -->
+  <form class="gate-card hide" id="resetForm">
+    <img class="gate-mark" src="images/logo/toss-mark-192.png" alt="Toss Sports" width="192" height="192">
+    <h1>New password</h1>
+    <p id="rsWho">Choose something only you know</p>
+    <label>New password<input type="password" id="rsPw" autocomplete="new-password" required></label>
+    <label>Again<input type="password" id="rsPw2" autocomplete="new-password" required></label>
+    <button class="btn primary block" id="rsBtn" type="submit">Save password</button>
+    <div class="gate-err hide" id="rsMsg"></div>
   </form>
 </div>
 
@@ -58,10 +84,10 @@
 
 <div id="toast" class="toast"></div>
 
-<script src="js/config.js?v=50"></script>
+<script src="js/config.js?v=51"></script>
 <script src="js/maze-export.js?v=1"></script>
 <script src="js/maze-bill.js?v=9"></script>
 <script src="js/maze-ops.js?v=27"></script>
-<script src="js/maze.js?v=26"></script>
+<script src="js/maze.js?v=28"></script>
 </body>
 </html>

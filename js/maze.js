@@ -107,8 +107,7 @@ $('#logout').onclick = async () => { await signOut(); showGate(); };
 
 function showGate() {
   USER = null; ME = null; AUTH = 'anon';
-  $('#gate').classList.remove('hide');
-  $('#shell').classList.add('hide');
+  gateCard('login');
   const p = $('#password'); if (p) p.value = '';
 }
 
@@ -149,9 +148,98 @@ async function enterPanel() {
   render();
 }
 
+/* ============================================================
+   FORGOTTEN PASSWORDS
+   ============================================================ */
+
+function gateCard(which) {
+  [['#loginForm','login'],['#forgotForm','forgot'],['#resetForm','reset']]
+    .forEach(([sel, name]) => {
+      const el = $(sel); if (el) el.classList.toggle('hide', name !== which);
+    });
+  $('#gate').classList.remove('hide');
+  $('#shell').classList.add('hide');
+}
+
+$('#forgotLink').onclick = () => {
+  $('#fpEmail').value = $('#email').value.trim();
+  $('#fpMsg').classList.add('hide');
+  gateCard('forgot');
+  $('#fpEmail').focus();
+};
+$('#fpBack').onclick = () => gateCard('login');
+
+$('#forgotForm').onsubmit = async e => {
+  e.preventDefault();
+  const email = $('#fpEmail').value.trim(), btn = $('#fpBtn'), msg = $('#fpMsg');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    msg.textContent = 'Enter the email you sign in with.';
+    msg.classList.remove('hide'); return;
+  }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  await requestPasswordReset(email);
+  btn.disabled = false; btn.textContent = 'Send the link';
+
+  /* Deliberately the same answer whether or not that address has an
+     account. Saying "no such user" would turn this box into a way to
+     find out who works here. */
+  msg.className = 'gate-err';
+  msg.innerHTML = 'If <b>' + esc(email) + '</b> has a Maze Room login, a reset link is on ' +
+    'its way. It expires in an hour, and it only works once.';
+};
+
+$('#resetForm').onsubmit = async e => {
+  e.preventDefault();
+  const pw = $('#rsPw').value, pw2 = $('#rsPw2').value;
+  const btn = $('#rsBtn'), msg = $('#rsMsg');
+  msg.classList.remove('hide'); msg.className = 'gate-err';
+
+  if (pw.length < 8) { msg.textContent = 'At least 8 characters.'; return; }
+  if (pw !== pw2)    { msg.textContent = 'Those two do not match.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await updatePassword(pw);
+    /* Signed out on purpose. Proving you can set the password is not the
+       same as proving you meant to start a session on this machine, and
+       typing the new one once immediately is a useful check that it saved. */
+    await signOut();
+    gateCard('login');
+    const le = $('#loginErr');
+    le.className = 'gate-err';
+    le.innerHTML = 'Password changed. Sign in with the new one.';
+  } catch (ex) {
+    msg.textContent = /weak|short|password/i.test(ex.message || '')
+      ? 'Supabase rejected that password — try a longer one.'
+      : (ex.message || 'Could not save the password.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save password';
+  }
+};
+
 /* Resume a session from a previous visit. Anything wrong with it — expired,
    revoked, refused — ends on the login screen rather than a half-open panel. */
 (async function resume() {
+  /* An emailed link lands here with its token in the fragment. Handle that
+     BEFORE resuming a stored session: whoever clicked the link is the person
+     to serve, even if someone else's session is still sitting in this
+     browser. */
+  const arrived = consumeAuthFragment();
+  if (arrived === 'error') {
+    showGate();
+    const le = $('#loginErr');
+    le.className = 'gate-err';
+    le.textContent = (lastAuthFragmentError || 'That link is no longer valid.') +
+      ' Request a new one.';
+    return;
+  }
+  if (arrived === 'recovery' || arrived === 'invite' || arrived === 'signup') {
+    const u = await fetchUser();
+    gateCard('reset');
+    if (u && u.email) $('#rsWho').textContent = 'for ' + u.email;
+    return;
+  }
+
   loadSession();
   if (!SESSION || !SESSION.access_token) { showGate(); return; }
   if (tokenLife() < 60) await refreshSession();
