@@ -1076,11 +1076,24 @@ function galleryHTML(p, off) {
   <div class="pdp-gal${imgs.length > 1 ? ' with-thumbs' : ''}">
     ${imgs.length > 1 ? `
       <div class="pdp-thumbs" role="group" aria-label="Product images">
-        ${imgs.map((src, i) => `
+        ${imgs.map((src, i) => {
+          /* The studio originals are 87–94% empty backdrop — the bat is only
+             3–8% of the frame. Shrunk into a 68px box that is a few pixels of
+             pale wood on white, which is why these read as blank tiles.
+
+             The "-cut" file is the same shot with the sweep removed and
+             trimmed to the blade, so the bat fills most of its frame and
+             survives being made small. If it is missing we fall back to the
+             original AND zoom it, because an untrimmed shot needs the empty
+             margins cropped away to show anything at all at this size. */
+          const cut = src.replace(/\.(webp|png|jpe?g)$/i, '-cut.webp');
+          return `
           <button class="pdp-th${i === 0 ? ' on' : ''}" data-img="${esc(src)}"
                   aria-label="View image ${i + 1} of ${imgs.length}">
-            <img src="${esc(src)}" alt="" loading="lazy" decoding="async">
-          </button>`).join('')}
+            <img src="${esc(cut)}" alt="" loading="lazy" decoding="async"
+                 onerror="this.onerror=null;this.src='${esc(src)}';this.classList.add('th-raw')">
+          </button>`;
+        }).join('')}
       </div>` : ''}
     <div class="pdp-stage${imgs.length ? ' has-photo' : ''}">
       ${badges}${main}
