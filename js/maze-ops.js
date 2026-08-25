@@ -16,9 +16,9 @@
 /* Founder-only sections sit LAST in this list on purpose — the dock draws
    them in order, so they group themselves at the right behind a divider. */
 const ROLE_NAV = {
-  founder:  ['dash','sales','fulfil','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
-  owner:    ['dash','sales','fulfil','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
-  manager:  ['dash','sales','fulfil','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores'],
+  founder:  ['dash','sales','fulfil','requests','qa','billing','products','tasks','sops','boards','coupons','scores','team','finance','insights','activity','branches','settings'],
+  owner:    ['dash','sales','fulfil','requests','qa','billing','products','tasks','sops','boards','coupons','scores','team','finance','insights','activity','branches','settings'],
+  manager:  ['dash','sales','fulfil','requests','qa','billing','products','tasks','sops','boards','coupons','scores'],
   sales:    ['dash','sales','fulfil','requests','qa','tasks','sops','boards'],
   workshop: ['dash','requests','tasks','sops']
 };
@@ -37,9 +37,21 @@ const ROLE_LABEL = {
 };
 
 /* Sections nobody below founder can open at all. These get the warm tint
-   in the dock. Team is deliberately absent: a manager can open it, they
-   just see less inside — so marking it would say the wrong thing. */
-const FOUNDER_ONLY = ['finance', 'insights', 'activity', 'branches', 'settings'];
+   in the dock.
+
+   Team used to sit outside this group because a manager could open it and
+   simply see less inside — the roster without salaries. It is founder-only
+   now, so the tint and the access agree again.
+
+   Order matters as much as membership. buildNav draws ONE divider, at the
+   point this group starts, so every tab named here has to sit in an unbroken
+   run at the end of ROLE_NAV. A tinted tab stranded earlier in the row would
+   open a second group and the divider would stop meaning anything.
+
+   Worth knowing: attendance lives inside Team, so a manager can no longer
+   mark it. If that turns out to be their job, attendance wants pulling out
+   into its own section rather than reopening Team. */
+const FOUNDER_ONLY = ['team', 'finance', 'insights', 'activity', 'branches', 'settings'];
 
 let ME = null;            // my staff row
 let OPS = { staff: [], attendance: [], tasks: [], payroll: [], sops: [], expenses: [], targets: [], customers: [] };
