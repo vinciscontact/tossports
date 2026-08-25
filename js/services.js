@@ -18,6 +18,80 @@
    would be worse than losing the record of it.
    ============================================================ */
 
+/* ============================================================
+   SERVICE IDENTITY
+
+   Six services that were six identical white cards. Each now has
+   a colour and a drawing of its own, carried from the card
+   straight through to its form, so arriving on a page feels like
+   arriving somewhere rather than at another form.
+
+   Orange and navy still run the site — these are accents, used on
+   an icon, a rule and a header, never on a primary button. The
+   brand does not become six brands.
+
+   Every colour was solved against WCAG relative luminance rather
+   than picked by eye, and clears 4.5:1 BOTH on white and on its
+   own 10% tint, which is the background it actually sits on. The
+   lowest of the six is 4.51.
+
+   The drawings are line art in one stroke weight on a 48-unit
+   grid, matching the icon set already in ICON. currentColor
+   throughout, so each inherits its service's accent and there is
+   one copy of each shape rather than six coloured variants.
+   ============================================================ */
+
+const SVC_ART = (() => {
+  const w = p => `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor"
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+    class="svc-art-svg" aria-hidden="true">${p}</svg>`;
+  return {
+    /* a blade with a split down it and a dressing across the split */
+    bat_doctor: w(`<path d="M20 6h8v9l3 4v20a3 3 0 0 1-3 3h-8a3 3 0 0 1-3-3V19l3-4z"/>
+      <path d="M24 21v14" stroke-dasharray="3 3"/>
+      <rect x="14" y="24" width="20" height="8" rx="2" transform="rotate(-14 24 28)"/>
+      <path d="M20.5 26.5v3M27.5 26.5v3" transform="rotate(-14 24 28)"/>`),
+
+    /* a blade being measured — calipers across the edge */
+    custom_bat: w(`<path d="M20 8h8v9l3 4v19h-14V21l3-4z"/>
+      <path d="M13 21h-4M39 21h-4M13 40h-4M39 40h-4"/>
+      <path d="M11 21v19M37 21v19" stroke-dasharray="2 3"/>
+      <path d="M24 17v23" stroke-dasharray="2 3"/>`),
+
+    /* one bat handed over for another — the loop between them */
+    trade_in: w(`<path d="M15 10h6v7l2 3v18h-10V20l2-3z"/>
+      <path d="M27 10h6v7l2 3v18h-10V20l2-3z" opacity=".55"/>
+      <path d="M20 30c3 3 5 3 8 0"/><path d="M28 30l-2.5-2M28 30l-2.5 2"/>`),
+
+    /* a crate of them */
+    wholesale: w(`<rect x="8" y="20" width="32" height="20" rx="2"/>
+      <path d="M8 26h32"/><path d="M16 20v-4M24 20v-6M32 20v-4"/>
+      <path d="M14 12h4v8h-4zM22 10h4v10h-4zM30 12h4v8h-4z"/>
+      <path d="M18 33h12"/>`),
+
+    /* a shirt with a number on it */
+    jersey: w(`<path d="M18 9l-8 4 3 7 3-1v20h16V19l3 1 3-7-8-4a6 6 0 0 1-12 0z"/>
+      <path d="M22 26h4v9M22 35h6"/>`),
+
+    /* film frame with a play mark */
+    video: w(`<rect x="7" y="12" width="34" height="24" rx="3"/>
+      <path d="M7 18h4M7 24h4M7 30h4M37 18h4M37 24h4M37 30h4"/>
+      <path d="M21 19l8 5-8 5z"/>`)
+  };
+})();
+
+/* colour + the one-line promise each card carries */
+const SVC_ID = {
+  bat_doctor: { accent: '#CC2C23', tint: '#FAEAE9', art: 'bat_doctor' },
+  custom_bat: { accent: '#3D3DA8', tint: '#ECECF6', art: 'custom_bat' },
+  trade_in:   { accent: '#007C41', tint: '#E6F2EC', art: 'trade_in'   },
+  wholesale:  { accent: '#9E5E00', tint: '#F5EFE6', art: 'wholesale'  },
+  jersey:     { accent: '#C0357A', tint: '#F9EBF2', art: 'jersey'     },
+  video:      { accent: '#6B3FC4', tint: '#F0ECF9', art: 'video'      }
+};
+
+const svcId = k => SVC_ID[k] || { accent: 'var(--orange-700)', tint: 'var(--paper-alt)', art: null };
+
 /* ---------- form specs ---------- */
 
 const SVC = {
@@ -30,14 +104,14 @@ const SVC = {
     cta: 'Send to the workshop',
     photos: { min: 1, max: 4, label: 'Photos of the damage', hint: 'At least one. The blade face, and a close-up of the problem.' },
     fields: [
-      { k: 'issue', t: 'radios', label: 'What is wrong?', req: true,
+      { k: 'issue', g: 'What is wrong', t: 'radios', label: 'What is wrong?', req: true,
         opts: () => SERVICES.batDoctor.issues.map(i => ({
           v: i.id, label: i.label,
           note: i.from ? `₹${i.from}–${i.to} typically` : 'We will quote after seeing it' })) },
-      { k: 'bat', t: 'text', label: 'Which bat is it?', ph: 'Toss Power X, or another brand', req: true },
-      { k: 'age', t: 'select', label: 'How old is it?', req: true,
+      { k: 'bat', g: 'About the bat', t: 'text', label: 'Which bat is it?', ph: 'Toss Power X, or another brand', req: true },
+      { k: 'age', g: 'About the bat', t: 'select', label: 'How old is it?', req: true,
         opts: () => ['Under 6 months', '6–12 months', '1–2 years', 'Over 2 years'].map(v => ({ v, label: v })) },
-      { k: 'note', t: 'textarea', label: 'Anything else we should know?', ph: 'When it happened, how it plays now…' }
+      { k: 'note', g: 'About the bat', t: 'textarea', label: 'Anything else we should know?', ph: 'When it happened, how it plays now…' }
     ]
   },
 
@@ -50,27 +124,27 @@ const SVC = {
     cta: 'Send my spec',
     photos: { min: 0, max: 3, label: 'Reference photos', hint: 'Optional — a bat you liked, or a sticker design.' },
     fields: [
-      { k: 'wood', t: 'radios', label: 'Wood', req: true, opts: () => [
+      { k: 'wood', g: 'The wood', t: 'radios', label: 'Wood', req: true, opts: () => [
         { v: 'srilankan', label: 'Sri Lankan wood', note: 'Hardest hitting, heaviest' },
         { v: 'kashmir',   label: 'Kashmir Willow',  note: 'Balanced, the all-rounder' },
         { v: 'poplar',    label: 'Poplar',          note: 'Lightest pickup, softest' } ] },
-      { k: 'profile', t: 'radios', label: 'Blade profile', req: true, opts: () => [
+      { k: 'profile', g: 'The shape', t: 'radios', label: 'Blade profile', req: true, opts: () => [
         { v: 'standard', label: 'Standard' }, { v: 'scoop', label: 'Scoop' },
         { v: 'flat', label: 'Flat' }, { v: 'bigedge', label: 'Big edge' },
         { v: 'mongoose', label: 'Mongoose' }, { v: 'multi', label: 'Double / triple blade' } ] },
-      { k: 'weight', t: 'select', label: 'Weight', req: true,
+      { k: 'weight', g: 'The shape', t: 'select', label: 'Weight', req: true,
         opts: () => ['Light — 650–699g', 'Medium — 700–760g', 'Heavy — 790–860g', 'Not sure, advise me']
           .map(v => ({ v, label: v })) },
-      { k: 'ball', t: 'radios', label: 'Which ball?', req: true, opts: () => [
+      { k: 'ball', g: 'How you play', t: 'radios', label: 'Which ball?', req: true, opts: () => [
         { v: 'soft', label: 'Soft tennis ball' },
         { v: 'medium', label: 'Medium / hard tennis ball' } ] },
-      { k: 'handle', t: 'select', label: 'Handle',
+      { k: 'handle', g: 'The shape', t: 'select', label: 'Handle',
         opts: () => ['Single piece', 'Joint handle', 'Cane handle', 'Whatever suits the spec']
           .map(v => ({ v, label: v })) },
-      { k: 'engraving', t: 'text', label: 'Engraving (optional)',
+      { k: 'engraving', g: 'Finishing touches', t: 'text', label: 'Engraving (optional)',
         ph: 'A name, a number, a team', max: () => SERVICES.engraving.maxChars,
         hint: () => `Up to ${SERVICES.engraving.maxChars} characters · +₹${SERVICES.engraving.price}` },
-      { k: 'note', t: 'textarea', label: 'How do you play?', ph: 'Where you play, what you struggle with, anything you want us to know.' }
+      { k: 'note', g: 'How you play', t: 'textarea', label: 'How do you play?', ph: 'Where you play, what you struggle with, anything you want us to know.' }
     ]
   },
 
@@ -84,13 +158,13 @@ const SVC = {
     photos: { min: 0, max: 3, label: 'Team logo or design', hint: 'Highest quality file you have.' },
     minNote: () => `Minimum order ${SERVICES.jersey.min} jerseys.`,
     fields: [
-      { k: 'team', t: 'text', label: 'Team name', req: true, ph: 'As it should print' },
-      { k: 'qty', t: 'number', label: 'How many jerseys?', req: true, min: 1, ph: '11' },
-      { k: 'sizes', t: 'text', label: 'Size breakdown', req: true,
+      { k: 'team', g: 'The team', t: 'text', label: 'Team name', req: true, ph: 'As it should print' },
+      { k: 'qty', g: 'The team', t: 'number', label: 'How many jerseys?', req: true, min: 1, ph: '11' },
+      { k: 'sizes', g: 'Sizes and names', t: 'text', label: 'Size breakdown', req: true,
         ph: '2 S, 5 M, 3 L, 1 XL', hint: () => 'Available: ' + SERVICES.jersey.sizes.join(', ') },
-      { k: 'names', t: 'textarea', label: 'Names and numbers',
+      { k: 'names', g: 'Sizes and names', t: 'textarea', label: 'Names and numbers',
         ph: 'One per line — Karthik 07, Arun 18…', hint: 'You can send this later if it is not final.' },
-      { k: 'when', t: 'text', label: 'Needed by', ph: 'Tournament date, if there is one' }
+      { k: 'when', g: 'Timing', t: 'text', label: 'Needed by', ph: 'Tournament date, if there is one' }
     ]
   },
 
@@ -104,12 +178,12 @@ const SVC = {
     photos: { min: 0, max: 0 },
     slabs: true,
     fields: [
-      { k: 'org', t: 'text', label: 'Club, academy or shop name', req: true },
-      { k: 'qty', t: 'number', label: 'How many bats?', req: true, min: 1, ph: '25',
+      { k: 'org', g: 'Who you are', t: 'text', label: 'Club, academy or shop name', req: true },
+      { k: 'qty', g: 'The order', t: 'number', label: 'How many bats?', req: true, min: 1, ph: '25',
         hint: () => `Bulk rates start at ${SERVICES.wholesale.min}.` },
-      { k: 'mix', t: 'textarea', label: 'Which bats?', ph: 'Model names, or just a budget per bat and we will suggest.' },
-      { k: 'gst', t: 'text', label: 'GSTIN (optional)', ph: 'For a tax invoice' },
-      { k: 'when', t: 'text', label: 'Needed by' }
+      { k: 'mix', g: 'The order', t: 'textarea', label: 'Which bats?', ph: 'Model names, or just a budget per bat and we will suggest.' },
+      { k: 'gst', g: 'Who you are', t: 'text', label: 'GSTIN (optional)', ph: 'For a tax invoice' },
+      { k: 'when', g: 'Timing', t: 'text', label: 'Needed by' }
     ]
   },
 
@@ -123,13 +197,13 @@ const SVC = {
     photos: { min: 2, max: 5, label: 'Photos of your bat', hint: 'Face, back, edge and toe. Be honest about the damage — it only slows things down otherwise.' },
     bands: true,
     fields: [
-      { k: 'bat', t: 'text', label: 'What bat is it?', req: true, ph: 'Brand and model' },
-      { k: 'condition', t: 'radios', label: 'Honest condition', req: true,
+      { k: 'bat', g: 'The bat you have', t: 'text', label: 'What bat is it?', req: true, ph: 'Brand and model' },
+      { k: 'condition', g: 'The bat you have', t: 'radios', label: 'Honest condition', req: true,
         opts: () => SERVICES.tradeIn.bands.map(b => ({
           v: b.id, label: b.label, note: `Usually ₹${b.from}–${b.to}` })) },
-      { k: 'age', t: 'select', label: 'How long have you had it?', req: true,
+      { k: 'age', g: 'The bat you have', t: 'select', label: 'How long have you had it?', req: true,
         opts: () => ['Under 6 months', '6–12 months', '1–2 years', 'Over 2 years'].map(v => ({ v, label: v })) },
-      { k: 'want', t: 'text', label: 'Which Toss bat do you want?', ph: 'Or leave it and we will suggest' }
+      { k: 'want', g: 'What you want next', t: 'text', label: 'Which Toss bat do you want?', ph: 'Or leave it and we will suggest' }
     ]
   },
 
@@ -145,9 +219,9 @@ const SVC = {
       accept: 'video/*' },
     consent: true,
     fields: [
-      { k: 'bat', t: 'text', label: 'Which Toss bat is in the video?', req: true },
-      { k: 'order', t: 'text', label: 'Your order number (optional)', ph: 'Speeds up the reward' },
-      { k: 'insta', t: 'text', label: 'Instagram handle (optional)', ph: '@yourname — so we can credit you' }
+      { k: 'bat', g: 'About the film', t: 'text', label: 'Which Toss bat is in the video?', req: true },
+      { k: 'order', g: 'About the film', t: 'text', label: 'Your order number (optional)', ph: 'Speeds up the reward' },
+      { k: 'insta', g: 'Credit', t: 'text', label: 'Instagram handle (optional)', ph: '@yourname — so we can credit you' }
     ]
   }
 };
@@ -193,79 +267,119 @@ function svcField(f) {
   </div>`;
 }
 
+/* Fields carry a group label, so the form is built by bucketing them in
+   declaration order rather than by any layout logic here. Adding a question
+   to a spec puts it in the right step automatically. */
+function svcGroups(s) {
+  const out = [], byName = {};
+  s.fields.forEach(f => {
+    const g = f.g || 'Details';
+    if (!byName[g]) { byName[g] = []; out.push({ name: g, fields: byName[g] }); }
+    byName[g].push(f);
+  });
+  return out;
+}
+
 function viewService(slug) {
   const kind = SVC_BY_SLUG[slug];
   const s = kind && SVC[kind];
   if (!s) return viewNotFound();
 
+  const id = svcId(kind);
   const ph = s.photos || {};
   const wa = TOSS_LINKS.whatsapp;
+  const groups = svcGroups(s);
+
+  /* Photos and contact details are steps in their own right, numbered with
+     the rest. Contact comes LAST on purpose: asking who someone is before
+     asking what they want is the wrong way round, and it was the first
+     thing on the page before. */
+  const total = groups.length + (ph.max ? 1 : 0) + 1;
+  let n = 0;
+  const step = name => `<div class="svc-step"><span>${++n}</span><h2>${esc(name)}</h2></div>`;
 
   return `
-  <section class="svc-top dark">
-    <div class="wrap">
-      <nav class="crumbs"><a href="#/">Home</a> / <span>${esc(s.title)}</span></nav>
-      <p class="eyebrow">${esc(s.eyebrow)}</p>
-      <h1 class="d1">${esc(s.title)}</h1>
-      <p class="lede">${esc(val(s.lede))}</p>
-      ${s.slabs ? `
-        <div class="svc-slabs">
-          ${SERVICES.wholesale.slabs.map(x => `
-            <div class="svc-slab">
-              <b>${x.off}% off</b>
-              <span>${x.from}${x.to ? '–' + x.to : '+'} bats</span>
-            </div>`).join('')}
-        </div>` : ''}
-      ${s.minNote ? `<p class="svc-min">${esc(val(s.minNote))}</p>` : ''}
-      ${kind === 'bat_doctor' ? `<p class="svc-min">Turnaround: ${esc(SERVICES.batDoctor.turnaround)}</p>` : ''}
+  <section class="svc-top" style="--svc:${id.accent};--svc-tint:${id.tint}">
+    <div class="wrap svc-top-in">
+      <div>
+        <nav class="crumbs"><a href="#/">Home</a> / <span>${esc(s.title)}</span></nav>
+        <p class="eyebrow">${esc(s.eyebrow)}</p>
+        <h1 class="d1">${esc(s.title)}</h1>
+        <p class="lede">${esc(val(s.lede))}</p>
+        <div class="svc-facts">
+          ${kind === 'bat_doctor' ? `<span>${ICON.truck} ${esc(SERVICES.batDoctor.turnaround)}</span>` : ''}
+          ${s.minNote ? `<span>${ICON.check} ${esc(val(s.minNote))}</span>` : ''}
+          ${kind === 'trade_in' ? `<span>${ICON.rupee} Valued from photos, no obligation</span>` : ''}
+          ${kind === 'video' ? `<span>${ICON.star} ${SERVICES.video.rewardOff}% off your next order</span>` : ''}
+          ${kind === 'custom_bat' ? `<span>${ICON.hammer} Shaped by hand in our own unit</span>` : ''}
+          ${wa ? `<a href="https://wa.me/${wa}?text=${encodeURIComponent('Hi Toss, about ' + s.title + ' — ')}"
+             target="_blank" rel="noopener">${ICON.whatsapp} Rather just ask?</a>` : ''}
+        </div>
+      </div>
+      <span class="svc-hero-art">${SVC_ART[id.art] || ''}</span>
     </div>
+    ${s.slabs ? `
+      <div class="wrap"><div class="svc-slabs">
+        ${SERVICES.wholesale.slabs.map(x => `
+          <div class="svc-slab"><b>${x.off}% off</b>
+            <span>${x.from}${x.to ? '–' + x.to : '+'} bats</span></div>`).join('')}
+      </div></div>` : ''}
   </section>
 
-  <section class="sec">
+  <section class="sec svc-formsec" style="--svc:${id.accent};--svc-tint:${id.tint}">
     <div class="wrap svc-wrap">
       <form class="svc-form" id="svcForm" data-kind="${kind}" novalidate>
 
-        <div class="svc-grid">
-          <div class="svc-f" data-k="name" data-t="text" data-req="1">
-            <label for="svc_name">Your name <i>required</i></label>
-            <input id="svc_name" type="text" autocomplete="name">
-          </div>
-          <div class="svc-f" data-k="phone" data-t="tel" data-req="1">
-            <label for="svc_phone">WhatsApp number <i>required</i></label>
-            <input id="svc_phone" type="tel" inputmode="numeric" autocomplete="tel"
-                   placeholder="10 digits">
-            <p class="svc-hint">This is how we reply. We do not use it for anything else.</p>
-          </div>
-        </div>
-
-        ${s.fields.map(svcField).join('')}
+        ${groups.map(g => `
+          <fieldset class="svc-group">
+            <legend class="sr-only">${esc(g.name)}</legend>
+            ${step(g.name)}
+            <div class="svc-grid-auto">${g.fields.map(svcField).join('')}</div>
+          </fieldset>`).join('')}
 
         ${ph.max ? `
-        <div class="svc-f" data-k="__photos"${ph.min ? ' data-req="1"' : ''}>
-          <label>${esc(val(ph.label))}${ph.min ? ' <i>required</i>' : ''}</label>
-          <div class="svc-up" id="svcUp">
-            <input type="file" id="svcFile" accept="${ph.accept || 'image/*'}"
-                   ${ph.max > 1 ? 'multiple' : ''} hidden>
-            <button type="button" class="btn btn-ghost sm" id="svcPick">Choose file${ph.max > 1 ? 's' : ''}</button>
-            <span class="svc-hint">${esc(val(ph.hint) || '')}</span>
+        <fieldset class="svc-group">
+          <legend class="sr-only">${esc(val(ph.label))}</legend>
+          ${step(val(ph.label))}
+          <div class="svc-f" data-k="__photos"${ph.min ? ' data-req="1"' : ''}>
+            <div class="svc-up" id="svcUp">
+              <input type="file" id="svcFile" accept="${ph.accept || 'image/*'}"
+                     ${ph.max > 1 ? 'multiple' : ''} hidden>
+              <button type="button" class="btn btn-ghost sm" id="svcPick">Choose file${ph.max > 1 ? 's' : ''}</button>
+              <span class="svc-hint">${esc(val(ph.hint) || '')}</span>
+            </div>
+            <div class="svc-thumbs" id="svcThumbs"></div>
           </div>
-          <div class="svc-thumbs" id="svcThumbs"></div>
-        </div>` : ''}
+        </fieldset>` : ''}
 
-        ${s.consent ? `
-        <div class="svc-f svc-consent">
-          <label class="svc-check">
-            <input type="checkbox" id="svcConsent">
-            <span>I am happy for Toss to use this video in their posts and adverts, and I
-              filmed it myself.</span>
-          </label>
-        </div>` : ''}
+        <fieldset class="svc-group">
+          <legend class="sr-only">How to reach you</legend>
+          ${step('How to reach you')}
+          <div class="svc-grid">
+            <div class="svc-f" data-k="name" data-t="text" data-req="1">
+              <label for="svc_name">Your name <i>required</i></label>
+              <input id="svc_name" type="text" autocomplete="name">
+            </div>
+            <div class="svc-f" data-k="phone" data-t="tel" data-req="1">
+              <label for="svc_phone">WhatsApp number <i>required</i></label>
+              <input id="svc_phone" type="tel" inputmode="numeric" autocomplete="tel"
+                     placeholder="10 digits">
+              <p class="svc-hint">This is how we reply. We do not use it for anything else.</p>
+            </div>
+          </div>
+          ${s.consent ? `
+          <div class="svc-f svc-consent">
+            <label class="svc-check">
+              <input type="checkbox" id="svcConsent">
+              <span>I am happy for Toss to use this video in their posts and adverts, and I
+                filmed it myself.</span>
+            </label>
+          </div>` : ''}
+        </fieldset>
 
         <div class="svc-actions">
           <button class="btn btn-primary" type="submit" id="svcSend">${esc(s.cta)}</button>
-          ${wa ? `<a class="btn btn-ghost" target="_blank" rel="noopener"
-             href="https://wa.me/${wa}?text=${encodeURIComponent('Hi Toss, about ' + s.title + ' — ')}">
-             Ask on WhatsApp instead</a>` : ''}
+          <span class="svc-steps-note">${total} steps · takes about a minute</span>
         </div>
         <p class="svc-stat" id="svcStat" role="status"></p>
       </form>
@@ -702,18 +816,18 @@ function communityHTML() {
 function servicesBandHTML() {
   const S = SERVICES;
   const cards = [
-    S.batDoctor.enabled && { href: '#/service/bat-doctor', t: 'Bat Doctor',
-      d: 'Cracked, loose or dead? Send a photo, get a price before you post it.', i: ICON.hammer },
-    S.customBat.enabled && { href: '#/service/custom', t: 'Build your own',
-      d: 'Your wood, your profile, your weight. Cut by hand to your spec.', i: ICON.star },
-    S.tradeIn.enabled && { href: '#/service/trade-in', t: 'Trade in your old bat',
-      d: 'We value it, you get that much off a new one.', i: ICON.rupee },
-    S.wholesale.enabled && { href: '#/service/wholesale', t: 'Bulk & wholesale',
-      d: `Club and academy rates from ${S.wholesale.min} bats.`, i: ICON.truck },
-    S.jersey.enabled && { href: '#/service/jersey', t: 'Team jerseys',
-      d: 'Names, numbers and your crest, printed to order.', i: ICON.shield },
-    S.video.enabled && { href: '#/service/video', t: `Send a video, get ${S.video.rewardOff}% off`,
-      d: 'Film yourself playing. If we use it, you get money off.', i: ICON.insta }
+    S.batDoctor.enabled && { k: 'bat_doctor', href: '#/service/bat-doctor', t: 'Bat Doctor',
+      d: 'Cracked, loose or dead? Send a photo, get a price before you post it.' },
+    S.customBat.enabled && { k: 'custom_bat', href: '#/service/custom', t: 'Build your own',
+      d: 'Your wood, your profile, your weight. Cut by hand to your spec.' },
+    S.tradeIn.enabled && { k: 'trade_in', href: '#/service/trade-in', t: 'Trade in your old bat',
+      d: 'We value it, you get that much off a new one.' },
+    S.wholesale.enabled && { k: 'wholesale', href: '#/service/wholesale', t: 'Bulk & wholesale',
+      d: `Club and academy rates from ${S.wholesale.min} bats.` },
+    S.jersey.enabled && { k: 'jersey', href: '#/service/jersey', t: 'Team jerseys',
+      d: 'Names, numbers and your crest, printed to order.' },
+    S.video.enabled && { k: 'video', href: '#/service/video', t: `Send a video, get ${S.video.rewardOff}% off`,
+      d: 'Film yourself playing. If we use it, you get money off.' }
   ].filter(Boolean);
   if (!cards.length) return '';
 
@@ -725,14 +839,22 @@ function servicesBandHTML() {
         <h2 class="d2">We also fix, build and kit out</h2>
       </div>
       <a href="#/track" class="link-arrow">Track an order ${ICON.arrow}</a></div>
+
       <div class="svcband-grid">
-        ${cards.map(c => `
-          <a class="svcband-card rv" href="${c.href}">
-            <span class="svcband-ico">${c.i}</span>
+        ${cards.map(c => {
+          const id = svcId(c.k);
+          /* Colour is passed as a custom property rather than baked into a
+             class per service. One rule set styles all six, and adding a
+             seventh service means adding a colour, not a stylesheet. */
+          return `
+          <a class="svcband-card rv" href="${c.href}"
+             style="--svc:${id.accent};--svc-tint:${id.tint}">
+            <span class="svcband-art">${SVC_ART[id.art] || ICON.star}</span>
             <b>${esc(c.t)}</b>
             <p>${esc(c.d)}</p>
             <span class="svcband-go">${ICON.arrow}</span>
-          </a>`).join('')}
+          </a>`;
+        }).join('')}
       </div>
     </div>
   </section>`;

@@ -2286,3 +2286,146 @@ body.pdp-open .fab{bottom:82px}
    marketing pages never did */
 .legal-updated{margin-top:34px;font-size:.8rem;color:var(--ink-50,#98989d)}
 .legal-nav{margin-top:10px;font-size:.82rem}
+
+/* ============================================================
+   SERVICES — cards and forms, one identity each
+
+   Everything below reads --svc and --svc-tint, set inline per
+   service. One rule set styles all six, and a seventh service is
+   a colour in SVC_ID, not another block of CSS.
+   ============================================================ */
+
+/* ---------- the card band ---------- */
+
+/* Fixed three-up rather than auto-fit. auto-fit gave four columns at wide
+   widths and stranded the last two in a half-empty row — the gap that made
+   the whole block look unfinished. Three columns divide six exactly. */
+.svcband-grid{display:grid;gap:16px;grid-template-columns:repeat(3,1fr)}
+@media (max-width:900px){.svcband-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.svcband-grid{grid-template-columns:1fr}}
+
+.svcband-card{position:relative;display:grid;gap:8px;align-content:start;
+  padding:26px 24px 52px;border-radius:18px;background:#fff;
+  border:1px solid var(--line);text-decoration:none;color:inherit;
+  overflow:hidden;transition:transform .22s var(--ease),box-shadow .22s var(--ease),
+    border-color .22s var(--ease)}
+
+/* A wash of the service colour bleeding in from the top right. It is the
+   thing that stops six white rectangles reading as one repeated card, and
+   it is a pseudo-element so it can sit behind the text without a wrapper. */
+.svcband-card::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(420px 220px at 108% -14%, var(--svc-tint), transparent 62%);
+  transition:opacity .22s var(--ease)}
+.svcband-card>*{position:relative}
+
+.svcband-card:hover{transform:translateY(-4px);border-color:var(--svc);
+  box-shadow:0 18px 40px rgba(11,11,36,.12)}
+
+.svcband-art{display:grid;place-items:center;width:56px;height:56px;border-radius:15px;
+  background:var(--svc-tint);color:var(--svc);margin-bottom:6px;
+  transition:transform .3s var(--ease)}
+.svcband-art .svc-art-svg{width:32px;height:32px;display:block}
+.svcband-card:hover .svcband-art{transform:scale(1.06) rotate(-3deg)}
+
+.svcband-card b{font-size:1.06rem;line-height:1.25}
+.svcband-card p{margin:0;font-size:.88rem;color:var(--ink-70)}
+
+.svcband-go{position:absolute;left:24px;bottom:20px;color:var(--svc);
+  opacity:0;transform:translateX(-8px);transition:.22s var(--ease)}
+.svcband-go svg{width:20px;height:20px}
+.svcband-card:hover .svcband-go{opacity:1;transform:none}
+
+/* a rule in the service colour along the bottom, drawn on hover */
+.svcband-card::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;
+  background:var(--svc);transform:scaleX(0);transform-origin:left;
+  transition:transform .28s var(--ease)}
+.svcband-card:hover::after{transform:scaleX(1)}
+
+@media (prefers-reduced-motion:reduce){
+  .svcband-card,.svcband-art,.svcband-go,.svcband-card::after{transition:none}
+  .svcband-card:hover{transform:none}
+  .svcband-card:hover .svcband-art{transform:none}
+}
+
+/* ---------- the form page header ---------- */
+
+.svc-top{background:var(--navy-900);color:#fff;position:relative;overflow:hidden;
+  padding:calc(var(--hdr) + 44px) 0 44px}
+/* The service colour, at low opacity over navy. Enough to tell two service
+   pages apart at a glance without turning the site into six colour schemes. */
+.svc-top::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(720px 420px at 88% -10%, var(--svc), transparent 66%),
+    radial-gradient(620px 380px at 12% 110%, rgba(61,61,168,.5), transparent 70%);
+  opacity:.34}
+.svc-top>*{position:relative}
+.svc-top .lede{max-width:54ch;margin-top:12px;color:rgba(255,255,255,.78)}
+.svc-top .crumbs{margin-bottom:18px}
+
+.svc-top-in{display:grid;gap:28px;align-items:center}
+@media (min-width:900px){.svc-top-in{grid-template-columns:1.6fr .9fr}}
+
+.svc-hero-art{display:none;justify-self:center;color:#fff;opacity:.9}
+@media (min-width:900px){
+  .svc-hero-art{display:block}
+  .svc-hero-art .svc-art-svg{width:min(210px,18vw);height:auto;
+    filter:drop-shadow(0 18px 34px rgba(0,0,0,.4))}
+}
+
+/* the promises, as facts rather than paragraphs */
+.svc-facts{display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:22px}
+.svc-facts span,.svc-facts a{display:inline-flex;align-items:center;gap:8px;
+  font-size:.82rem;font-weight:700;color:rgba(255,255,255,.82)}
+.svc-facts a{color:#7ee787;text-decoration:none}
+.svc-facts a:hover{text-decoration:underline}
+.svc-facts svg{width:16px;height:16px;flex:none}
+
+.svc-slabs{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+
+/* ---------- the form, as numbered steps ---------- */
+
+.svc-formsec{background:var(--paper)}
+.svc-group{border:0;padding:0;margin:0 0 34px}
+.svc-group:last-of-type{margin-bottom:22px}
+
+.svc-step{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.svc-step span{display:grid;place-items:center;width:30px;height:30px;flex:none;
+  border-radius:50%;background:var(--svc-tint);color:var(--svc);
+  font-weight:900;font-size:.86rem}
+.svc-step h2{font-size:1.02rem;font-weight:800;margin:0;letter-spacing:-.01em}
+
+/* Two columns where the fields are short, one where they are not. Guessing
+   from the field type beats a hand-maintained column count per group. */
+.svc-grid-auto{display:grid;gap:18px;grid-template-columns:1fr}
+@media (min-width:680px){
+  .svc-grid-auto{grid-template-columns:1fr 1fr}
+  .svc-grid-auto .svc-f[data-t="textarea"],
+  .svc-grid-auto .svc-f[data-t="radios"]{grid-column:1 / -1}
+}
+
+/* the accent reaches the controls too, so the page feels of a piece */
+.svc-formsec .svc-f input:focus,
+.svc-formsec .svc-f select:focus,
+.svc-formsec .svc-f textarea:focus{
+  border-color:var(--svc);box-shadow:0 0 0 3px color-mix(in srgb, var(--svc) 18%, transparent)}
+.svc-formsec .svc-radio input:checked+.svc-radio-b{
+  border-color:var(--svc);background:var(--svc-tint);
+  box-shadow:0 0 0 2px color-mix(in srgb, var(--svc) 22%, transparent)}
+.svc-formsec .svc-check input{accent-color:var(--svc)}
+.svc-formsec .svc-up{border-color:var(--line)}
+.svc-formsec .svc-up:hover{border-color:var(--svc)}
+
+/* color-mix is recent. Where it is unsupported the focus ring simply falls
+   back to the orange defined earlier rather than disappearing. */
+@supports not (color: color-mix(in srgb, red 50%, transparent)){
+  .svc-formsec .svc-f input:focus,
+  .svc-formsec .svc-f select:focus,
+  .svc-formsec .svc-f textarea:focus{box-shadow:0 0 0 3px rgba(255,138,30,.18)}
+}
+
+.svc-steps-note{font-size:.8rem;color:var(--ink-50);font-weight:700}
+
+/* visually hidden, still read aloud — the fieldset needs a legend for
+   assistive tech even though the numbered heading carries it visually */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
