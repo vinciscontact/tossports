@@ -21,11 +21,63 @@ button{background:none;border:0;cursor:pointer}
 .hide{display:none!important}
 a{color:var(--orange);text-decoration:none}
 
-/* ---------- login ---------- */
+/* ---------- login ----------
+
+   A ground behind the sign-in, and nothing else in the panel. The
+   background belongs here and only here: past this screen the Maze Room
+   is a dense working tool, and a photograph behind a table of numbers
+   would fight the numbers every time.
+
+   The photo carries a copyright watermark from whoever shot it. It is
+   left intact — the notice is part of the image, and painting it out
+   would be worse than showing it.
+
+   The image is loaded on .gate rather than on body so the browser only
+   fetches it on the login screen. Someone already signed in never pays
+   for a 191kB photo they will not see. */
 .gate{min-height:100vh;display:grid;place-items:center;padding:24px;
-  background:radial-gradient(800px 500px at 50% 0%,rgba(255,138,30,.12),transparent 60%)}
-.gate-card{width:100%;max-width:360px;background:var(--panel);border:1px solid var(--line);
-  border-radius:18px;padding:34px 28px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.12)}
+  position:relative;isolation:isolate;
+  background:#0b0b18 url('../images/maze-bg-1600.webp') center/cover no-repeat;
+  background-attachment:fixed}
+@media (max-width:900px){
+  /* the small file below the breakpoint, and no fixed attachment: iOS
+     ignores it and Android repaints the whole layer on every scroll */
+  .gate{background-image:url('../images/maze-bg-900.webp');background-attachment:scroll}
+}
+
+/* The scrim is what makes this work. It is a busy, high-contrast
+   photograph, and a white card dropped straight onto it reads as a
+   sticker. Dark at the edges, darker still behind the card, so the card
+   looks lit rather than pasted. pointer-events:none because a decorative
+   layer must never take a click meant for the form beneath it. */
+.gate::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(680px 520px at 50% 50%, rgba(6,6,20,.72), rgba(6,6,20,.34) 60%, transparent 78%),
+    linear-gradient(180deg, rgba(6,6,20,.55), rgba(6,6,20,.30) 38%, rgba(6,6,20,.68))}
+
+.gate-card{width:100%;max-width:360px;border-radius:18px;
+  padding:34px 28px;text-align:center;position:relative;
+  /* Frosted rather than solid: the ground stays faintly readable through
+     the card, which is the whole point of putting it there.
+
+     .97 and not lower. At .93 the field showed through enough to drag the
+     grey label text to 4.41:1, just under the 4.5 WCAG AA needs for body
+     text — and these labels sit above the two fields someone has to type
+     into. The frosted look survives the extra 4%; legibility would not
+     have survived losing it. */
+  background:rgba(255,255,255,.97);
+  backdrop-filter:blur(18px) saturate(1.4);
+  -webkit-backdrop-filter:blur(18px) saturate(1.4);
+  border:1px solid rgba(255,255,255,.6);
+  box-shadow:0 30px 70px rgba(0,0,0,.45), 0 2px 10px rgba(0,0,0,.25),
+             inset 0 1px 0 rgba(255,255,255,.8)}
+
+/* Safari before 16.4 and any browser with backdrop-filter disabled would
+   render the card at 93% opacity over a photograph, which is unreadable.
+   Fall back to something solid rather than something pretty. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .gate-card{background:rgba(255,255,255,.985)}
+}
 .gate-mark{width:64px;height:64px;object-fit:contain;display:block;margin:0 auto 12px}
 .gate-card h1{font-family:var(--f-d);font-size:2rem;text-transform:uppercase;letter-spacing:.02em}
 .gate-card p{color:var(--ink-60);font-size:.85rem;margin-bottom:22px}
