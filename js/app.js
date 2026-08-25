@@ -1293,14 +1293,64 @@ function viewProductGeneric(p) {
     </div>
   </section>
 
+  ${buybarHTML(p)}`;
+}
+
+/* ------------------------------------------------------------
+   The sticky buy bar.
+
+   It used to be a price and two buttons in a flex row where
+   nothing grew: .bb-p was flex:none and the buttons flex:0 0 auto.
+   With a price that just about held together, but an unpriced bat
+   has no Add to Bag — two children, neither growing, both stuck
+   left, and a 680px pill with a hole in the middle. The actions
+   now sit in their own group pushed right, so the bar is balanced
+   whether it carries one action or two.
+
+   It also says WHICH bat. By the time this appears you have
+   scrolled past the related products, and a floating price with
+   no name attached could belong to any of them.
+
+   Which button is loud depends on what you can actually do. With
+   a price, Add to Bag is the action and WhatsApp steps back to an
+   outline. With no price, WhatsApp IS the only way to buy, so it
+   takes the solid treatment instead of sitting there looking
+   optional.
+   ------------------------------------------------------------ */
+function buybarHTML(p) {
+  const priced = hasPrice(p);
+  const img = ((p.images || []).filter(Boolean)[0] || '');
+  const cut = img ? img.replace(/\.(webp|png|jpe?g)$/i, '-cut.webp') : '';
+  const off = discount(p);
+  const freeShip = priced && p.price >= FREE_SHIP_OVER;
+
+  return `
   <div class="buybar" id="buybar">
-    <div class="bb-p">
-      ${hasPrice(p)
-        ? `<b class="num">${fmt(p.price)}</b><span>incl. taxes</span>`
-        : `<b>On request</b><span>Ask for today's price</span>`}
+    <div class="bb-id">
+      ${cut ? `<img class="bb-thumb" src="${esc(cut)}" alt="" loading="lazy"
+                    onerror="this.remove()">` : ''}
+      <div class="bb-name">
+        <b>${esc(p.name)}</b>
+        <span>${priced
+          ? (freeShip ? 'Free delivery' : 'Shaped by hand in Chennai')
+          : 'Shaped to your spec'}</span>
+      </div>
     </div>
-    <button class="btn btn-wa" id="waBtn2">${ICON.whatsapp}<span class="bb-wa-t">WhatsApp</span></button>
-    ${hasPrice(p) ? `<button class="btn btn-primary" id="addBtn2">Add to Bag</button>` : ''}
+
+    <div class="bb-p${priced ? '' : ' por'}">
+      ${priced
+        ? `<b class="num">${fmt(p.price)}</b>
+           <span>${off >= 15 ? off + '% off · incl. taxes' : 'incl. taxes'}</span>`
+        : `<b>Made to order</b><span>Ask for today's price</span>`}
+    </div>
+
+    <div class="bb-act">
+      <button class="btn ${priced ? 'btn-wa-ghost' : 'btn-wa'}" id="waBtn2">
+        ${ICON.whatsapp}<span class="bb-wa-t">${priced ? 'WhatsApp' : 'Ask on WhatsApp'}</span>
+      </button>
+      ${priced ? `<button class="btn btn-primary" id="addBtn2">${ICON.cart}
+        <span class="bb-add-t">Add to Bag</span></button>` : ''}
+    </div>
   </div>`;
 }
 
@@ -1490,15 +1540,7 @@ function viewProduct(id) {
   <!-- follows you down the page. Unpriced bats get one too — they previously
        had no sticky action at all, so the only way to enquire was to scroll
        back up. -->
-  <div class="buybar" id="buybar">
-    <div class="bb-p">
-      ${hasPrice(p)
-        ? `<b class="num">${fmt(p.price)}</b><span>incl. taxes</span>`
-        : `<b>Made to order</b><span>Ask for today's price</span>`}
-    </div>
-    <button class="btn btn-wa" id="waBtn2">${ICON.whatsapp}<span class="bb-wa-t">WhatsApp</span></button>
-    ${hasPrice(p) ? `<button class="btn btn-primary" id="addBtn2">Add to Bag</button>` : ''}
-  </div>`;
+  ${buybarHTML(p)}`;
 }
 
 /* ---------------- VIEW: FINDER ---------------- */
