@@ -15,15 +15,15 @@
   --navy-700:#1B1B4D; --navy-600:#262668; --indigo:#3D3DA8;
 
   /* action */
-  --orange:#FF8A1E; --orange-600:#F2740A; --orange-700:#D45F00;
+  --orange:#FF8A1E; --orange-600:#F2740A; --orange-700:#C24D00;
   --orange-50:#FFF3E4;
 
   /* light side */
   --paper:#FFFFFF; --paper-alt:#F6F7FB; --paper-warm:#FBF8F3;
-  --ink:#14143A; --ink-70:#4A4A6E; --ink-50:#75759A; --line:#E6E8F2;
+  --ink:#14143A; --ink-70:#4A4A6E; --ink-50:#6D6D92; --line:#E6E8F2;
 
   /* signals */
-  --green:#0E9F55; --green-bg:#E8F7EF; --red:#E5484D;
+  --green:#007F35; --green-bg:#E8F7EF; --red:#E5484D;
 
   --wrap:1240px;
   --r-sm:10px; --r:16px; --r-lg:24px; --r-xl:34px;
@@ -62,8 +62,12 @@ input,select,textarea{font:inherit;color:inherit}
 .d1{font-size:clamp(2.75rem,10.5vw,6.5rem)}
 .d2{font-size:clamp(2rem,6.6vw,3.9rem)}
 .d3{font-size:clamp(1.4rem,4.4vw,2.3rem)}
+/* The base eyebrow sits on LIGHT sections, where brand orange on white is
+   2.35:1 and barely readable at .7rem. It uses the darker variant here; the
+   .dark .eyebrow rule below keeps the bright brand orange where it belongs,
+   on the navy sections, so the brand is unchanged everywhere it was legible. */
 .eyebrow{font-size:.7rem;font-weight:800;letter-spacing:.22em;text-transform:uppercase;
-  color:var(--orange);margin:0 0 14px}
+  color:var(--orange-700);margin:0 0 14px}
 .lede{font-size:clamp(1rem,2.4vw,1.15rem);color:var(--ink-70);max-width:56ch;margin:0}
 .dark .lede{color:rgba(255,255,255,.72)}
 .num{font-variant-numeric:tabular-nums}
@@ -1867,7 +1871,7 @@ body.has-annc .filter-bar{top:var(--hdr)}
 .ftr .brand{color:#fff;margin-bottom:14px}
 .ftr p{color:rgba(255,255,255,.55);font-size:.86rem;margin:0 0 18px;max-width:38ch}
 .ftr h4{font-size:.71rem;font-weight:900;letter-spacing:.15em;text-transform:uppercase;
-  color:rgba(255,255,255,.4);margin:0 0 14px}
+  color:rgba(255,255,255,.52);margin:0 0 14px}
 .ftr ul{list-style:none;padding:0;margin:0;display:grid;gap:9px}
 .ftr ul a{font-size:.87rem;color:rgba(255,255,255,.72)}
 .ftr ul a:hover{color:var(--orange)}
@@ -1895,14 +1899,14 @@ body.has-annc .filter-bar{top:var(--hdr)}
 .ftr-seo a:hover{color:var(--orange)}
 .ftr-bot{border-top:1px solid rgba(255,255,255,.1);margin-top:34px;padding-top:20px;
   display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;
-  font-size:.76rem;color:rgba(255,255,255,.4)}
+  font-size:.76rem;color:rgba(255,255,255,.46)}
 /* build credit — present but quieter than the store's own information */
-.ftr-by{color:rgba(255,255,255,.32)}
+.ftr-by{color:rgba(255,255,255,.52)}
 .ftr-by b{color:rgba(255,255,255,.62);font-weight:800;letter-spacing:.01em}
 
 /* staff entrance — deliberately quiet, it is not for customers */
 .ftr-staff{display:inline-flex;align-items:center;gap:6px;
-  color:rgba(255,255,255,.32);font-weight:700;letter-spacing:.04em;
+  color:rgba(255,255,255,.46);font-weight:700;letter-spacing:.04em;
   border:1px solid rgba(255,255,255,.12);border-radius:100px;padding:6px 13px;
   transition:.2s var(--ease)}
 .ftr-staff svg{width:12px;height:12px}
@@ -2130,7 +2134,7 @@ body.pdp-open .fab{bottom:82px}
 
 .svc-check{display:flex;gap:11px;align-items:flex-start;cursor:pointer;font-size:.88rem}
 .svc-check input{margin-top:3px;width:17px;height:17px;accent-color:var(--orange);flex:none}
-.svc-check i{font-style:normal;color:var(--orange);font-weight:800}
+.svc-check i{font-style:normal;color:var(--orange-700);font-weight:800}
 .svc-consent.err{outline:2px solid #e5484d;outline-offset:6px;border-radius:8px}
 
 .svc-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}

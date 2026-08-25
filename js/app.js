@@ -975,13 +975,13 @@ function shopCatsRail() {
   const cats = (typeof CATEGORIES !== 'undefined' ? CATEGORIES : [{ id: 'bats', name: 'Bats' }])
     .filter(c => c.id === 'bats' || PRODUCTS.some(p => prodCat(p) === c.id));
   if (cats.length < 2) return '';
-  return `<div class="shop-cats" role="tablist" aria-label="Categories">
+  return `<nav class="shop-cats" aria-label="Product categories">
     ${cats.map(c => `
       <a class="shop-cat${filters.cat === c.id ? ' on' : ''}"
          href="#/shop${c.id === 'bats' ? '' : '?cat=' + c.id}">
         ${esc(c.name)}<i>${PRODUCTS.filter(p => prodCat(p) === c.id).length}</i>
       </a>`).join('')}
-  </div>`;
+  </nav>`;
 }
 
 function viewShop() {
@@ -1023,7 +1023,7 @@ function viewShop() {
         <div>
           <div class="filter-bar">
             <button class="btn btn-ghost btn-sm f-open" id="fOpen">${ICON.filter} Filter${chips.length ? ' (' + chips.length + ')' : ''}</button>
-            <select class="sel" id="sortSel">
+            <select class="sel" id="sortSel" aria-label="Sort products">
               <option value="pop"${filters.sort==='pop'?' selected':''}>Most popular</option>
               <option value="lo"${filters.sort==='lo'?' selected':''}>Price: low to high</option>
               <option value="hi"${filters.sort==='hi'?' selected':''}>Price: high to low</option>
