@@ -22,6 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const { SITE, BUSINESS, CLUSTERS: C1, GUIDES: G1, FAQS } = require('./seo-data');
 const { TURF_PAGES, AREAS, CLUSTERS_2, GUIDES_2 } = require('./seo-data-extra');
+const { LEGAL } = require('./legal-data');
 
 /* one map, so nothing can accidentally target the same phrase twice */
 const CLUSTERS = Object.assign({}, C1, CLUSTERS_2);
@@ -834,6 +835,40 @@ function areaPage(a) {
 const written = [];
 const urls = [];
 
+/* ---------- policy pages ----------
+   Kept out of the sitemap's high-priority band and marked
+   noindex-free but low priority: they must be reachable and
+   crawlable (a payment gateway checks for them, and customers
+   look for them before paying) without competing with the pages
+   built to rank. */
+function legalPage(slug, L) {
+  const body = `
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="../">Home</a> / <span>${esc(L.h1)}</span></nav>
+  <h1>${esc(L.h1)}</h1>
+  <p class="seo-lede">${esc(L.desc)}</p>
+  ${L.body.map(([h, html]) => `<h2>${esc(h)}</h2>${html}`).join('')}
+  <p class="legal-updated">${esc(L.updated)}</p>
+  <p class="legal-nav">
+    ${Object.keys(LEGAL).filter(k => k !== slug)
+      .map(k => `<a href="../${k}/">${esc(LEGAL[k].h1)}</a>`).join(' · ')}
+  </p>`;
+
+  return shell({
+    path: '/' + slug + '/', depth: '../',
+    title: fitTitle(L.title),
+    h1: L.h1,
+    desc: fitDesc(L.desc),
+    body: body,
+    schema: [
+      { '@type': 'WebPage', '@id': SITE + '/' + slug + '/#page',
+        name: L.title, url: SITE + '/' + slug + '/',
+        description: L.desc, isPartOf: { '@id': SITE + '/#website' },
+        publisher: { '@id': SITE + '/#organization' } },
+      breadcrumbs([{ name: 'Home', url: '/' }, { name: L.h1, url: '/' + slug + '/' }])
+    ]
+  });
+}
+
 function add(rel, html, loc, priority, freq) {
   written.push(write(rel, html));
   urls.push({ loc: loc, priority: priority, freq: freq });
@@ -850,8 +885,16 @@ console.log('Domain: ' + SITE + (SITE.includes('tossports.in')
 assertNoSlugClashes(new Set([
   ...Object.keys(CLUSTERS),
   ...Object.keys(TURF_PAGES),
+  ...Object.keys(LEGAL),
   'guides', 'cricket-bats', 'images', 'css', 'js'
 ]));
+
+/* policy pages */
+Object.keys(LEGAL).forEach(slug => {
+  add(slug + '/index.html', legalPage(slug, LEGAL[slug]),
+      SITE + '/' + slug + '/', '0.3', 'yearly');
+});
+console.log('  ' + Object.keys(LEGAL).length + ' policy pages');
 
 /* category pages */
 Object.keys(CLUSTERS).forEach(slug => {

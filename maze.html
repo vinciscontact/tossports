@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="icon" href="images/logo/favicon-32.png" sizes="32x32">
-<link rel="stylesheet" href="css/maze.css?v=22">
+<link rel="stylesheet" href="css/maze.css?v=21">
 </head>
 <body>
 
@@ -22,9 +22,7 @@
     <label>Email<input type="email" id="email" autocomplete="username" required></label>
     <label>Password<input type="password" id="password" autocomplete="current-password" required></label>
     <button class="btn primary block" id="loginBtn" type="submit">Sign in</button>
-    <button class="linklike" id="forgotBtn" type="button">Forgot password?</button>
     <div class="gate-err hide" id="loginErr"></div>
-    <div class="gate-ok hide" id="loginOk"></div>
   </form>
 </div>
 
@@ -60,10 +58,12 @@
 
 <div id="toast" class="toast"></div>
 
-<script src="js/config.js?v=23"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="js/config.js?v=49"></script>
 <script src="js/maze-export.js?v=1"></script>
 <script src="js/maze-bill.js?v=9"></script>
 <script src="js/maze-ops.js?v=21"></script>
-<script src="js/maze.js?v=25"></script>
+<script src="js/maze.js?v=21"></script>
 </body>
 </html>

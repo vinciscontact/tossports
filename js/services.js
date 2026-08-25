@@ -559,6 +559,17 @@ function trackHTML(o) {
           <div><b>${esc(s.label)}</b><i>${esc(s.note)}</i></div>
         </li>`).join('')}
     </ol>
+    ${o.tracking_no ? `
+      <div class="trk-courier">
+        <div>
+          <p class="eyebrow">${esc((DELIVERY.couriers[o.courier] || {}).label || 'Courier')}</p>
+          <b>${esc(o.tracking_no)}</b>
+        </div>
+        ${(o.tracking_url || (DELIVERY.couriers[o.courier] || {}).url)
+          ? `<a class="btn btn-ghost sm" target="_blank" rel="noopener"
+               href="${esc(o.tracking_url || DELIVERY.couriers[o.courier].url)}">
+               Track with the courier ${ICON.arrow}</a>` : ''}
+      </div>` : ''}
     ${items.length ? `<ul class="trk-items">${items.map(i =>
       `<li><span>${esc(i.name || i.id)}</span><b>× ${i.qty || 1}</b></li>`).join('')}</ul>` : ''}
     <p class="trk-foot">Placed ${new Date(o.created_at).toLocaleDateString('en-IN',
@@ -803,4 +814,111 @@ function viewJunior() {
       </div>
     </div>
   </section>`;
+}
+
+/* ============================================================
+   DELIVERY
+
+   A pin code answers two questions at checkout: can we reach you
+   at all, and roughly when. Both are answered before the order is
+   placed rather than after, because "we don't deliver there" is
+   the single worst thing to learn once you have already paid.
+   ============================================================ */
+
+/* Longest prefix wins, so '600' beats '6' beats ''. Sorting by length
+   rather than trusting the order of the config means a zone added later
+   cannot silently shadow a more specific one already there. */
+function deliveryZone(pin) {
+  const p = String(pin || '').replace(/\D/g, '');
+  if (p.length !== 6) return null;
+  return DELIVERY.zones
+    .slice()
+    .sort((a, b) => b.prefix.length - a.prefix.length)
+    .find(z => p.startsWith(z.prefix)) || null;
+}
+
+function pinServed(pin) {
+  const p = String(pin || '').replace(/\D/g, '');
+  if (p.length !== 6) return true;                 // not our job to validate length here
+  return !DELIVERY.unserved.some(x => p.startsWith(String(x)));
+}
+
+/** The line shown under the PIN field at checkout. */
+function deliveryNote(pin) {
+  const p = String(pin || '').replace(/\D/g, '');
+  if (p.length !== 6) return '';
+  if (!pinServed(p)) {
+    return `<span class="dv bad">Our couriers do not reach ${esc(p)} yet. ` +
+      `Message us on WhatsApp — we can often still get a bat to you.</span>`;
+  }
+  const z = deliveryZone(p);
+  if (!z) return '';
+  return `<span class="dv ok">${ICON.truck} ${esc(z.label)} — usually ` +
+    `<b>${esc(z.days)}</b> after dispatch</span>`;
+}
+
+/* ============================================================
+   ANALYTICS
+
+   Loads nothing at all until an ID exists in config. A tag that
+   fires before anyone has decided to have analytics is a third
+   party reading your visitors for no benefit.
+
+   Loaded once, after first paint, so measurement never delays the
+   page it is measuring.
+   ============================================================ */
+
+let _analyticsLoaded = false;
+
+function loadAnalytics() {
+  if (_analyticsLoaded) return;
+  const { ga4, meta } = ANALYTICS || {};
+  if (!ga4 && !meta) return;
+  _analyticsLoaded = true;
+
+  if (ga4) {
+    const s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(ga4);
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { window.dataLayer.push(arguments); };
+    gtag('js', new Date());
+    /* The site is a hash router, so GA would otherwise record one pageview
+       for the whole visit. Automatic page_view is off and route() sends
+       them instead. */
+    gtag('config', ga4, { send_page_view: false });
+    trackPage();
+  }
+
+  if (meta) {
+    /* eslint-disable */
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
+    (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+    /* eslint-enable */
+    fbq('init', meta);
+    fbq('track', 'PageView');
+  }
+}
+
+function trackPage() {
+  if (typeof gtag !== 'function') return;
+  gtag('event', 'page_view', {
+    page_location: location.href,
+    page_path: location.hash.replace(/^#/, '') || '/',
+    page_title: document.title
+  });
+}
+
+/** Commerce events, ignored entirely when no analytics is configured. */
+function trackEvent(name, params) {
+  if (typeof gtag === 'function') gtag('event', name, params || {});
+  if (typeof fbq === 'function') {
+    const META = { add_to_cart: 'AddToCart', begin_checkout: 'InitiateCheckout',
+                   purchase: 'Purchase', view_item: 'ViewContent' };
+    if (META[name]) fbq('track', META[name], params || {});
+  }
 }

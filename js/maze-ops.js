@@ -16,14 +16,14 @@
 /* Founder-only sections sit LAST in this list on purpose — the dock draws
    them in order, so they group themselves at the right behind a divider. */
 const ROLE_NAV = {
-  founder:  ['dash','sales','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
-  owner:    ['dash','sales','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
-  manager:  ['dash','sales','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores'],
-  sales:    ['dash','sales','requests','qa','tasks','sops','boards'],
+  founder:  ['dash','sales','fulfil','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
+  owner:    ['dash','sales','fulfil','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores','finance','insights','activity','branches','settings'],
+  manager:  ['dash','sales','fulfil','requests','qa','billing','products','team','tasks','sops','boards','coupons','scores'],
+  sales:    ['dash','sales','fulfil','requests','qa','tasks','sops','boards'],
   workshop: ['dash','requests','tasks','sops']
 };
 const NAV_LABEL = {
-  dash:'Dashboard', sales:'Sales', requests:'Requests', qa:'Questions',
+  dash:'Dashboard', sales:'Sales', fulfil:'Fulfilment', requests:'Requests', qa:'Questions',
   billing:'Billing', finance:'Finance', products:'Products',
   team:'Team', tasks:'Tasks', sops:'SOPs', boards:'Leaderboards',
   coupons:'Rewards', scores:'Game scores', insights:'Insights',
@@ -1129,14 +1129,14 @@ function staffModal(s) {
 }
 
 /* ---------- creating a login ----------
-   Accounts are created against Supabase Auth's signup endpoint, which does
-   not touch the founder's own session.
+   Firebase accounts are created through a SECOND app instance. Creating a
+   user on the main instance signs you in as them and throws the founder
+   out mid-job; a secondary instance keeps this session untouched.
 
-   Why this is safe: an account on its own grants nothing at all. Every
-   policy in the database keys off my_role(), which reads the `staff`
+   Why this is safe: a Firebase account on its own grants nothing at all.
+   Every policy in the database keys off my_role(), which reads the `staff`
    table — and only a founder can write that table. The account is the
-   doorbell; the staff row is the key. The uid binds itself on their first
-   sign-in (claim_staff, matched by email), so no UID copying is needed. */
+   doorbell; the staff row is the key. */
 function randomPassword() {
   const a = 'abcdefghijkmnpqrstuvwxyz', A = 'ABCDEFGHJKLMNPQRSTUVWXYZ', n = '23456789';
   const pool = a + A + n, buf = new Uint32Array(10);
@@ -1157,14 +1157,18 @@ async function createLogin(email, name) {
 
   const pw = randomPassword();
   try {
-    const r = await authCall('signup', { email, password: pw });
-    const uid = (r.user && r.user.id) || r.id || '';
-    const confirmed = !!(r.access_token || (r.user && r.user.email_confirmed_at) || r.email_confirmed_at);
+    /* a throwaway app instance, torn down straight after */
+    const secondary = firebase.apps.find(a => a.name === 'mk')
+      || firebase.initializeApp(FIREBASE_CONFIG, 'mk');
+    const cred = await secondary.auth().createUserWithEmailAndPassword(email, pw);
+    const uid = cred.user.uid;
+    await secondary.auth().signOut();
+    await secondary.delete().catch(() => {});
 
     const box = $('#st_uid');
-    if (box && uid) box.value = uid;        /* saved with the form */
+    if (box) box.value = uid;               /* saved with the form */
 
-    /* shown once — the password cannot be revealed again */
+    /* shown once — Firebase will never reveal this password again */
     const zone = $('#mkLogin') && $('#mkLogin').parentElement;
     if (zone) zone.innerHTML = `
       <div style="width:100%">
@@ -1175,20 +1179,16 @@ async function createLogin(email, name) {
         </div>
         <div class="hint" style="margin-top:6px">This password is shown once and cannot be
           recovered — copy it before closing. ${esc(name || 'They')} should change it after
-          signing in. Press <b>Save changes</b> to finish adding them to the team.${confirmed ? '' : `
-          <br><b>One more step:</b> email confirmation is on for this project, so either they
-          click the link Supabase just emailed them, or you confirm them by hand in
-          Supabase → Authentication → Users.`}</div>
+          signing in. Press <b>Save changes</b> to finish adding them to the team.</div>
       </div>`;
     toast('Login created');
   } catch (e) {
-    const m = String(e && e.message || ''), c = String(e && e.code || '');
+    const c = (e && e.code) || '';
     const msg =
-      /already registered|already exists/i.test(m) || c === 'user_already_exists'
-        ? 'That email already has a login — they can sign in with it as-is.'
-      : c === 'signup_disabled' || /signups? not allowed/i.test(m)
-        ? 'Sign-ups are disabled for this project. Create the user in Supabase → Authentication → Users → Add user (tick “Auto Confirm”), or enable sign-ups.'
-      : m || 'Could not create the login';
+      c === 'auth/email-already-in-use' ? 'That email already has a login — paste their existing UID instead, or use another address.'
+      : c === 'auth/operation-not-allowed' ? 'Firebase is refusing new accounts. Turn on Email/Password sign-up in Firebase Console → Authentication → Sign-in method.'
+      : c === 'auth/weak-password' ? 'Firebase rejected the generated password. Try again.'
+      : (e && e.message) || 'Could not create the login';
     toast(msg, true);
     if (btn) { btn.disabled = false; btn.textContent = 'Create login'; }
   }
@@ -1714,4 +1714,164 @@ function wireQAAdmin() {
       await loadQAAdmin(); render(); toast('Deleted');
     } catch (e) { toast(e.message, true); }
   });
+}
+
+/* ============================================================
+   FULFILMENT — who is waiting to be told, and what shipped
+
+   There is no email or WhatsApp API wired up, so nothing can be
+   sent automatically. Rather than pretend otherwise, this is a
+   worklist a person clears: it shows who has not been told their
+   order was received, opens WhatsApp with the message already
+   written, and records that it was sent.
+
+   An honest queue beats a promise the system cannot keep.
+   ============================================================ */
+
+let FUL = { rows: [], loaded: false, only: 'waiting' };
+
+async function loadFulfil() {
+  try {
+    FUL.rows = await supa('orders?select=id,created_at,total,status,customer,items,' +
+      'courier,tracking_no,tracking_url,notified_at,branch' +
+      '&order=created_at.desc&limit=200') || [];
+  } catch (e) { FUL.rows = []; toast(e.message, true); }
+  FUL.loaded = true;
+}
+
+function fulFiltered() {
+  if (FUL.only === 'waiting')  return FUL.rows.filter(o => !o.notified_at && o.status !== 'cancelled');
+  if (FUL.only === 'toship')   return FUL.rows.filter(o => !o.tracking_no && !['delivered','cancelled'].includes(o.status));
+  return FUL.rows;
+}
+
+function viewFulfil() {
+  const rows = fulFiltered();
+  const waiting = FUL.rows.filter(o => !o.notified_at && o.status !== 'cancelled').length;
+
+  return `
+    <div class="head"><h2>Fulfilment</h2>
+      <span class="muted">${FUL.loaded ? waiting + ' still to be told' : 'loading…'}</span>
+      <span class="sp"><button class="btn ghost sm" id="fulRefresh">Refresh</button></span>
+    </div>
+
+    <div class="chips" id="fulFilter">
+      <button class="chip${FUL.only==='waiting' ? ' on' : ''}" data-o="waiting">Needs telling${waiting ? ` <b>${waiting}</b>` : ''}</button>
+      <button class="chip${FUL.only==='toship' ? ' on' : ''}" data-o="toship">No tracking yet</button>
+      <button class="chip${FUL.only==='all' ? ' on' : ''}" data-o="all">All orders</button>
+    </div>
+
+    ${!rows.length ? `<div class="empty">${FUL.loaded ? 'Nothing waiting — all caught up.' : 'Loading…'}</div>` : `
+    <table class="tbl">
+      <thead><tr>
+        <th>Order</th><th>Customer</th><th>Total</th><th>Status</th>
+        <th>Tracking</th><th></th>
+      </tr></thead>
+      <tbody>${rows.map(fulRow).join('')}</tbody>
+    </table>`}
+  `;
+}
+
+function fulRow(o) {
+  const c = o.customer || {};
+  const phone = String(c.phone || '').replace(/\D/g, '').slice(-10);
+  const hrs = Math.round((Date.now() - new Date(o.created_at)) / 3.6e6);
+  const late = !o.notified_at && hrs > 12;
+
+  return `
+  <tr${late ? ' class="late"' : ''}>
+    <td><b>${esc(o.id)}</b><br>
+      <span class="muted">${new Date(o.created_at).toLocaleDateString('en-IN',
+        { day:'numeric', month:'short' })} · ${hrs}h ago</span></td>
+    <td>${esc(c.name || '—')}<br><span class="muted">${esc(c.phone || '')}</span></td>
+    <td>₹${o.total}</td>
+    <td><span class="pill ${esc(o.status)}">${esc(o.status)}</span></td>
+    <td>${o.tracking_no
+      ? `<b>${esc(o.tracking_no)}</b><br><span class="muted">${
+          esc((DELIVERY.couriers[o.courier] || {}).label || o.courier || '')}</span>`
+      : '<span class="muted">—</span>'}</td>
+    <td>
+      ${phone.length === 10 ? `<a class="btn ghost sm" target="_blank" rel="noopener"
+        data-wa="${o.id}"
+        href="https://wa.me/91${phone}?text=${encodeURIComponent(orderMsg(o))}">WhatsApp</a>` : ''}
+      <button class="btn ghost sm" data-ship="${esc(o.id)}">Tracking</button>
+      ${o.notified_at
+        ? `<span class="pill done">told</span>`
+        : `<button class="btn ghost sm" data-told="${esc(o.id)}">Mark told</button>`}
+    </td>
+  </tr>`;
+}
+
+/* The message staff actually send. Written here rather than typed fresh each
+   time so every customer gets the same thing, and so it already contains the
+   tracking link once there is one. */
+function orderMsg(o) {
+  const c = o.customer || {};
+  const items = (Array.isArray(o.items) ? o.items : [])
+    .map(i => `• ${i.name || i.id} × ${i.qty || 1}`).join('\n');
+  let t = `Hi ${String(c.name || '').split(' ')[0]}, this is Toss Sports 🏏\n\n` +
+    `We have your order *${o.id}*:\n${items}\n\nTotal: ₹${o.total}\n\n`;
+  if (o.tracking_no) {
+    t += `It has shipped — ${(DELIVERY.couriers[o.courier] || {}).label || 'courier'} ` +
+         `tracking *${o.tracking_no}*.\n\n`;
+  } else {
+    t += `Every bat is shaped by hand, so we will confirm the dispatch date shortly.\n\n`;
+  }
+  t += `You can follow it any time at tossports.in — track order, using this ` +
+       `order number and your phone number.`;
+  return t;
+}
+
+function wireFulfil() {
+  if (!FUL.loaded) loadFulfil().then(render);
+  const rf = $('#fulRefresh');
+  if (rf) rf.onclick = async () => { FUL.loaded = false; await loadFulfil(); render(); };
+  $$('#fulFilter .chip').forEach(b => b.onclick = () => { FUL.only = b.dataset.o; render(); });
+
+  /* Opening WhatsApp is the act of telling them, so record it there rather
+     than relying on someone remembering to press a second button. */
+  $$('[data-wa]').forEach(a => a.addEventListener('click', () => markTold(a.dataset.wa, true)));
+  $$('[data-told]').forEach(b => b.onclick = () => markTold(b.dataset.told));
+
+  $$('[data-ship]').forEach(b => b.onclick = () => {
+    const id = b.dataset.ship, o = FUL.rows.find(x => x.id === id);
+    if (!o) return;
+    modal('Tracking for ' + id, `
+      <div class="row"><label>Courier</label>
+        <select id="s_cour">
+          <option value="">Choose…</option>
+          ${Object.keys(DELIVERY.couriers).map(k =>
+            `<option value="${k}"${o.courier === k ? ' selected' : ''}>${
+              esc(DELIVERY.couriers[k].label)}</option>`).join('')}
+        </select></div>
+      <div class="row"><label>Tracking number</label>
+        <input id="s_no" type="text" value="${esc(o.tracking_no || '')}"></div>
+      <div class="row"><label>Direct tracking link (optional)</label>
+        <input id="s_url" type="text" value="${esc(o.tracking_url || '')}"
+               placeholder="Leave empty to use the courier's own page">
+        <div class="hint">Saving a tracking number moves the order to "On its way",
+          which is what the customer sees on the tracking page.</div></div>
+    `, async () => {
+      const no = $('#s_no').value.trim();
+      try {
+        await supa('orders?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: {
+          courier: $('#s_cour').value || null,
+          tracking_no: no || null,
+          tracking_url: $('#s_url').value.trim() || null,
+          status: no && ['new','making','packed'].includes(o.status) ? 'shipped' : o.status
+        }});
+        await loadFulfil(); render(); toast('Tracking saved');
+      } catch (e) { toast(e.message, true); return false; }
+    });
+  });
+}
+
+async function markTold(id, quiet) {
+  try {
+    await supa('orders?id=eq.' + encodeURIComponent(id), { method: 'PATCH',
+      body: { notified_at: new Date().toISOString() } });
+    const row = FUL.rows.find(o => o.id === id);
+    if (row) row.notified_at = new Date().toISOString();
+    if (!quiet) { toast('Marked as told'); render(); }
+  } catch (e) { toast(e.message, true); }
 }

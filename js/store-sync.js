@@ -55,14 +55,7 @@ async function syncSettings() {
     if (s.free_ship_over != null) FREE_SHIP_OVER = Number(s.free_ship_over);
     if (s.ship_fee      != null) SHIP_FEE       = Number(s.ship_fee);
     if (s.razorpay_key)   RAZORPAY_KEY   = String(s.razorpay_key);
-    /* The announcement bar is a list edited in the Maze Room; normaliseMarquee
-       also accepts the legacy string/array shapes. Only override the bundled
-       default when the row actually exists. */
-    if ('announcement' in s) MARQUEE = normalizeMarquee(s.announcement);
-    /* Engraving price / char limit / on-off are Maze Room–editable. Merge over
-       the config defaults so the code-defined fonts and positions survive even
-       when the admin only saved the numbers. */
-    if (s.engraving && typeof s.engraving === 'object') Object.assign(SERVICES.engraving, s.engraving);
+    if (s.announcement)   STORE_NOTE     = String(s.announcement);
     LIVE.settings = true;
     return true;
   } catch (e) { console.warn('settings sync:', e.message); return false; }
@@ -83,10 +76,7 @@ async function pushOrder(order) {
         items: (order.items || []).map(l => {
           const p = byId(l.id) || {};
           return { id: l.id, name: p.name || l.id, price: p.price || 0,
-                   qty: l.qty, variant: l.variant || null,
-                   /* the workshop reads engraving off the order in the Maze Room,
-                      so it must be recorded, not just sent to WhatsApp */
-                   engrave: l.engrave || null };
+                   qty: l.qty, variant: l.variant || null };
         }),
         subtotal: order.subtotal, shipping: order.shipping,
         discount: order.off || 0, total: order.total,

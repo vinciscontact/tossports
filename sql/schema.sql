@@ -199,10 +199,7 @@ insert into public.settings (key, value) values
   ('free_ship_over',  '1500'::jsonb),
   ('ship_fee',        '99'::jsonb),
   ('razorpay_key',    '""'::jsonb),
-  -- Announcement marquee: { on, items }. Edited in Maze Room → Settings.
-  ('announcement',    '{"on":true,"items":["Handcrafted in our own unit — not resold","Free shipping over ₹1,500","Order on WhatsApp — 9176995707"]}'::jsonb),
-  -- Engraving add-on: { enabled, price, maxChars }. Fonts/positions live in code.
-  ('engraving',       '{"enabled":true,"price":199,"maxChars":18}'::jsonb)
+  ('announcement',    '"Handcrafted in our own unit · Free shipping over ₹1,500"'::jsonb)
 on conflict (key) do nothing;
 
 insert into public.products (id, name, price, mrp, tier, sort, data) values

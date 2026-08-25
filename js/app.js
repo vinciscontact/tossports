@@ -11,22 +11,6 @@ let FREE_SHIP_OVER = 1500;
 let SHIP_FEE = 99;
 let STORE_NOTE = '';
 
-/* Announcement marquee — a list of plain-text lines shown in the top bar,
-   edited in Maze Room → Settings → Announcement bar. These defaults show
-   offline or before live settings arrive; live data replaces them at boot.
-   on:false or an empty list hides the bar entirely. See renderMarquee(). */
-let MARQUEE = {
-  on: true,
-  items: [
-    '🏏 Handcrafted in-house — not resold',
-    '🎮 Play Gully Cricket — score 30, unlock a discount',
-    '🚚 Free shipping over ₹1,500',
-    '💬 Order on WhatsApp — 9176995707',
-    '🏆 Beat the leaderboard — ₹100 off at 50 runs',
-    '⚡ Toss Power X — 3 months warranty'
-  ]
-};
-
 /* Set the live key in Maze Room → Settings → Razorpay key id. */
 let RAZORPAY_KEY = 'rzp_test_REPLACE_WITH_YOUR_KEY';
 
@@ -85,24 +69,6 @@ function toast(msg) {
   toast._t = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
-/* ---------------- engraving ----------------
-   An engraving is { text, position, font }. Older carts (and older order
-   rows) may hold a bare string — engNorm() upgrades both to the object shape
-   and drops anything with no text, so `line.engrave` is either a full object
-   or null and every caller can treat it uniformly. */
-const ENG_POS_DEFAULT = 'front', ENG_FONT_DEFAULT = 'classic';
-function engNorm(e) {
-  if (!e) return null;
-  if (typeof e === 'string') { const t = e.trim(); return t ? { text: t, position: ENG_POS_DEFAULT, font: ENG_FONT_DEFAULT } : null; }
-  const t = String(e.text || '').trim();
-  return t ? { text: t, position: e.position || ENG_POS_DEFAULT, font: e.font || ENG_FONT_DEFAULT } : null;
-}
-function engLabel(kind, id) {
-  const list = SERVICES.engraving[kind === 'font' ? 'fonts' : 'positions'] || [];
-  const hit = list.find(x => x.id === id);
-  return hit ? hit.label : id;
-}
-
 /* ---------------- cart ---------------- */
 function cartCount() { return cart.reduce((n, i) => n + i.qty, 0); }
 function cartSubtotal() {
@@ -121,17 +87,18 @@ function addToCart(id, variant, engrave) {
   const p = byId(id);
   if (!p) return;
   if (!hasPrice(p)) { enquire(p); return; }
-  /* Engraving is part of the line identity, not an attribute of it — two bats
-     with different names (or the same name in a different font/position) are
-     two lines, and must never merge into a quantity of 2. */
-  const eng = engNorm(engrave);
-  if (eng) eng.text = eng.text.slice(0, SERVICES.engraving.maxChars);
-  const key = id + '|' + (variant || '') + '|' + (eng ? `${eng.text}~${eng.position}~${eng.font}` : '');
+  /* Engraved text is part of the line identity, not an attribute of it — two
+     bats with different names on them are two lines, and must never merge
+     into a quantity of 2. */
+  engrave = String(engrave || '').trim().slice(0, SERVICES.engraving.maxChars);
+  const key = id + '|' + (variant || '') + '|' + engrave;
   const hit = cart.find(i => i.key === key);
   if (hit) hit.qty++;
-  else cart.push({ key, id, variant: variant || null, engrave: eng, qty: 1 });
+  else cart.push({ key, id, variant: variant || null, engrave: engrave || null, qty: 1 });
   saveCart(); syncCart();
   toast(p.name + ' added to bag');
+  if (typeof trackEvent === 'function') trackEvent('add_to_cart',
+    { currency: 'INR', value: p.price, items: [{ item_id: p.id, item_name: p.name }] });
   document.dispatchEvent(new CustomEvent('toss:cart'));
 }
 function setQty(key, d) {
@@ -176,8 +143,7 @@ function cartWaText(info) {
     const p = byId(i.id);
     const v = variantName(p, i.variant);
     t += `${n + 1}. *${p.name}*${v ? ' — ' + v : ''}\n`;
-    const eng = engNorm(i.engrave);
-    if (eng) t += `   Engraved: "${eng.text}" — ${engLabel('font', eng.font)}, ${engLabel('position', eng.position)} (+${fmt(SERVICES.engraving.price)} each)
+    if (i.engrave) t += `   Engraved: "${i.engrave}" (+${fmt(SERVICES.engraving.price)} each)
 `;
     t += `   Qty ${i.qty}`;
     t += hasPrice(p) ? ` × ${fmt(p.price)} = ${fmt(p.price * i.qty)}\n` : `  (price on request)\n`;
@@ -1118,8 +1084,6 @@ function galleryHTML(p, off) {
       </div>` : ''}
     <div class="pdp-stage${imgs.length ? ' has-photo' : ''}">
       ${badges}${main}
-      <!-- live engraving preview, filled and positioned by the product wiring -->
-      <div class="eng-preview hide" id="engPreview" aria-hidden="true"><span></span></div>
       ${imgs.length ? `
         <button class="pdp-zoom" id="pdpZoom" aria-label="Zoom this photo">
           ${ICON.search}<span>Zoom</span>
@@ -1431,24 +1395,9 @@ function viewProduct(id) {
                 <span><b>Engrave it</b> — your name, a number, your team
                   <i>+${fmt(SERVICES.engraving.price)}</i></span>
               </label>
-              <div id="engFields" class="eng-fields hide">
-                <input id="engTxt" type="text" class="eng-txt"
-                       maxlength="${SERVICES.engraving.maxChars}"
-                       placeholder="Up to ${SERVICES.engraving.maxChars} characters">
-                <div class="eng-opts">
-                  <label class="eng-opt">Position
-                    <select id="engPos">
-                      ${SERVICES.engraving.positions.map(o => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('')}
-                    </select>
-                  </label>
-                  <label class="eng-opt">Style
-                    <select id="engFont">
-                      ${SERVICES.engraving.fonts.map(o => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('')}
-                    </select>
-                  </label>
-                </div>
-                <p class="eng-note">Preview is indicative — the workshop engraves exactly the text, style and position you pick.</p>
-              </div>
+              <input id="engTxt" type="text" class="eng-txt hide"
+                     maxlength="${SERVICES.engraving.maxChars}"
+                     placeholder="Up to ${SERVICES.engraving.maxChars} characters">
             </div>` : ''}
 
           <div class="buy-row">
@@ -2091,7 +2040,8 @@ function viewCheckout() {
               <div class="field"><label for="cPhone">WhatsApp number</label>
                 <input id="cPhone" type="tel" inputmode="numeric" placeholder="10 digit number" autocomplete="tel"><div class="msg hide"></div></div>
               <div class="field"><label for="cPin">PIN code</label>
-                <input id="cPin" type="tel" inputmode="numeric" placeholder="600001" autocomplete="postal-code"><div class="msg hide"></div></div>
+                <input id="cPin" type="tel" inputmode="numeric" placeholder="600001" autocomplete="postal-code"><div class="msg hide"></div>
+                <div class="dv-note" id="cPinNote"></div></div>
             </div>
             <div class="field"><label for="cAddr">Address</label>
               <textarea id="cAddr" rows="3" placeholder="House / street / area" autocomplete="street-address"></textarea><div class="msg hide"></div></div>
@@ -2135,12 +2085,11 @@ function viewCheckout() {
             <p class="sub">${cartCount()} item${cartCount() === 1 ? '' : 's'}</p>
             ${cart.map(i => {
               const p = byId(i.id), v = variantName(p, i.variant);
-              const eo = engNorm(i.engrave);
-              const eng = eo ? SERVICES.engraving.price : 0;
+              const eng = i.engrave ? SERVICES.engraving.price : 0;
               return `<div class="mini-item">
                 <div class="mini-art">${batArt(p, { glow: false })}</div>
                 <b>${esc(p.name)}${v ? `<br><span style="color:var(--ink-50);font-weight:600;font-size:.78rem">${esc(v)}</span>` : ''}
-                   ${eo ? `<br><span style="color:var(--orange);font-weight:700;font-size:.78rem">Engraved “${esc(eo.text)}” · ${esc(engLabel('font', eo.font))}, ${esc(engLabel('position', eo.position))}</span>` : ''}
+                   ${i.engrave ? `<br><span style="color:var(--orange);font-weight:700;font-size:.78rem">Engraved “${esc(i.engrave)}”</span>` : ''}
                    <br><span style="color:var(--ink-50);font-weight:600;font-size:.78rem">Qty ${i.qty}</span></b>
                 <i class="num">${hasPrice(p) ? fmt((p.price + eng) * i.qty) : '—'}</i>
               </div>`;
@@ -2237,21 +2186,18 @@ function renderCart() {
   }
   body.innerHTML = cart.map(i => {
     const p = byId(i.id), v = variantName(p, i.variant);
-    const eng = engNorm(i.engrave);
-    const unit = (p.price || 0) + (eng ? SERVICES.engraving.price : 0);
     return `<div class="ci">
       <a class="ci-art" href="#/product/${p.id}" data-close>${batArt(p, { glow: false })}</a>
       <div class="ci-b">
         <h4><a href="#/product/${p.id}" data-close>${esc(p.name)}</a></h4>
         ${v ? `<div class="v">${esc(v)}</div>` : ''}
-        ${eng ? `<div class="v ci-eng">✎ “${esc(eng.text)}” · ${esc(engLabel('font', eng.font))}, ${esc(engLabel('position', eng.position))}</div>` : ''}
         <div class="ci-foot">
           <div class="qty">
             <button data-q="-1" data-key="${i.key}" aria-label="Decrease">−</button>
             <i class="num">${i.qty}</i>
             <button data-q="1" data-key="${i.key}" aria-label="Increase">+</button>
           </div>
-          <span class="ci-price num">${hasPrice(p) ? fmt(unit * i.qty) : 'On request'}</span>
+          <span class="ci-price num">${hasPrice(p) ? fmt(p.price * i.qty) : 'On request'}</span>
         </div>
         <button class="ci-rm" data-rm="${i.key}">Remove</button>
       </div>
@@ -2326,6 +2272,7 @@ function validate() {
     ['#cName',  v => v.length >= 2,          'Please enter your name'],
     ['#cPhone', v => /^[6-9]\d{9}$/.test(v), 'Enter a valid 10 digit number'],
     ['#cPin',   v => /^\d{6}$/.test(v),      'Enter a valid 6 digit PIN code'],
+    ['#cPin',   v => pinServed(v),           'Our couriers do not reach this PIN code yet — message us on WhatsApp'],
     ['#cAddr',  v => v.length >= 8,          'Please enter your address'],
     ['#cCity',  v => v.length >= 2,          'Enter your city'],
     ['#cState', v => v.length >= 2,          'Enter your state']
@@ -2433,6 +2380,7 @@ function route(keepScroll) {
   $$('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + path));
 
   if (!keepScroll) window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+  if (typeof trackPage === 'function') trackPage();
   mount(page, parts);
   observeReveal();
   onScroll();
@@ -2722,31 +2670,19 @@ function mount(page, parts) {
       variant = b.dataset.v;
     });
 
-    /* engraving: fields and live preview appear once the option is on */
-    const engOn = $('#engOn'), engFields = $('#engFields'), engTxt = $('#engTxt');
-    const engPos = $('#engPos'), engFont = $('#engFont'), engPrev = $('#engPreview');
-    function paintEng() {
-      const on = engOn && engOn.checked;
-      if (engFields) engFields.classList.toggle('hide', !on);
-      if (!engPrev) return;
-      const txt = on && engTxt ? engTxt.value.trim() : '';
-      const pos = engPos ? engPos.value : ENG_POS_DEFAULT;
-      const font = engFont ? engFont.value : ENG_FONT_DEFAULT;
-      engPrev.className = 'eng-preview eng-pos-' + pos + (txt ? '' : ' hide');
-      const span = engPrev.querySelector('span');
-      span.className = 'eng-font-' + font;
-      span.textContent = txt;
+    /* engraving: the text box only exists once the option is on */
+    const engOn = $('#engOn'), engTxt = $('#engTxt');
+    if (engOn && engTxt) {
+      engOn.onchange = () => {
+        engTxt.classList.toggle('hide', !engOn.checked);
+        if (engOn.checked) engTxt.focus();
+      };
     }
-    if (engOn) engOn.onchange = () => { paintEng(); if (engOn.checked && engTxt) engTxt.focus(); };
-    [engTxt, engPos, engFont].forEach(el => { if (el) { el.oninput = paintEng; el.onchange = paintEng; } });
-
-    const engraving = () => (engOn && engOn.checked && engTxt && engTxt.value.trim())
-      ? { text: engTxt.value.trim(), position: engPos ? engPos.value : ENG_POS_DEFAULT, font: engFont ? engFont.value : ENG_FONT_DEFAULT }
-      : null;
+    const engraving = () => (engOn && engOn.checked ? engTxt.value : '');
 
     const add = () => {
-      if (engOn && engOn.checked && (!engTxt || !engTxt.value.trim())) {
-        if (engTxt) { engTxt.classList.add('err'); engTxt.focus(); }
+      if (engOn && engOn.checked && !engTxt.value.trim()) {
+        engTxt.classList.add('err'); engTxt.focus();
         toast('Type what you want engraved');
         return;
       }
@@ -2780,6 +2716,16 @@ function mount(page, parts) {
   }
 
   if (page === 'checkout') {
+    /* Serviceability and the delivery estimate resolve while the field is
+       being typed in. Finding out we cannot reach you AFTER paying is the
+       worst possible moment to learn it. */
+    const pin = $('#cPin'), pinNote = $('#cPinNote');
+    if (pin && pinNote) {
+      const showPin = () => { pinNote.innerHTML = deliveryNote(pin.value); };
+      pin.addEventListener('input', showPin);
+      showPin();
+    }
+    trackEvent('begin_checkout', { value: grandTotal(), currency: 'INR' });
     payMethod = 'wa';
     loadRazorpay();
 
@@ -2850,42 +2796,6 @@ function mount(page, parts) {
   }
 }
 
-/* ---------------- announcement marquee ----------------
-   Rebuilds the .annc-track from MARQUEE. The CSS loop translates the track
-   by exactly -50%, so it must hold TWO identical halves for a seamless wrap;
-   the second half is aria-hidden so screen readers hear each line once.
-   Messages are inserted as text, never HTML — anything typed in the Maze
-   Room is safe by construction. */
-function renderMarquee() {
-  const bar = document.querySelector('.annc');
-  if (!bar) return;
-  const items = (MARQUEE && MARQUEE.on && Array.isArray(MARQUEE.items))
-    ? MARQUEE.items.map(s => String(s).trim()).filter(Boolean) : [];
-  const hdr = document.querySelector('#hdr');
-
-  if (!items.length) {                 // off, or nothing to say — remove the bar
-    bar.style.display = 'none';
-    document.body.classList.remove('has-annc');
-    if (hdr) hdr.style.top = '';        // undo the 34px offset onScroll may have set
-    return;
-  }
-
-  bar.style.display = '';
-  document.body.classList.add('has-annc');
-  let track = bar.querySelector('.annc-track');
-  if (!track) { track = document.createElement('div'); track.className = 'annc-track'; bar.appendChild(track); }
-  track.textContent = '';
-  for (let copy = 0; copy < 2; copy++) {
-    items.forEach(msg => {
-      const span = document.createElement('span');
-      span.textContent = msg;
-      if (copy === 1) span.setAttribute('aria-hidden', 'true');
-      track.appendChild(span);
-    });
-  }
-  if (typeof onScroll === 'function') onScroll();   // resync header offset to the bar
-}
-
 /* ---------------- global wiring ---------------- */
 function onScroll() {
   const y = window.scrollY;
@@ -2946,8 +2856,6 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
   $('#fWa').innerHTML       = ICON.whatsapp;
   $('#yr').textContent      = new Date().getFullYear();
 
-  renderMarquee();          // from defaults now; upgraded once live settings load
-
   $('#cartBtn').onclick   = () => { renderCart(); openDrawer('#cartDrawer'); };
   $('#searchBtn').onclick = () => { openDrawer('#searchDrawer'); setTimeout(() => $('#sInput').focus(), 320); runSearch(''); };
   $('#sInput').oninput    = e => runSearch(e.target.value);
@@ -2958,6 +2866,8 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
 
   /* the playful bits, mounted last so nothing above depends on them */
   if (typeof NavPlay !== 'undefined') NavPlay.mount();
+  /* after first paint — measurement must never delay the page it measures */
+  if (typeof loadAnalytics === 'function') requestAnimationFrame(loadAnalytics);
   if (typeof Bot !== 'undefined') Bot.mount();
 
   /* Live data is fetched AFTER the page is already interactive.
@@ -2971,7 +2881,6 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
       if (typeof syncStore === 'function') {
         const live = await syncStore();
         if (live && (live.products || live.settings || live.categories)) route(true);
-        if (live && live.settings) renderMarquee();   // reflect the Maze Room's announcement
       }
     } catch (e) { console.warn('catalogue sync skipped:', e.message); }
 

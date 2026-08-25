@@ -5,6 +5,7 @@
    to the browser:
      · the Supabase project URL and publishable key are protected
        by Row Level Security, not by secrecy
+     · Firebase web API keys are identifiers, not credentials
 
    NEVER put the Postgres password or a Supabase service_role key
    in here — those grant full database access and would bypass
@@ -32,29 +33,63 @@ const TOSS_LINKS = {
   whatsapp:  '919176995707' // the number orders already go to
 };
 
+/* ------------------------------------------------------------
+   Delivery.
+
+   `unserved` holds pin-code prefixes our couriers will not reach.
+   Prefix rather than full pin code because Indian pin codes are
+   geographic: the first three digits are the sorting district, so
+   one entry covers a region instead of hundreds of individual
+   codes.
+
+   It is EMPTY by default, and an empty list means "we deliver
+   everywhere". Guessing which districts a courier refuses would
+   be worse than not checking — it would turn away real orders
+   from places we can actually reach. Fill it from the courier's
+   own serviceability list.
+
+   `zones` drives the delivery estimate shown at checkout. Matched
+   longest-prefix-first, so '600' (Chennai) wins over '6'.
+   ------------------------------------------------------------ */
+const DELIVERY = {
+  unserved: [],
+  zones: [
+    { prefix: '600', label: 'Chennai',        days: '1–3 working days' },
+    { prefix: '6',   label: 'Tamil Nadu',     days: '2–4 working days' },
+    { prefix: '5',   label: 'South India',    days: '3–5 working days' },
+    { prefix: '',    label: 'Rest of India',  days: '4–7 working days' }
+  ],
+  /* Where a tracking number can be followed. The order stores which
+     courier, so the tracking page can link straight to it. */
+  couriers: {
+    dtdc:     { label: 'DTDC',        url: 'https://www.dtdc.in/tracking.asp' },
+    delhivery:{ label: 'Delhivery',   url: 'https://www.delhivery.com/track/package/' },
+    bluedart: { label: 'Blue Dart',   url: 'https://www.bluedart.com/tracking' },
+    indiapost:{ label: 'India Post',  url: 'https://www.indiapost.gov.in/_layouts/15/dop.portal.tracking/trackconsignment.aspx' },
+    other:    { label: 'Courier',     url: '' }
+  }
+};
+
+/* ------------------------------------------------------------
+   Analytics.
+
+   Both IDs are empty, and nothing loads while they are. That is
+   deliberate: an analytics tag that fires before anyone has
+   decided to have analytics is a third party reading your
+   visitors for no benefit. Paste an ID and only then does the
+   script get injected.
+   ------------------------------------------------------------ */
+const ANALYTICS = {
+  ga4:  '',   // G-XXXXXXXXXX
+  meta: ''    // Meta pixel id
+};
+
 const SERVICES = {
   /* Engraving. Priced as an add-on and carried onto the invoice.
      The character limit is a real constraint from the bench, not a
      UI preference: past roughly 18 characters the text has to shrink
      enough that it stops reading cleanly on the blade. */
-  /* Engraving. price / maxChars / enabled are editable in the Maze Room
-     (settings.engraving); fonts and positions are code-defined because each
-     maps to specific CSS and preview geometry — an admin cannot add a font
-     that has no styling. The character limit is a real bench constraint:
-     past ~18 characters the text shrinks enough to stop reading cleanly. */
-  engraving: {
-    price: 199, maxChars: 18, enabled: true,
-    fonts: [
-      { id: 'classic',   label: 'Classic serif' },
-      { id: 'block',     label: 'Bold block' },
-      { id: 'signature', label: 'Signature script' }
-    ],
-    positions: [
-      { id: 'front', label: 'Front of blade' },
-      { id: 'back',  label: 'Back of blade' },
-      { id: 'toe',   label: 'Toe' }
-    ]
-  },
+  engraving: { price: 199, maxChars: 18, enabled: true },
 
   /* Bat Doctor. Bands rather than fixed prices, because the real
      price depends on what the bat looks like when it arrives. */
@@ -108,31 +143,37 @@ const SERVICES = {
   customBat: { enabled: true }
 };
 
-/* ============================================================
-   Maze Room auth — Supabase Auth, no third party.
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyBsqvLa_V_XCi189P3Qd61-zd4c4i_E0G8',
+  authDomain: 'toss-cb8c0.firebaseapp.com',
+  projectId: 'toss-cb8c0',
+  storageBucket: 'toss-cb8c0.firebasestorage.app',
+  messagingSenderId: '844825622558',
+  appId: '1:844825622558:web:af838b8d0f707e351e160f',
+  measurementId: 'G-VX9GZ9YREG'
+};
 
-   The admin signs in with Supabase's own email+password, so the
-   access token is minted by the same system that enforces RLS:
-   no cross-system JWT handoff exists to silently break. The
-   token's `sub` claim is the Supabase user UUID, which is what
-   `staff.uid` binds to (via claim_staff, matched by email).
-   ============================================================ */
-let authToken = null;           // the signed-in admin's access token
-let tokenRejected = false;      // true when Supabase refuses the token
-const setAuthToken = t => { authToken = t; tokenRejected = false; };
+/* Supabase accepts the Firebase ID token as a third-party JWT, so RLS
+   can key off the Firebase uid. Requires Third-Party Auth to be enabled
+   in the Supabase dashboard — see sql/SETUP.md. */
+let firebaseToken = null;
+let tokenRejected = false;      // true when Supabase refuses the Firebase JWT
+const setFirebaseToken = t => { firebaseToken = t; tokenRejected = false; };
 
-/* A token can still be refused (expired, revoked, project key rotated).
-   Detect that once at sign-in, fall back to the publishable key so the
-   app still loads read-only, and let the UI say precisely what is wrong. */
+/* Supabase only accepts a Firebase ID token once Firebase is registered as a
+   Third Party Auth provider. Until then it answers 401 PGRST301 to EVERY
+   request — including ones that would have succeeded anonymously. Detect that
+   once at sign-in, fall back to the publishable key so the app still loads,
+   and let the UI say precisely what is wrong. */
 async function checkToken() {
-  if (!authToken) return 'anon';
+  if (!firebaseToken) return 'anon';
   try {
     const r = await fetch(SUPA_URL + '/rest/v1/products?select=id&limit=1', { headers: supaHeaders() });
     if (r.status === 401) {
       const j = await r.json().catch(() => ({}));
       if (j.code === 'PGRST301' || /jwt/i.test(j.message || '')) {
         tokenRejected = true;
-        authToken = null;              // degrade to anonymous reads
+        firebaseToken = null;          // degrade to anonymous reads
         return 'rejected';
       }
       return 'unauthorised';
@@ -144,7 +185,7 @@ async function checkToken() {
 function supaHeaders(extra) {
   return Object.assign({
     apikey: SUPA_KEY,
-    Authorization: 'Bearer ' + (authToken || SUPA_KEY),
+    Authorization: 'Bearer ' + (firebaseToken || SUPA_KEY),
     'Content-Type': 'application/json'
   }, extra || {});
 }
@@ -187,27 +228,4 @@ async function supa(pathAndQuery, opts) {
 /* call a SECURITY DEFINER function (claim_reward, validate_coupon) */
 function supaRpc(fn, args) {
   return supa('rpc/' + fn, { method: 'POST', body: args || {} });
-}
-
-/* ============================================================
-   Announcement marquee — shared shape
-
-   The `announcement` setting is edited in the Maze Room and read by
-   the storefront, so both must agree on its shape. Canonical form is
-   { on: boolean, items: [string, …] }. This normaliser also accepts
-   the two older shapes the row may still hold — a bare string, or a
-   plain array — so nothing has to be migrated by hand.
-
-   Lives in config.js because it is the one file loaded by BOTH the
-   shop (index.html) and the Maze Room (maze.html).
-   ============================================================ */
-function normalizeMarquee(v) {
-  if (v == null) return { on: true, items: [] };
-  if (typeof v === 'string') { const t = v.trim(); return { on: !!t, items: t ? [t] : [] }; }
-  if (Array.isArray(v)) return { on: v.length > 0, items: v.map(String) };
-  if (typeof v === 'object') {
-    const items = Array.isArray(v.items) ? v.items.map(String) : [];
-    return { on: v.on !== false, items };   // default to visible unless explicitly off
-  }
-  return { on: true, items: [] };
 }

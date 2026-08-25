@@ -2158,3 +2158,28 @@ body.pdp-open .fab{bottom:82px}
 .hdr:not(.onDark) .nav-back:hover{color:var(--orange)}
 /* the players never run at this width, so nothing needs bringing back */
 @media (max-width:900px){.nav-back{display:none}}
+
+/* ---------- delivery answer at checkout ---------- */
+.dv-note{margin-top:7px;min-height:1.1em}
+.dv{display:inline-flex;align-items:center;gap:7px;font-size:.8rem;font-weight:700}
+.dv svg{width:15px;height:15px;flex:none}
+.dv.ok{color:#1f7a33}
+.dv.bad{color:#c92a2e}
+.dv b{font-weight:900}
+
+/* ---------- courier on the tracking page ---------- */
+.trk-courier{display:flex;justify-content:space-between;align-items:center;gap:14px;
+  flex-wrap:wrap;margin:6px 0 4px;padding:14px 16px;border-radius:12px;
+  background:var(--panel-2,#f0f0f3)}
+.trk-courier b{font-family:var(--f-d,inherit);font-size:1.05rem;letter-spacing:.02em}
+
+/* ---------- policy links ---------- */
+.ftr-legal{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:12px;padding:0}
+.ftr-legal li{list-style:none}
+.ftr-legal a{font-size:.78rem;color:rgba(255,255,255,.45)}
+.ftr-legal a:hover{color:var(--orange)}
+
+/* policy page body — long prose, so it needs measure and rhythm the
+   marketing pages never did */
+.legal-updated{margin-top:34px;font-size:.8rem;color:var(--ink-50,#98989d)}
+.legal-nav{margin-top:10px;font-size:.82rem}

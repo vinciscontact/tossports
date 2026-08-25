@@ -1,11 +1,10 @@
 /* ============================================================
    MAZE ROOM — Toss Sports admin
 
-   Auth and data are BOTH Supabase. The admin signs in with
-   Supabase Auth email+password; the access token it mints is the
-   token Row Level Security checks, so there is no cross-system
-   handoff to silently fail. The UI hiding itself is a
-   convenience — the database is what actually says no.
+   Auth is Firebase; data is Supabase. The Firebase ID token is
+   passed to Supabase as a third-party JWT so Row Level Security
+   can check the uid against the `admins` table. The UI hiding
+   itself is a convenience — the database is what actually says no.
    ============================================================ */
 
 const $  = (s, r) => (r || document).querySelector(s);
@@ -59,110 +58,17 @@ function toast(msg, bad) {
   toastT = setTimeout(() => el.className = 'toast', 2600);
 }
 
-/* ---------------- auth (Supabase Auth) ----------------
-   The session lives in localStorage and is refreshed BEFORE the access
-   token expires. If a refresh ever fails the session ends loudly — back
-   to the login gate with a message — because the alternative is what bit
-   us under Firebase: a silently-degraded session where reads look fine
-   and every write is refused with a cryptic 403. */
-const SESSION_KEY = 'toss_maze_session';
-let SESSION = null;             // { access_token, refresh_token, expires_at, user }
-let refreshTimer = null;
-
-async function authCall(path, body, token, method) {
-  const res = await fetch(`${SUPA_URL}/auth/v1/${path}`, {
-    method: method || 'POST',
-    headers: {
-      apikey: SUPA_KEY,
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + (token || SUPA_KEY)
-    },
-    body: JSON.stringify(body || {})
-  });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(j.error_description || j.msg || j.message || ('HTTP ' + res.status));
-    err.code = j.error_code || j.error || res.status;
-    throw err;
-  }
-  return j;
-}
-
-function friendlyAuthError(ex) {
-  const m = String(ex && ex.message || ''), c = String(ex && ex.code || '');
-  if (/invalid login credentials/i.test(m) || c === 'invalid_credentials' || c === 'invalid_grant')
-    return 'That email and password combination is not recognised.';
-  if (/email not confirmed/i.test(m) || c === 'email_not_confirmed')
-    return 'This login exists but its email is not confirmed. In the Supabase dashboard, open Authentication → Users and confirm it (or recreate the user with “Auto Confirm” ticked).';
-  if (/rate/i.test(m) || c === 'over_request_rate_limit')
-    return 'Too many attempts. Wait a minute and try again.';
-  if (/fetch|network/i.test(m))
-    return 'Cannot reach the server. Check your connection.';
-  return m || 'Sign-in failed.';
-}
-
-function persistSession() {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify(SESSION)); } catch (e) {}
-}
-
-/* Refresh two minutes early; a failed refresh ends the session LOUDLY. */
-function scheduleRefresh() {
-  clearTimeout(refreshTimer);
-  if (!SESSION) return;
-  const ms = Math.max(30_000, (SESSION.expires_at * 1000) - Date.now() - 120_000);
-  refreshTimer = setTimeout(async () => {
-    try {
-      const s = await authCall('token?grant_type=refresh_token',
-        { refresh_token: SESSION.refresh_token });
-      SESSION = s; persistSession(); setAuthToken(s.access_token);
-      scheduleRefresh();
-    } catch (e) {
-      endSession('Your session expired and could not be renewed — sign in again.');
-    }
-  }, ms);
-}
-
-async function startSession(s) {
-  SESSION = s; persistSession();
-  setAuthToken(s.access_token);
-  USER = { uid: s.user.id, email: s.user.email };
-  scheduleRefresh();
-
-  AUTH = await checkToken();
-  /* bind this login to the staff record the owner added by email */
-  if (AUTH === 'ok') { try { await supaRpc('claim_staff'); } catch (e) { console.warn('claim_staff', e.message); } }
-
-  $('#gate').classList.add('hide');
-  $('#shell').classList.remove('hide');
-  $('#who').textContent = USER.email;
-  await loadAll();
-  render();
-}
-
-function endSession(message) {
-  clearTimeout(refreshTimer);
-  const tok = SESSION && SESSION.access_token;
-  SESSION = null; USER = null; ME = null; AUTH = 'anon';
-  setAuthToken(null);
-  try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
-  if (tok) authCall('logout', {}, tok).catch(() => {});   // best effort, server side
-  const blocker = $('#adminBlock'); if (blocker) blocker.remove();
-  $('#shell').classList.add('hide');
-  $('#gate').classList.remove('hide');
-  const err = $('#loginErr');
-  err.textContent = message || '';
-  err.classList.toggle('hide', !message);
-}
+/* ---------------- auth ---------------- */
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth();
 
 $('#loginForm').onsubmit = async e => {
   e.preventDefault();
   const btn = $('#loginBtn'), err = $('#loginErr');
   btn.disabled = true; btn.textContent = 'Signing in…';
-  err.classList.add('hide'); $('#loginOk').classList.add('hide');
+  err.classList.add('hide');
   try {
-    const s = await authCall('token?grant_type=password',
-      { email: $('#email').value.trim(), password: $('#password').value });
-    await startSession(s);
+    await auth.signInWithEmailAndPassword($('#email').value.trim(), $('#password').value);
   } catch (ex) {
     err.textContent = friendlyAuthError(ex);
     err.classList.remove('hide');
@@ -171,118 +77,42 @@ $('#loginForm').onsubmit = async e => {
   }
 };
 
-$('#logout').onclick = () => endSession();
+function friendlyAuthError(ex) {
+  const c = ex && ex.code || '';
+  if (c.includes('invalid-credential') || c.includes('wrong-password') || c.includes('user-not-found'))
+    return 'That email and password combination is not recognised.';
+  if (c.includes('too-many-requests'))
+    return 'Too many attempts. Wait a minute and try again.';
+  if (c.includes('operation-not-allowed'))
+    return 'Email/password sign-in is not enabled yet in the Firebase console. See sql/SETUP.md step 2.';
+  if (c.includes('network'))
+    return 'Cannot reach Firebase. Check your connection.';
+  return ex.message || 'Sign-in failed.';
+}
 
-/* ---------------- forgot password ----------------
-   Supabase emails a recovery link. The link comes back to THIS page with
-   tokens in the URL hash and type=recovery; the boot code below spots that
-   and swaps the gate for a set-new-password card. The response to the
-   request is deliberately the same whether the email exists or not. */
-$('#forgotBtn').onclick = async () => {
-  const email = $('#email').value.trim();
-  const err = $('#loginErr'), ok = $('#loginOk');
-  err.classList.add('hide'); ok.classList.add('hide');
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    err.textContent = 'Type your email in the box above first, then press Forgot password.';
-    err.classList.remove('hide');
+$('#logout').onclick = () => auth.signOut();
+
+auth.onAuthStateChanged(async user => {
+  USER = user;
+  if (!user) {
+    setFirebaseToken(null);
+    $('#gate').classList.remove('hide');
+    $('#shell').classList.add('hide');
     return;
   }
-  const btn = $('#forgotBtn');
-  btn.disabled = true;
-  try {
-    await authCall('recover', { email,
-      /* bring the link back to this exact page, wherever it is hosted */
-      gotrue_meta_security: {}, redirect_to: location.origin + location.pathname });
-    ok.textContent = 'If that email has a login, a reset link is on its way. ' +
-      'Open it on this device — the link brings you back here to set a new password.';
-    ok.classList.remove('hide');
-  } catch (e) {
-    err.textContent = /rate/i.test(e.message || '')
-      ? 'Too many reset emails just now — wait a few minutes and try again.'
-      : ('Could not send the reset email — ' + (e.message || 'try again.'));
-    err.classList.remove('hide');
-  } finally { btn.disabled = false; }
-};
+  setFirebaseToken(await user.getIdToken());
+  AUTH = await checkToken();
+  /* bind this Firebase login to the staff record the owner added by email */
+  if (AUTH === 'ok') { try { await supaRpc('claim_staff'); } catch (e) { console.warn('claim_staff', e.message); } }
+  /* refresh the token before it expires so long sessions keep working */
+  setInterval(async () => setFirebaseToken(await user.getIdToken(true)), 45 * 60 * 1000);
 
-/* the recovery link lands with #access_token=…&refresh_token=…&type=recovery */
-function hashParams() {
-  const out = {};
-  location.hash.replace(/^#/, '').split('&').forEach(kv => {
-    const i = kv.indexOf('=');
-    if (i > 0) out[decodeURIComponent(kv.slice(0, i))] = decodeURIComponent(kv.slice(i + 1));
-  });
-  return out;
-}
-
-function jwtExp(tok) {
-  try { return JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp; }
-  catch (e) { return Math.floor(Date.now() / 1000) + 3600; }
-}
-
-function showRecoveryCard(p) {
-  history.replaceState(null, '', location.pathname);   // tokens must not linger in the URL
-  const gate = $('#gate');
-  gate.classList.remove('hide');
-  gate.innerHTML = `
-    <form class="gate-card" id="recForm">
-      <img class="gate-mark" src="images/logo/toss-mark-192.png" alt="Toss Sports" width="192" height="192">
-      <h1>New password</h1>
-      <p>You followed a reset link — set the new password for this login.</p>
-      <label>New password<input type="password" id="recPw" autocomplete="new-password" minlength="8" required></label>
-      <label>Type it again<input type="password" id="recPw2" autocomplete="new-password" required></label>
-      <button class="btn primary block" id="recBtn" type="submit">Set password &amp; sign in</button>
-      <div class="gate-err hide" id="recErr"></div>
-    </form>`;
-  $('#recForm').onsubmit = async e => {
-    e.preventDefault();
-    const err = $('#recErr'), btn = $('#recBtn');
-    err.classList.add('hide');
-    const pw = $('#recPw').value, pw2 = $('#recPw2').value;
-    if (pw.length < 8) { err.textContent = 'At least 8 characters.'; err.classList.remove('hide'); return; }
-    if (pw !== pw2)    { err.textContent = 'The two passwords do not match.'; err.classList.remove('hide'); return; }
-    btn.disabled = true; btn.textContent = 'Saving…';
-    try {
-      const user = await authCall('user', { password: pw }, p.access_token, 'PUT');
-      await startSession({
-        access_token: p.access_token,
-        refresh_token: p.refresh_token,
-        expires_at: Number(p.expires_at) || jwtExp(p.access_token),
-        user
-      });
-    } catch (ex) {
-      err.textContent = /expired|invalid/i.test(ex.message || '')
-        ? 'This reset link has expired — go back and request a fresh one.'
-        : (ex.message || 'Could not set the password.');
-      err.classList.remove('hide');
-      btn.disabled = false; btn.textContent = 'Set password & sign in';
-    }
-  };
-}
-
-/* boot: a recovery link wins; otherwise restore a previous session */
-(async () => {
-  const p = hashParams();
-  if (p.type === 'recovery' && p.access_token) { showRecoveryCard(p); return; }
-  if (p.error_description) {
-    history.replaceState(null, '', location.pathname);
-    const err = $('#loginErr');
-    err.textContent = p.error_description.replace(/\+/g, ' ');
-    err.classList.remove('hide');
-    return;
-  }
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(SESSION_KEY)); } catch (e) {}
-  if (!saved || !saved.refresh_token) return;
-  try {
-    if ((saved.expires_at * 1000) - Date.now() < 120_000) {
-      saved = await authCall('token?grant_type=refresh_token',
-        { refresh_token: saved.refresh_token });
-    }
-    await startSession(saved);
-  } catch (e) {
-    endSession('Your session expired — sign in again.');
-  }
-})();
+  $('#gate').classList.add('hide');
+  $('#shell').classList.remove('hide');
+  $('#who').textContent = user.email;
+  await loadAll();
+  render();
+});
 
 /* ---------------- data ---------------- */
 let lastLoadError = null;
@@ -360,6 +190,7 @@ const DOCK_ICON = (() => {
     dash:     s('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'),
     sales:    s('<path d="M3 20h18"/><path d="M6 20v-6M11 20V9M16 20v-9M21 20V5"/>'),
     requests: s('<path d="M4 5h16v11H8l-4 4Z"/><path d="M8 9h8M8 12.5h5"/>'),
+    fulfil:   s('<rect x="1.5" y="6" width="13" height="11" rx="1.5"/><path d="M14.5 9.5H19l3.5 3.5V17h-8z"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>'),
     qa:       s('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/>'),
     billing:  s('<path d="M6 2h12v20l-2-1.5L14 22l-2-1.5L10 22l-2-1.5L6 22Z"/><path d="M9 7h6M9 11h6"/>'),
     finance:  s('<circle cx="12" cy="12" r="9"/><path d="M12 3v9l6.4 6.4"/>'),
@@ -503,87 +334,33 @@ function checkSetup() {
   /* Order matters: a rejected token makes every read fail, which used to look
      exactly like an empty database. Diagnose the auth layer first. */
   if (AUTH === 'rejected') {
-    msg = `<b>Supabase refused this session's token.</b> Sign out and sign back in.
-      If it happens again immediately, the project's JWT settings changed —
-      check Supabase → Authentication.
-      <br><br><span style="opacity:.7">Showing public data only, read-only.</span>`;
+    msg = `<b>Supabase is rejecting your Firebase login.</b>
+      Your email and password were correct — Firebase signed you in — but Supabase
+      will not accept a Firebase token until you register Firebase as a third-party
+      auth provider. Until then nothing here can load or save.
+      <br><br><b>Fix it in one step:</b> Supabase Dashboard →
+      <b>Authentication</b> → <b>Sign In / Providers</b> → <b>Third Party Auth</b> →
+      <b>Add provider</b> → <b>Firebase</b>, and enter project ID
+      <code>${esc(FIREBASE_CONFIG.projectId)}</code>. Then reload this page.
+      <br><br><span style="opacity:.7">Showing public data only, read-only.
+      Your Firebase UID is <code>${esc(USER && USER.uid)}</code> — you'll need it next.</span>`;
   } else if (!DB.products.length && lastLoadError) {
     msg = `Could not read the database — <code>${esc(lastLoadError.message)}</code>
            (HTTP ${esc(lastLoadError.status)} on <code>${esc(lastLoadError.q)}</code>).`;
   } else if (!DB.products.length) {
     msg = `No products found. Run <code>sql/schema.sql</code> in the Supabase SQL Editor
            to create the tables and seed your 29 bats.`;
+  } else if (!ME) {
+    msg = `You are signed in to Firebase, but you are not on the staff list — so the database
+           is giving you nothing. Add yourself with this SQL, then reload:
+           <br><br><code>insert into public.staff (uid, name, email, role)
+           values ('${esc(USER && USER.uid)}', 'Your Name', '${esc(USER && USER.email)}', 'owner');</code>
+           <br><br>If that runs but nothing changes, Firebase is not yet enabled as a
+           <b>Third Party Auth</b> provider in Supabase (step 4 of <code>sql/SETUP.md</code>) —
+           without it Supabase ignores your login entirely.`;
   }
   b.innerHTML = msg;
   b.classList.toggle('hide', !msg);
-
-  /* Everything above can pass while writes still fail: the reads that loaded
-     this page are mostly public, so a session that has silently degraded to
-     anonymous — or a staff role below manager — looks healthy right up until
-     a save or a photo upload is refused. Ask the database directly. */
-  if (!msg && USER) verifyAdmin_(b);
-}
-
-async function verifyAdmin_(b) {
-  let admin = false;
-  try { admin = await supaRpc('is_admin'); } catch (e) { admin = false; }
-  if (admin === true) return;
-
-  const diag = `<br><br><span style="opacity:.7">Diagnostics — signed in as
-    <code>${esc(USER.email)}</code>, login UID <code>${esc(USER.uid)}</code>,
-    token ${authToken ? 'accepted' : (tokenRejected ? 'REJECTED by Supabase' : 'missing')},
-    staff row: ${ME ? esc(ME.role) + (ME.active === false ? ' (inactive)' : '') : 'none matches this UID'}.</span>`;
-
-  /* A bound sales/workshop login is a VALID session with fewer rights —
-     inform, don't block. Everything else is a broken session: reads look
-     fine (the catalogue is public) while every write would be refused, so
-     block the screen rather than let saves fail one by one. */
-  if (ME && ME.active !== false && ['sales', 'workshop'].includes(ME.role)) {
-    b.innerHTML = `<b>Signed in as ${esc(ROLE_LABEL[ME.role] || ME.role)} — this role cannot edit
-      products or upload photos.</b> Ask an owner to change your role on the Team page,
-      or sign in with an owner/manager account.` + diag;
-    b.classList.remove('hide');
-    return;
-  }
-
-  blockScreen(`<h2>This login has no access yet</h2>
-    <p>You signed in, but this account is not bound to an active staff row —
-    so the database refuses every change. Nothing you save here would stick,
-    which is why the screen is blocked instead.</p>
-    <p><b>Fix (owner, one time):</b> run this in the Supabase SQL Editor,
-    then press “Try again”.</p>
-    <pre>update public.staff set uid = '${esc(USER.uid)}', active = true
- where lower(email) = lower('${esc(USER.email)}');</pre>
-    <p style="opacity:.75">If no staff row exists for this email yet:</p>
-    <pre>insert into public.staff (uid, name, email, role)
-values ('${esc(USER.uid)}', 'Your Name', '${esc(USER.email)}', 'owner');</pre>` + diag);
-}
-
-/* Full-screen block: same visual layer as the login gate, so "you cannot
-   work right now" looks like what it is. */
-function blockScreen(html) {
-  let el = $('#adminBlock');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'adminBlock';
-    el.className = 'gate';
-    document.body.appendChild(el);
-  }
-  el.innerHTML = `<div class="gate-card" style="max-width:560px;text-align:left">
-    ${html}
-    <div style="display:flex;gap:10px;margin-top:18px">
-      <button class="btn primary" id="abRetry" type="button">Try again</button>
-      <button class="btn ghost" id="abOut" type="button">Sign out</button>
-    </div>
-  </div>`;
-  $('#abRetry').onclick = async () => {
-    try { await supaRpc('claim_staff'); } catch (e) {}
-    let ok = false;
-    try { ok = await supaRpc('is_admin'); } catch (e) {}
-    if (ok === true) { el.remove(); await loadAll(); render(); }
-    else toast('Still no access — run the SQL first, then try again.', true);
-  };
-  $('#abOut').onclick = () => endSession();
 }
 
 async function saveRow(table, row, keyCol) {
@@ -647,6 +424,7 @@ function render() {
   const R = {
     dash:     [viewOpsDash,   wireDash],
     sales:    [viewSales,     wireSales],
+    fulfil:   [viewFulfil,    wireFulfil],
     requests: [viewRequests,  wireRequests],
     qa:       [viewQA,        wireQAAdmin],
     finance:  [viewFinance,   wireFinance],
@@ -1585,21 +1363,6 @@ async function optimiseImage(file) {
   return { versions: out, original: { w: img.naturalWidth, h: img.naturalHeight } };
 }
 
-/* Supabase Storage reports a permissions refusal as HTTP 400 with the real
-   403 buried in the JSON body ({"statusCode":"403","code":"AccessDenied"}),
-   so checking res.status alone leaks raw JSON into the UI. Read the body. */
-function storageError_(status, bodyText) {
-  let body = null;
-  try { body = JSON.parse(bodyText); } catch (e) {}
-  const denied = status === 401 || status === 403 ||
-    (body && (body.code === 'AccessDenied' || body.statusCode === '403' || body.statusCode === '401' ||
-              /row-level security/i.test(body.message || '')));
-  return denied
-    ? 'Storage refused the upload — this login has no admin rights right now. ' +
-      'Close this window and read the banner at the top of the page (reload if there is none).'
-    : ((body && body.message) || bodyText || 'HTTP ' + status).slice(0, 140);
-}
-
 async function putObject_(path, blob, contentType) {
   const res = await fetch(`${SUPA_URL}/storage/v1/object/products/${path}`, {
     method: 'POST',
@@ -1609,7 +1372,12 @@ async function putObject_(path, blob, contentType) {
     }),
     body: blob
   });
-  if (!res.ok) throw new Error(storageError_(res.status, await res.text()));
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(res.status === 403 || res.status === 401
+      ? 'Storage refused the upload — your account is not an admin.'
+      : (t || res.statusText).slice(0, 120));
+  }
   return `${SUPA_URL}/storage/v1/object/public/products/${path}`;
 }
 
@@ -1658,7 +1426,12 @@ async function uploadRaw_(file, productId) {
     headers: Object.assign(supaHeaders(), { 'Content-Type': file.type || 'image/jpeg' }),
     body: file
   });
-  if (!res.ok) throw new Error(storageError_(res.status, await res.text()));
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(res.status === 403 || res.status === 401
+      ? 'Storage refused the upload — your account is not an admin.'
+      : (t || res.statusText).slice(0, 120));
+  }
   return `${SUPA_URL}/storage/v1/object/public/products/${path}`;
 }
 
@@ -1784,9 +1557,9 @@ function wirePhotoUpload(productId) {
 function writeError(e) {
   const m = (e && e.message || '').toLowerCase();
   if (m.includes('row-level') || m.includes('policy') || m.includes('permission'))
-    return 'The database refused the write — this login has no admin rights. Reload the page and follow the instructions on screen.';
+    return 'The database refused the write — your Firebase UID is not an admin. See SETUP.md steps 4–5.';
   if (m.includes('jwt') || m.includes('token'))
-    return 'Login token rejected by Supabase. Sign out and sign back in.';
+    return 'Login token rejected by Supabase. Enable Firebase Third Party Auth (SETUP.md step 4).';
   return e.message || 'Save failed';
 }
 
@@ -1865,67 +1638,6 @@ function wireScores() {
   });
 }
 
-/* Engraving controls. price / maxChars / enabled are the admin-editable bits;
-   fonts and positions stay in config.js because each maps to CSS the admin
-   cannot supply. Saved as settings.engraving and merged over the config
-   defaults by store-sync on the shop. */
-function currentEngraving() {
-  const base = (typeof SERVICES !== 'undefined' && SERVICES.engraving) || { price: 199, maxChars: 18, enabled: true };
-  const saved = (DB.settings && DB.settings.engraving) || {};
-  return Object.assign({}, base, saved);
-}
-
-function viewEngravingPanel() {
-  const e = currentEngraving();
-  const fonts = (e.fonts || []).map(f => f.label).join(', ') || '—';
-  const positions = (e.positions || []).map(p => p.label).join(', ') || '—';
-  return `
-    <div class="panel">
-      <h3>Engraving</h3>
-      <p class="muted">Charged as an add-on on every bat and carried onto the order.
-        Fonts and positions the customer can pick are set in code:
-        <b>${esc(fonts)}</b> · <b>${esc(positions)}</b>.</p>
-      <label class="mq-toggle"><input type="checkbox" id="engEnabled" ${e.enabled !== false ? 'checked' : ''}>
-        <span>Offer engraving on the shop</span></label>
-      <div class="f">
-        <div class="row">
-          <label>Engraving price (₹)</label>
-          <input id="engPrice" type="number" min="0" value="${esc(e.price ?? 199)}">
-          <div class="hint">Added per engraved bat, multiplied by quantity.</div>
-        </div>
-        <div class="row">
-          <label>Maximum characters</label>
-          <input id="engMax" type="number" min="1" value="${esc(e.maxChars ?? 18)}">
-          <div class="hint">Past ~18 the text stops reading cleanly on the blade.</div>
-        </div>
-      </div>
-      <button type="button" class="btn primary" id="engSave">Save engraving</button>
-    </div>`;
-}
-
-function wireEngraving() {
-  const btn = $('#engSave');
-  if (!btn) return;
-  btn.onclick = async () => {
-    btn.disabled = true; const label = btn.textContent; btn.textContent = 'Saving…';
-    try {
-      const value = {
-        enabled: $('#engEnabled').checked,
-        price: Math.max(0, Number($('#engPrice').value || 0)),
-        maxChars: Math.max(1, Number($('#engMax').value || 18))
-      };
-      await supa('settings', {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-        body: { key: 'engraving', value }
-      });
-      DB.settings.engraving = Object.assign({}, DB.settings.engraving, value);
-      toast('Engraving saved');
-    } catch (e) { toast(writeError(e), true); }
-    finally { btn.disabled = false; btn.textContent = label; }
-  };
-}
-
 /* ---------------- settings ---------------- */
 const SETTING_FIELDS = [
   ['whatsapp',       'WhatsApp number', 'text',   'Country code, no plus. e.g. 919176995707'],
@@ -1939,87 +1651,9 @@ const SETTING_FIELDS = [
   ['business_state',   'Your state', 'text', 'Decides CGST/SGST versus IGST for each customer.'],
   ['gst_rate',         'GST rate (%)', 'number', 'Cricket bats are usually 12%. Confirm with your accountant.'],
   ['hsn_code',         'HSN code', 'text', 'Sports goods are commonly 9506.'],
-  ['invoice_prefix',   'Invoice prefix', 'text', 'e.g. TOSS gives TOSS/26-27/0001.']
-  /* 'announcement' is not here — it is a list of messages with its own
-     editor below (viewMarqueePanel / wireMarquee), not a single text box. */
+  ['invoice_prefix',   'Invoice prefix', 'text', 'e.g. TOSS gives TOSS/26-27/0001.'],
+  ['announcement',   'Announcement bar', 'text',  'The scrolling line at the top of the site']
 ];
-
-/* One editable row of the announcement marquee. Values are escaped because
-   they are typed by staff and echoed straight back into the input. */
-function marqueeRowsHtml(items) {
-  if (!items.length) return '<p class="muted" id="mqEmpty">No messages yet — add one below.</p>';
-  return items.map((msg, i) => `
-    <div class="mq-row" data-i="${i}">
-      <input class="mq-input" type="text" value="${esc(msg)}" placeholder="Message text" aria-label="Message ${i + 1}">
-      <div class="mq-move">
-        <button type="button" class="btn ghost sm" data-mq-up="${i}" title="Move up" aria-label="Move up">↑</button>
-        <button type="button" class="btn ghost sm" data-mq-down="${i}" title="Move down" aria-label="Move down">↓</button>
-        <button type="button" class="btn ghost sm" data-mq-del="${i}" title="Remove" aria-label="Remove">✕</button>
-      </div>
-    </div>`).join('');
-}
-
-function viewMarqueePanel() {
-  const mq = normalizeMarquee(DB.settings.announcement);
-  return `
-    <div class="panel">
-      <h3>Announcement bar</h3>
-      <p class="muted">The scrolling line at the top of the storefront. One message per row;
-        they scroll in order and loop. Plain text — emoji are fine.</p>
-      <label class="mq-toggle"><input type="checkbox" id="mqOn" ${mq.on ? 'checked' : ''}>
-        <span>Show the announcement bar on the shop</span></label>
-      <div id="mqList" class="mq-list">${marqueeRowsHtml(mq.items)}</div>
-      <div class="mq-actions">
-        <button type="button" class="btn ghost" id="mqAdd">+ Add message</button>
-        <button type="button" class="btn primary" id="mqSave">Save announcement</button>
-      </div>
-    </div>`;
-}
-
-function wireMarquee() {
-  const list = $('#mqList');
-  if (!list) return;
-  const readItems = () => $$('#mqList .mq-input').map(el => el.value);
-  const rerender = items => { list.innerHTML = marqueeRowsHtml(items); };
-
-  $('#mqAdd').onclick = () => {
-    const items = readItems(); items.push('');
-    rerender(items);
-    const inputs = $$('#mqList .mq-input');
-    if (inputs.length) inputs[inputs.length - 1].focus();
-  };
-
-  /* Reorder/remove read the CURRENT input values first, so edits in other
-     rows are never lost when the list is rebuilt. */
-  list.addEventListener('click', e => {
-    const up = e.target.closest('[data-mq-up]');
-    const dn = e.target.closest('[data-mq-down]');
-    const del = e.target.closest('[data-mq-del]');
-    if (!up && !dn && !del) return;
-    const items = readItems();
-    if (up)  { const i = +up.dataset.mqUp;   if (i > 0) { const t = items[i - 1]; items[i - 1] = items[i]; items[i] = t; } }
-    if (dn)  { const i = +dn.dataset.mqDown; if (i < items.length - 1) { const t = items[i + 1]; items[i + 1] = items[i]; items[i] = t; } }
-    if (del) { items.splice(+del.dataset.mqDel, 1); }
-    rerender(items);
-  });
-
-  $('#mqSave').onclick = async () => {
-    const btn = $('#mqSave');
-    btn.disabled = true; const label = btn.textContent; btn.textContent = 'Saving…';
-    try {
-      const items = readItems().map(s => s.trim()).filter(Boolean);
-      const value = { on: $('#mqOn').checked, items };
-      await supa('settings', {
-        method: 'POST',
-        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-        body: { key: 'announcement', value }
-      });
-      DB.settings.announcement = value;
-      toast('Announcement saved');
-    } catch (e) { toast(writeError(e), true); }
-    finally { btn.disabled = false; btn.textContent = label; }
-  };
-}
 
 function viewSettings() {
   return `
@@ -2034,54 +1668,14 @@ function viewSettings() {
       <button class="btn primary" id="saveSettings">Save settings</button>
     </div></div>
 
-    ${viewMarqueePanel()}
-
-    ${viewEngravingPanel()}
-
     <div class="panel">
       <h3>Account</h3>
       <p class="muted">Signed in as <b>${esc(USER && USER.email)}</b><br>
-        Login UID <code>${esc(USER && USER.uid)}</code></p>
-      <div class="f" style="margin-top:14px">
-        <div class="row">
-          <label>New password</label>
-          <input id="pwNew" type="password" autocomplete="new-password" minlength="8">
-          <div class="hint">At least 8 characters. Changing it signs nobody out — it simply
-            applies from the next sign-in.</div>
-        </div>
-        <div class="row">
-          <label>Type it again</label>
-          <input id="pwNew2" type="password" autocomplete="new-password">
-        </div>
-      </div>
-      <button type="button" class="btn primary" id="pwSave">Change password</button>
+        Firebase UID <code>${esc(USER && USER.uid)}</code></p>
     </div>`;
 }
 
-function wirePassword() {
-  const btn = $('#pwSave');
-  if (!btn) return;
-  btn.onclick = async () => {
-    const pw = $('#pwNew').value, pw2 = $('#pwNew2').value;
-    if (pw.length < 8) { toast('Password needs at least 8 characters', true); return; }
-    if (pw !== pw2)    { toast('The two passwords do not match', true); return; }
-    btn.disabled = true; const label = btn.textContent; btn.textContent = 'Saving…';
-    try {
-      await authCall('user', { password: pw }, SESSION && SESSION.access_token, 'PUT');
-      $('#pwNew').value = ''; $('#pwNew2').value = '';
-      toast('Password changed');
-    } catch (e) {
-      toast(/same password/i.test(e.message || '')
-        ? 'That is already the current password.'
-        : ('Could not change it — ' + (e.message || 'try again')), true);
-    } finally { btn.disabled = false; btn.textContent = label; }
-  };
-}
-
 function wireSettings() {
-  wireMarquee();            // the announcement-bar editor is part of this view
-  wireEngraving();          // and the engraving controls
-  wirePassword();           // and the change-password box
   $('#saveSettings').onclick = async () => {
     const btn = $('#saveSettings');
     btn.disabled = true; btn.textContent = 'Saving…';
