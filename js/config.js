@@ -143,41 +143,133 @@ const SERVICES = {
   customBat: { enabled: true }
 };
 
-const FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyBsqvLa_V_XCi189P3Qd61-zd4c4i_E0G8',
-  authDomain: 'toss-cb8c0.firebaseapp.com',
-  projectId: 'toss-cb8c0',
-  storageBucket: 'toss-cb8c0.firebasestorage.app',
-  messagingSenderId: '844825622558',
-  appId: '1:844825622558:web:af838b8d0f707e351e160f',
-  measurementId: 'G-VX9GZ9YREG'
-};
 
-/* Supabase accepts the Firebase ID token as a third-party JWT, so RLS
-   can key off the Firebase uid. Requires Third-Party Auth to be enabled
-   in the Supabase dashboard — see sql/SETUP.md. */
-let firebaseToken = null;
-let tokenRejected = false;      // true when Supabase refuses the Firebase JWT
-const setFirebaseToken = t => { firebaseToken = t; tokenRejected = false; };
+/* ============================================================
+   AUTH — Supabase, and only Supabase
 
-/* Supabase only accepts a Firebase ID token once Firebase is registered as a
-   Third Party Auth provider. Until then it answers 401 PGRST301 to EVERY
-   request — including ones that would have succeeded anonymously. Detect that
-   once at sign-in, fall back to the publishable key so the app still loads,
-   and let the UI say precisely what is wrong. */
+   This used to sign in through Firebase and hand the Firebase ID
+   token to Supabase as a third-party JWT. That handoff has one
+   failure mode and it is a bad one: if Firebase is not registered
+   as a Third Party Auth provider, Supabase answers 401 to EVERY
+   request — including ones that would have succeeded anonymously
+   — and the panel degrades to a signed-in-looking shell where
+   every write is refused with an opaque 403.
+
+   Supabase mints the token its own RLS checks, so that entire
+   class of failure does not exist any more. my_role() already
+   reads auth.jwt()->>'sub' and matches it against staff.uid,
+   which never cared which provider issued the token — only that
+   the subject matches. So the database side is a data migration,
+   not a rewrite. See sql/013-supabase-auth.sql.
+
+   The session lives in localStorage. That is what supabase-js
+   does too, and it is the honest trade for an admin panel with no
+   server to hold an httpOnly cookie: a refresh token in
+   localStorage is readable by any script that gets onto the page,
+   so nothing else third-party should ever be loaded into the Maze
+   Room.
+   ============================================================ */
+
+const SESS_KEY = 'toss_maze_session';
+let SESSION = null;          // { access_token, refresh_token, expires_at, user }
+let refreshTimer = null;
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESS_KEY);
+    SESSION = raw ? JSON.parse(raw) : null;
+  } catch (e) { SESSION = null; }
+  return SESSION;
+}
+
+function saveSession(s) {
+  SESSION = s;
+  try {
+    if (s) localStorage.setItem(SESS_KEY, JSON.stringify(s));
+    else localStorage.removeItem(SESS_KEY);
+  } catch (e) { /* private mode — the session simply will not persist */ }
+  scheduleRefresh();
+}
+
+/** Seconds until the access token expires. Negative once it has. */
+function tokenLife() {
+  if (!SESSION || !SESSION.expires_at) return -1;
+  return SESSION.expires_at - Math.floor(Date.now() / 1000);
+}
+
+/* Refresh a minute before expiry rather than after a request has already
+   failed, so a long session never shows the user an error it could have
+   avoided. Clamped to at least 10s so a clock skew cannot spin this. */
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  if (!SESSION || !SESSION.refresh_token) return;
+  const wait = Math.max(10, tokenLife() - 60) * 1000;
+  refreshTimer = setTimeout(refreshSession, Math.min(wait, 2147483000));
+}
+
+async function authFetch(path, body) {
+  const r = await fetch(SUPA_URL + '/auth/v1/' + path, {
+    method: 'POST',
+    headers: { apikey: SUPA_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {})
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const e = new Error(j.error_description || j.msg || j.message || r.statusText);
+    e.status = r.status; e.code = j.error_code || j.error;
+    throw e;
+  }
+  return j;
+}
+
+function adopt(j) {
+  saveSession({
+    access_token: j.access_token,
+    refresh_token: j.refresh_token,
+    expires_at: j.expires_at || (Math.floor(Date.now() / 1000) + (j.expires_in || 3600)),
+    user: j.user ? { id: j.user.id, email: j.user.email } : (SESSION && SESSION.user) || null
+  });
+  return SESSION;
+}
+
+async function signIn(email, password) {
+  return adopt(await authFetch('token?grant_type=password',
+    { email: String(email).trim(), password: password }));
+}
+
+async function refreshSession() {
+  if (!SESSION || !SESSION.refresh_token) return null;
+  try {
+    return adopt(await authFetch('token?grant_type=refresh_token',
+      { refresh_token: SESSION.refresh_token }));
+  } catch (e) {
+    /* A refresh token is single-use and can be revoked. If it is refused the
+       session is genuinely over — clearing it sends the user back to the
+       login screen rather than leaving them in a shell that cannot write. */
+    saveSession(null);
+    if (typeof onSessionLost === 'function') onSessionLost();
+    return null;
+  }
+}
+
+async function signOut() {
+  const tok = SESSION && SESSION.access_token;
+  saveSession(null);
+  if (!tok) return;
+  try {
+    await fetch(SUPA_URL + '/auth/v1/logout', { method: 'POST',
+      headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + tok } });
+  } catch (e) { /* the local session is already gone, which is what matters */ }
+}
+
+/** Confirms the token the database will actually accept, not the one we hold. */
 async function checkToken() {
-  if (!firebaseToken) return 'anon';
+  if (!SESSION || !SESSION.access_token) return 'anon';
+  if (tokenLife() < 30) await refreshSession();
+  if (!SESSION) return 'anon';
   try {
     const r = await fetch(SUPA_URL + '/rest/v1/products?select=id&limit=1', { headers: supaHeaders() });
-    if (r.status === 401) {
-      const j = await r.json().catch(() => ({}));
-      if (j.code === 'PGRST301' || /jwt/i.test(j.message || '')) {
-        tokenRejected = true;
-        firebaseToken = null;          // degrade to anonymous reads
-        return 'rejected';
-      }
-      return 'unauthorised';
-    }
+    if (r.status === 401) { saveSession(null); return 'rejected'; }
     return r.ok ? 'ok' : 'error';
   } catch (e) { return 'offline'; }
 }
@@ -185,7 +277,9 @@ async function checkToken() {
 function supaHeaders(extra) {
   return Object.assign({
     apikey: SUPA_KEY,
-    Authorization: 'Bearer ' + (firebaseToken || SUPA_KEY),
+    /* Falls back to the publishable key so the storefront — which has no
+       session and never will — keeps reading public data normally. */
+    Authorization: 'Bearer ' + ((SESSION && SESSION.access_token) || SUPA_KEY),
     'Content-Type': 'application/json'
   }, extra || {});
 }

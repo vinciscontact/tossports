@@ -17,42 +17,57 @@ Re-run it in the SQL Editor only if you ever need to reset.
 
 ---
 
-## 2. Turn on Firebase email login — ✅ already done
+## 2. Auth is Supabase — ✅ nothing to configure
 
-Verified against your project `toss-cb8c0`: Email/Password sign-in is enabled.
-Nothing to do here.
+Sign-in used to go through Firebase, and the Firebase token was handed to
+Supabase as a third-party JWT. That handoff had one failure mode and it was a
+bad one: if the provider was not registered, Supabase answered 401 to *every*
+request, and the Maze Room opened into a signed-in-looking shell where nothing
+loaded and every save was refused.
+
+Supabase now issues the token its own policies read, so that whole class of
+failure is gone. There is no second console, no provider to register, and no
+project ID to keep in step.
+
+Verified against your project: the email provider is **enabled** and sign-ups
+are **allowed**.
+
+> **Email confirmation is ON** (`mailer_autoconfirm: false`). A newly created
+> login cannot sign in until its email is confirmed. Either have them click the
+> link, or confirm them yourself under **Authentication → Users**. The Maze Room
+> warns you about this when it creates a login.
 
 ---
 
 ## 3. Create your admin user
 
-Firebase Console → **Authentication** → **Users** → **Add user**.
+Supabase Dashboard → **Authentication** → **Users** → **Add user**.
 
-Use a real email and a strong password. This is the login for the Maze Room,
-so treat it like the key to your till.
+- Use a real email and a strong password — this is the key to your till.
+- Tick **Auto Confirm User** so they can sign in straight away.
 
-Then **copy that user's UID** — the long string in the Users table.
+You do **not** need to copy the user's UID anywhere. `claim_staff()` matches on
+email and binds the account to the staff row the first time they sign in.
 
 ---
 
-## 4. Let Supabase trust Firebase
+## 4. Run the auth migration
 
-This is the step that makes the security real rather than cosmetic.
+Run `sql/013-supabase-auth.sql` in the SQL Editor.
 
-Supabase Dashboard → **Authentication** → **Sign In / Providers** →
-**Third Party Auth** → **Add provider** → **Firebase**.
+`staff.uid` used to hold Firebase UIDs, which no longer match anything. The
+migration clears them so each person re-binds by email on their next sign-in.
+It is safe to run more than once.
 
-Enter your Firebase project ID: `toss-cb8c0`
-
-Without this, Supabase ignores your Firebase login and the admin lock would
-only be a hidden screen, not an actual permission.
+If nobody can get in afterwards, it is because no unclaimed owner row exists —
+the migration raises a warning saying exactly that, with the SQL to fix it.
 
 ---
 
 ## 5. Put yourself on the staff list — ✅ already done
 
-You're on it as **owner**, by email. Your Firebase UID binds itself the first
-time you sign in successfully — nothing to copy or paste.
+You're on it as **owner**, by email. Your Supabase user id binds itself the
+first time you sign in successfully — nothing to copy or paste.
 
 The rest of this section is for adding your team later.
 
@@ -72,9 +87,10 @@ Only people in `staff` can see or change anything. Everyone else — including
 anyone who reads the publishable key out of the page source — can read active
 products and place an order, and nothing more.
 
-Once you're in, add the rest of your team from **Team → Add person**. Each one
-needs a Firebase user created the same way as step 3; paste their UID into their
-staff record so they can log in.
+Once you're in, add the rest of your team from **Team → Add person**. The
+**Create login** button there makes their Supabase account and shows the password
+once — copy it before you close the dialog. Their account binds to the staff row
+the first time they sign in.
 
 ### The four roles
 
@@ -108,7 +124,7 @@ it names the actual failure.
 
 ## 6. Open it
 
-Firebase auth will not run from a `file://` page, so serve the folder:
+Auth will not run from a `file://` page, so serve the folder:
 
 ```bash
 npx serve "C:/TheVincis/Toss analysis/Toss core website"
@@ -124,7 +140,7 @@ Then open the address it prints and add `/maze.html`.
 |---|---|---|
 | Supabase project URL | yes | public endpoint |
 | `sb_publishable_...` key | yes | protected by RLS, not secrecy |
-| Firebase web config | yes | identifiers, not credentials |
+| Supabase publishable key | yes | protected by RLS, not by secrecy |
 | **Postgres password** | **NO** | full database access, bypasses every policy |
 | **`service_role` key** | **NO** | same — bypasses every policy |
 

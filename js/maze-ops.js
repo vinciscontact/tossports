@@ -1129,12 +1129,13 @@ function staffModal(s) {
 }
 
 /* ---------- creating a login ----------
-   Firebase accounts are created through a SECOND app instance. Creating a
-   user on the main instance signs you in as them and throws the founder
-   out mid-job; a secondary instance keeps this session untouched.
+   Supabase's signup endpoint returns a session for the account it just
+   created. Adopting it would sign the founder out and replace them with
+   the person they were adding, mid-job — so the response is read for the
+   user id and the session is thrown away.
 
-   Why this is safe: a Firebase account on its own grants nothing at all.
-   Every policy in the database keys off my_role(), which reads the `staff`
+   Why this is safe: an auth account on its own grants nothing at all.
+   Every policy in the database keys off my_role(), which reads the staff
    table — and only a founder can write that table. The account is the
    doorbell; the staff row is the key. */
 function randomPassword() {
@@ -1157,18 +1158,38 @@ async function createLogin(email, name) {
 
   const pw = randomPassword();
   try {
-    /* a throwaway app instance, torn down straight after */
-    const secondary = firebase.apps.find(a => a.name === 'mk')
-      || firebase.initializeApp(FIREBASE_CONFIG, 'mk');
-    const cred = await secondary.auth().createUserWithEmailAndPassword(email, pw);
-    const uid = cred.user.uid;
-    await secondary.auth().signOut();
-    await secondary.delete().catch(() => {});
+    /* Supabase's public signup endpoint, called directly rather than through
+       the session helpers. The response carries a session for the NEW user,
+       and adopting it would sign the founder out and replace them with the
+       person they just created — so it is read for the user id and then
+       thrown away. This is why signIn() is not used here.
+
+       Creating an account grants nothing on its own. Every policy in the
+       database keys off public.staff, which only an owner can write, so an
+       auth user with no staff row can read exactly what a stranger can. The
+       account is the key; the staff row is the lock. */
+    const res = await fetch(SUPA_URL + '/auth/v1/signup', {
+      method: 'POST',
+      headers: { apikey: SUPA_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: pw })
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const e = new Error(out.msg || out.error_description || out.message || res.statusText);
+      e.code = out.error_code || out.error || String(res.status);
+      throw e;
+    }
+
+    const uid = (out.user && out.user.id) || (out.id) || '';
+    /* No session means the project requires email confirmation, so they
+       cannot sign in until they click the link. Better said now than
+       discovered by someone who cannot get in. */
+    const needsConfirm = !out.access_token && !(out.session && out.session.access_token);
 
     const box = $('#st_uid');
-    if (box) box.value = uid;               /* saved with the form */
+    if (box && uid) box.value = uid;         /* saved with the form */
 
-    /* shown once — Firebase will never reveal this password again */
+    /* shown once — Supabase will never reveal this password again */
     const zone = $('#mkLogin') && $('#mkLogin').parentElement;
     if (zone) zone.innerHTML = `
       <div style="width:100%">
@@ -1179,15 +1200,24 @@ async function createLogin(email, name) {
         </div>
         <div class="hint" style="margin-top:6px">This password is shown once and cannot be
           recovered — copy it before closing. ${esc(name || 'They')} should change it after
-          signing in. Press <b>Save changes</b> to finish adding them to the team.</div>
+          signing in. Press <b>Save changes</b> to finish adding them to the team.${
+          needsConfirm ? ' <b>They must confirm their email before they can sign in</b> — ' +
+            'Supabase is set to require it. You can confirm them yourself under ' +
+            'Authentication → Users.' : ''}</div>
       </div>`;
     toast('Login created');
   } catch (e) {
     const c = (e && e.code) || '';
     const msg =
-      c === 'auth/email-already-in-use' ? 'That email already has a login — paste their existing UID instead, or use another address.'
-      : c === 'auth/operation-not-allowed' ? 'Firebase is refusing new accounts. Turn on Email/Password sign-up in Firebase Console → Authentication → Sign-in method.'
-      : c === 'auth/weak-password' ? 'Firebase rejected the generated password. Try again.'
+      /already registered|already been registered|user_already_exists/i.test(c + ' ' + (e.message || ''))
+        ? 'That email already has a login. Add them by email instead — their account binds ' +
+          'itself to the staff row the next time they sign in.'
+      : /signup.*disabled|signups_not_allowed/i.test(c + ' ' + (e.message || ''))
+        ? 'This Supabase project has sign-ups disabled, so a login cannot be created from ' +
+          'here. Add the user under Authentication → Users in the Supabase dashboard, ' +
+          'then add them to the team by email.'
+      : /weak.?password|password/i.test(c)
+        ? 'Supabase rejected the generated password. Try again.'
       : (e && e.message) || 'Could not create the login';
     toast(msg, true);
     if (btn) { btn.disabled = false; btn.textContent = 'Create login'; }

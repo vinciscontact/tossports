@@ -1,7 +1,7 @@
 /* ============================================================
    MAZE ROOM — Toss Sports admin
 
-   Auth is Firebase; data is Supabase. The Firebase ID token is
+   Auth and data are both Supabase. The access token Supabase
    passed to Supabase as a third-party JWT so Row Level Security
    can check the uid against the `admins` table. The UI hiding
    itself is a convenience — the database is what actually says no.
@@ -58,9 +58,16 @@ function toast(msg, bad) {
   toastT = setTimeout(() => el.className = 'toast', 2600);
 }
 
-/* ---------------- auth ---------------- */
-firebase.initializeApp(FIREBASE_CONFIG);
-const auth = firebase.auth();
+/* ---------------- auth ----------------
+
+   Supabase Auth, directly. No Firebase SDK, no third-party token
+   handoff, nothing to configure in a second console — the token
+   Supabase issues is the token its own RLS reads.
+
+   The panel is only shown once the database has actually accepted
+   the token. Showing the shell first and discovering the token is
+   refused afterwards is how this used to leave someone stranded on
+   "Loading store…" looking signed in, with every write refused. */
 
 $('#loginForm').onsubmit = async e => {
   e.preventDefault();
@@ -68,9 +75,10 @@ $('#loginForm').onsubmit = async e => {
   btn.disabled = true; btn.textContent = 'Signing in…';
   err.classList.add('hide');
   try {
-    await auth.signInWithEmailAndPassword($('#email').value.trim(), $('#password').value);
+    await signIn($('#email').value, $('#password').value);
+    await enterPanel();
   } catch (ex) {
-    err.textContent = friendlyAuthError(ex);
+    err.innerHTML = friendlyAuthError(ex);
     err.classList.remove('hide');
   } finally {
     btn.disabled = false; btn.textContent = 'Sign in';
@@ -78,41 +86,78 @@ $('#loginForm').onsubmit = async e => {
 };
 
 function friendlyAuthError(ex) {
-  const c = ex && ex.code || '';
-  if (c.includes('invalid-credential') || c.includes('wrong-password') || c.includes('user-not-found'))
+  const c = String((ex && (ex.code || '')) || '');
+  const m = String((ex && ex.message) || '');
+  if (/invalid_credentials|invalid_grant/i.test(c + m) || /Invalid login/i.test(m))
     return 'That email and password combination is not recognised.';
-  if (c.includes('too-many-requests'))
+  if (/email_not_confirmed/i.test(c + m))
+    return 'That account exists but its email has not been confirmed. ' +
+           'In Supabase → Authentication → Users, open the user and confirm it.';
+  if (/over_request_rate_limit|too many/i.test(c + m))
     return 'Too many attempts. Wait a minute and try again.';
-  if (c.includes('operation-not-allowed'))
-    return 'Email/password sign-in is not enabled yet in the Firebase console. See sql/SETUP.md step 2.';
-  if (c.includes('network'))
-    return 'Cannot reach Firebase. Check your connection.';
-  return ex.message || 'Sign-in failed.';
+  if (/signup.*disabled|not enabled/i.test(m))
+    return 'Email sign-in is disabled for this project. Supabase → Authentication → ' +
+           'Providers → Email.';
+  if (/Failed to fetch|NetworkError/i.test(m))
+    return 'Cannot reach Supabase. Check your connection.';
+  return esc(m) || 'Sign-in failed.';
 }
 
-$('#logout').onclick = () => auth.signOut();
+$('#logout').onclick = async () => { await signOut(); showGate(); };
 
-auth.onAuthStateChanged(async user => {
-  USER = user;
-  if (!user) {
-    setFirebaseToken(null);
-    $('#gate').classList.remove('hide');
-    $('#shell').classList.add('hide');
+function showGate() {
+  USER = null; ME = null; AUTH = 'anon';
+  $('#gate').classList.remove('hide');
+  $('#shell').classList.add('hide');
+  const p = $('#password'); if (p) p.value = '';
+}
+
+/* Called by config.js when a refresh token is refused mid-session, so an
+   expired session lands on the login screen instead of a dead panel. */
+function onSessionLost() {
+  showGate();
+  const err = $('#loginErr');
+  if (err) { err.textContent = 'Your session expired. Sign in again.'; err.classList.remove('hide'); }
+}
+
+async function enterPanel() {
+  USER = SESSION && SESSION.user;
+  AUTH = await checkToken();
+
+  if (AUTH !== 'ok') {
+    /* Do not open the shell on a token the database will not accept. */
+    await signOut();
+    const err = $('#loginErr');
+    err.innerHTML = AUTH === 'offline'
+      ? 'Signed in, but the database is unreachable. Check your connection.'
+      : 'Signed in, but the database refused the session. ' +
+        'If this persists, the project URL or publishable key in config.js is wrong.';
+    err.classList.remove('hide');
     return;
   }
-  setFirebaseToken(await user.getIdToken());
-  AUTH = await checkToken();
-  /* bind this Firebase login to the staff record the owner added by email */
-  if (AUTH === 'ok') { try { await supaRpc('claim_staff'); } catch (e) { console.warn('claim_staff', e.message); } }
-  /* refresh the token before it expires so long sessions keep working */
-  setInterval(async () => setFirebaseToken(await user.getIdToken(true)), 45 * 60 * 1000);
+
+  /* Bind this login to the staff row an owner added by email. Runs on every
+     sign-in, not just the first: it is idempotent, and a staff row added
+     after someone's account exists still needs claiming. */
+  try { await supaRpc('claim_staff'); }
+  catch (e) { console.warn('claim_staff:', e.message); }
 
   $('#gate').classList.add('hide');
   $('#shell').classList.remove('hide');
-  $('#who').textContent = user.email;
+  $('#who').textContent = (USER && USER.email) || '';
   await loadAll();
   render();
-});
+}
+
+/* Resume a session from a previous visit. Anything wrong with it — expired,
+   revoked, refused — ends on the login screen rather than a half-open panel. */
+(async function resume() {
+  loadSession();
+  if (!SESSION || !SESSION.access_token) { showGate(); return; }
+  if (tokenLife() < 60) await refreshSession();
+  if (!SESSION) { showGate(); return; }
+  try { await enterPanel(); } catch (e) { console.warn(e); showGate(); }
+})();
 
 /* ---------------- data ---------------- */
 let lastLoadError = null;
@@ -339,16 +384,11 @@ function checkSetup() {
   /* Order matters: a rejected token makes every read fail, which used to look
      exactly like an empty database. Diagnose the auth layer first. */
   if (AUTH === 'rejected') {
-    msg = `<b>Supabase is rejecting your Firebase login.</b>
-      Your email and password were correct — Firebase signed you in — but Supabase
-      will not accept a Firebase token until you register Firebase as a third-party
-      auth provider. Until then nothing here can load or save.
-      <br><br><b>Fix it in one step:</b> Supabase Dashboard →
-      <b>Authentication</b> → <b>Sign In / Providers</b> → <b>Third Party Auth</b> →
-      <b>Add provider</b> → <b>Firebase</b>, and enter project ID
-      <code>${esc(FIREBASE_CONFIG.projectId)}</code>. Then reload this page.
-      <br><br><span style="opacity:.7">Showing public data only, read-only.
-      Your Firebase UID is <code>${esc(USER && USER.uid)}</code> — you'll need it next.</span>`;
+    msg = `<b>The database refused your session.</b>
+      Your sign-in worked, but Supabase would not accept the token it issued. That
+      normally means the project URL or publishable key in <code>js/config.js</code>
+      does not match this project.
+      <br><br><span style="opacity:.7">Showing public data only, read-only.</span>`;
   } else if (!DB.products.length && lastLoadError) {
     msg = `Could not read the database — <code>${esc(lastLoadError.message)}</code>
            (HTTP ${esc(lastLoadError.status)} on <code>${esc(lastLoadError.q)}</code>).`;
@@ -356,13 +396,13 @@ function checkSetup() {
     msg = `No products found. Run <code>sql/schema.sql</code> in the Supabase SQL Editor
            to create the tables and seed your 29 bats.`;
   } else if (!ME) {
-    msg = `You are signed in to Firebase, but you are not on the staff list — so the database
-           is giving you nothing. Add yourself with this SQL, then reload:
-           <br><br><code>insert into public.staff (uid, name, email, role)
-           values ('${esc(USER && USER.uid)}', 'Your Name', '${esc(USER && USER.email)}', 'owner');</code>
-           <br><br>If that runs but nothing changes, Firebase is not yet enabled as a
-           <b>Third Party Auth</b> provider in Supabase (step 4 of <code>sql/SETUP.md</code>) —
-           without it Supabase ignores your login entirely.`;
+    msg = `You are signed in, but you are not on the staff list — so the database is
+           handing you nothing back. An owner adds you by email, and your login binds
+           itself to that row the next time you sign in:
+           <br><br><code>insert into public.staff (name, email, role)
+           values ('Your Name', '${esc(USER && USER.email)}', 'owner');</code>
+           <br><br>Then sign out and back in. <code>claim_staff()</code> matches on
+           email and fills in the rest.`;
   }
   b.innerHTML = msg;
   b.classList.toggle('hide', !msg);
@@ -1562,9 +1602,9 @@ function wirePhotoUpload(productId) {
 function writeError(e) {
   const m = (e && e.message || '').toLowerCase();
   if (m.includes('row-level') || m.includes('policy') || m.includes('permission'))
-    return 'The database refused the write — your Firebase UID is not an admin. See SETUP.md steps 4–5.';
+    return 'The database refused the write — your account is not an admin. Ask a founder to set your role, or see sql/SETUP.md.';
   if (m.includes('jwt') || m.includes('token'))
-    return 'Login token rejected by Supabase. Enable Firebase Third Party Auth (SETUP.md step 4).';
+    return 'Your session expired or was refused. Sign out and back in.';
   return e.message || 'Save failed';
 }
 
@@ -1676,7 +1716,7 @@ function viewSettings() {
     <div class="panel">
       <h3>Account</h3>
       <p class="muted">Signed in as <b>${esc(USER && USER.email)}</b><br>
-        Firebase UID <code>${esc(USER && USER.uid)}</code></p>
+        Supabase user <code>${esc(USER && USER.id)}</code></p>
     </div>`;
 }
 
