@@ -201,6 +201,11 @@ const DOCK_ICON = (() => {
     boards:   s('<path d="M7 4h10v4a5 5 0 0 1-10 0Z"/><path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3"/><path d="M12 13v4m-4 4h8m-4-4v4"/>'),
     coupons:  s('<path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2.5 2.5 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2.5 2.5 0 0 0 0-4Z"/><path d="M13 7v2m0 6v2m0-6v2"/>'),
     scores:   s('<rect x="2.5" y="7" width="19" height="10" rx="5"/><path d="M7.5 10v4M5.5 12h4"/><circle cx="16" cy="11" r=".8" fill="currentColor"/><circle cx="18.5" cy="13" r=".8" fill="currentColor"/>'),
+    /* Activity had no icon and silently fell back to the dashboard's, so two
+       different sections rendered the same picture in the dock with nothing
+       to tell them apart. A clock with a rewind arrow — it is the audit
+       trail, a record of what already happened. */
+    activity: s('<path d="M3.2 10.5A9 9 0 1 1 5 16.2"/><path d="M3 5.5v5h5"/><path d="M12 7.5V12l3 1.8"/>'),
     insights: s('<path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.5.4.8 1 .9 1.7h5.4c.1-.7.4-1.3.9-1.7A6 6 0 0 0 12 3Z"/>'),
     branches: s('<path d="M3 21h18"/><path d="M5 21V8l5-4 5 4v13"/><path d="M15 21V11l4 2v8"/><path d="M8.5 12h3M8.5 16h3"/>'),
     settings: s('<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 6.9l2 1.2M17.5 15.9l2 1.2M2.8 12h2.4M18.8 12h2.4M4.5 17.1l2-1.2M17.5 8.1l2-1.2"/>')

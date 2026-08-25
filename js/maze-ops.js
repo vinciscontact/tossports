@@ -1600,7 +1600,7 @@ function wireRequests() {
     const id = Number(b.dataset.quote);
     const row = REQ.rows.find(r => r.id === id);
     if (!row) return;
-    modal('Quote this request', `
+    openModal('Quote this request', `
       <div class="row"><label>Amount (₹)</label>
         <input id="q_amt" type="number" value="${row.quote != null ? row.quote : ''}"></div>
       <div class="row"><label>Discount code to give them</label>
@@ -1683,7 +1683,7 @@ function wireQAAdmin() {
   $$('[data-ans]').forEach(b => b.onclick = () => {
     const id = Number(b.dataset.ans), row = QA.rows.find(r => r.id === id);
     if (!row) return;
-    modal('Answer this question', `
+    openModal('Answer this question', `
       <div class="row"><label>Question</label>
         <p class="hint">${esc(row.question)}</p></div>
       <div class="row"><label>Your answer</label>
@@ -1836,7 +1836,7 @@ function wireFulfil() {
   $$('[data-ship]').forEach(b => b.onclick = () => {
     const id = b.dataset.ship, o = FUL.rows.find(x => x.id === id);
     if (!o) return;
-    modal('Tracking for ' + id, `
+    openModal('Tracking for ' + id, `
       <div class="row"><label>Courier</label>
         <select id="s_cour">
           <option value="">Choose…</option>
