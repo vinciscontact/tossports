@@ -186,6 +186,15 @@ create trigger pq_sanitise_ins
 -- It returns only what a tracking page needs. Address, email and
 -- payment id are deliberately not in the result.
 -- ------------------------------------------------------------
+-- Dropped first, not merely replaced. CREATE OR REPLACE cannot change a
+-- function's return type, and 012 later widens this one to carry the courier
+-- columns. On a database where 012 has already run, re-running this file — or
+-- the consolidated COMPLETE-SCHEMA — would hit the 10-column version with a
+-- 7-column definition and fail with "cannot change return type of existing
+-- function". Dropping makes this file re-runnable from any state, which is
+-- the whole promise made at the top of it.
+drop function if exists public.track_order(text, text);
+
 create or replace function public.track_order(p_id text, p_phone text)
 returns table (
   id text, status text, total integer, method text,

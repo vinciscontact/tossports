@@ -48,6 +48,61 @@ const HAZARDS = [
   [/^\s*\\/m,                            'psql meta-command']
 ];
 
+/* ------------------------------------------------------------
+   Catch the one mistake this file cannot survive.
+
+   CREATE OR REPLACE FUNCTION cannot change a function's return
+   type. If migration A defines f() returning one shape and
+   migration B redefines it with another, B must DROP first — and
+   so must A, or re-running the set against a database already at
+   B fails with "cannot change return type of existing function".
+
+   That is exactly how COMPLETE-SCHEMA broke: 012 widened
+   track_order to carry courier columns and dropped correctly,
+   011 did not, so any re-run after 012 died at section 11.
+
+   This walks every function defined more than once, compares the
+   full RETURNS clause, and refuses to build if two definitions
+   disagree without a drop guarding them.
+   ------------------------------------------------------------ */
+function checkReturnTypes(order, dir) {
+  const seen = {};
+  order.forEach(([file]) => {
+    const sql = fs.readFileSync(path.join(dir, file), 'utf8');
+    const re = /create or replace function\s+(?:public\.)?([a-z_]+)\s*\(([^)]*)\)([\s\S]*?)\blanguage\b/gi;
+    let m;
+    while ((m = re.exec(sql))) {
+      const name = m[1];
+      const arity = m[2].trim() === '' ? 0 : m[2].split(',').length;
+      const returns = (m[3].match(/returns([\s\S]*)/i) || ['', ''])[1]
+        .replace(/\s+/g, ' ').trim().toLowerCase();
+      const hasDrop = new RegExp('drop\\s+function\\s+if\\s+exists\\s+(public\\.)?' + name, 'i').test(sql);
+      const key = name + '/' + arity;
+      (seen[key] = seen[key] || []).push({ file, returns, hasDrop });
+    }
+  });
+
+  const problems = [];
+  Object.entries(seen).forEach(([key, defs]) => {
+    if (defs.length < 2) return;
+    const shapes = new Set(defs.map(d => d.returns));
+    if (shapes.size < 2) return;                    // same shape every time, fine
+    const undropped = defs.filter(d => !d.hasDrop);
+    if (undropped.length) {
+      problems.push(key + ' changes return type but ' +
+        undropped.map(d => d.file).join(', ') + ' has no "drop function if exists"');
+    }
+  });
+  return problems;
+}
+
+const returnProblems = checkReturnTypes(ORDER, DIR);
+if (returnProblems.length) {
+  console.error('Refusing to build — a function changes shape without a drop:');
+  returnProblems.forEach(p => console.error('  ' + p));
+  process.exit(1);
+}
+
 const parts = [];
 let hazardFound = false;
 
