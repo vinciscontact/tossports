@@ -1442,6 +1442,23 @@ canvas.gp-cv{display:block;width:100%;height:auto;image-rendering:pixelated;
 .card-art::after{content:'';position:absolute;inset:0;
   background:radial-gradient(58% 46% at 50% 42%,rgba(61,61,168,.4),transparent 70%)}
 .card-art .bat-art{position:relative;z-index:1}
+/* A photo cannot be sized the way the drawing was.
+
+   .card-art gets its height from aspect-ratio, and a percentage height on a
+   grid item does not reliably resolve against that — so height:86% fell back
+   to a share of the image's OWN height. A 191x1319 cut-out rendered 1134px
+   tall inside a 226px card, and overflow:hidden left you looking at a slice
+   of the handle.
+
+   The sizes are explicit rather than left to insets. For an absolutely
+   positioned REPLACED element, width:auto and height:auto resolve to the
+   image intrinsic size and the bottom offset is simply ignored — insets
+   stretch a div, not an img. So inset:0 supplies a definite containing box,
+   100%/100% fills it, padding insets the bat, and object-fit letterboxes.
+   The extra specificity is deliberate: it has to beat .card-art .bat-art
+   above, which pins position to relative. */
+.card-art img.bat-photo{position:absolute;inset:0;z-index:1;
+  width:100%;height:100%;object-fit:contain;padding:7% 9%;box-sizing:border-box}
 .badges{position:absolute;top:11px;left:11px;z-index:2;display:flex;flex-direction:column;
   gap:5px;align-items:flex-start}
 .badge{background:var(--orange);color:var(--navy-900);font-size:.63rem;font-weight:900;
