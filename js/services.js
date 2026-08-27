@@ -330,6 +330,18 @@ function viewService(slug) {
     <div class="wrap svc-wrap">
       <form class="svc-form" id="svcForm" data-kind="${kind}" novalidate>
 
+        <!-- Fills as the required fields are answered. A four-step form
+             feels shorter when you can see where the end is. -->
+        <div class="svc-prog" id="svcProg">
+          <span class="svc-prog-track" aria-hidden="true"><i id="svcProgFill"></i></span>
+          <span class="svc-prog-txt" id="svcProgTxt"></span>
+        </div>
+
+        <!-- Filled in only when a submit fails. Outlining the field in place
+             is no help if it is three screens up. -->
+        <div class="svc-errbox hide" id="svcErr" role="alert" tabindex="-1"></div>
+
+
         ${groups.map(g => `
           <fieldset class="svc-group">
             <legend class="sr-only">${esc(g.name)}</legend>
@@ -426,7 +438,11 @@ async function svcUpload(file, kind) {
     body: blob
   });
   if (!res.ok) throw new Error('Upload failed — check your connection and try again.');
-  return `${SUPA_URL}/storage/v1/object/public/requests/${path}`;
+  /* The PATH, not a public URL. The `requests` bucket is private: it holds
+     photos of people's homes and the videos the consent box asks about, and
+     a public bucket is listable by anyone. The Maze Room signs these on
+     demand, which is also what keeps them readable only by staff. */
+  return path;
 }
 
 /* ---------- wiring ---------- */
@@ -467,6 +483,10 @@ function wireService(slug) {
     $$('[data-rm]', thumbs).forEach(b => b.onclick = () => {
       files.splice(+b.dataset.rm, 1); paint();
     });
+    /* Photos are a required step on most of these forms, and they arrive
+       through the picker rather than a form field, so the bar has to be told
+       here or it would sit one step behind all the way to submit. */
+    if (typeof paintProgress === 'function') paintProgress();
   }
 
   /* Read every field back off the DOM by its declared key, so adding a
@@ -490,34 +510,87 @@ function wireService(slug) {
     return out;
   }
 
-  function firstMissing(data) {
-    for (const box of $$('.svc-f', form)) {
-      if (!box.dataset.req) continue;
+  /* Every required box, with whether it is satisfied and what to call it if
+     it is not. One pass feeds both the progress bar and the error list, so
+     the two can never disagree about what is outstanding. */
+  function requiredState(data) {
+    const out = [];
+    $$('.svc-f', form).forEach(box => {
+      if (!box.dataset.req) return;
       const k = box.dataset.k;
-      if (k === '__photos') { if (files.length < ph.min) return box; continue; }
-      if (!data[k]) return box;
+      const label = (($('label', box) || {}).textContent || k || 'This')
+        .replace(/\s*required\s*$/i, '').trim();
+      if (k === '__photos') { out.push({ box, ok: files.length >= ph.min, label: val(ph.label) }); return; }
+      let ok = !!data[k];
+      if (k === 'phone' && ok) ok = data.phone.replace(/\D/g, '').length >= 10;
+      out.push({ box, ok, label });
+    });
+    if (s.consent) {
+      const box = $('.svc-consent', form);
+      if (box) out.push({ box, ok: $('#svcConsent').checked, label: 'Permission to use the video' });
     }
-    if (data.phone && data.phone.replace(/\D/g, '').length < 10) return $('[data-k="phone"]', form);
-    if (s.consent && !$('#svcConsent').checked) return $('.svc-consent', form);
-    return null;
+    return out;
   }
+
+  function firstMissing(data) {
+    const bad = requiredState(data).find(r => !r.ok);
+    return bad ? bad.box : null;
+  }
+
+  /* Redrawn on every input, so it tracks typing rather than only submits. */
+  function paintProgress() {
+    const fill = $('#svcProgFill'), txt = $('#svcProgTxt');
+    if (!fill) return;
+    const st = requiredState(collect());
+    const done = st.filter(r => r.ok).length;
+    const pct = st.length ? Math.round((done / st.length) * 100) : 0;
+    fill.style.width = pct + '%';
+    txt.textContent = done === st.length
+      ? 'All set — send it over'
+      : done + ' of ' + st.length + ' answered';
+    $('#svcProg').classList.toggle('done', done === st.length);
+  }
+
+  /* input covers typing, change covers radios, selects and the file picker.
+     Both are needed: a radio fires change but never input. */
+  form.addEventListener('input', paintProgress);
+  form.addEventListener('change', paintProgress);
+  paintProgress();
 
   form.onsubmit = async e => {
     e.preventDefault();
     const data = collect();
 
-    const bad = firstMissing(data);
-    if (bad) {
+    const state = requiredState(data);
+    const missing = state.filter(r => !r.ok);
+    const errBox = $('#svcErr');
+
+    if (missing.length) {
       $$('.svc-f', form).forEach(b => b.classList.remove('err'));
-      bad.classList.add('err');
-      bad.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      const el = $('input,select,textarea', bad); if (el) el.focus({ preventScroll: true });
-      stat.textContent = bad.classList.contains('svc-consent')
-        ? 'Please tick the permission box so we can use the video.'
-        : 'Fill this in and we can send it.';
-      stat.className = 'svc-stat bad';
+      missing.forEach(r => r.box.classList.add('err'));
+
+      /* Say everything that is outstanding, up here, with a jump to each.
+         Marking fields in place only helps if you can see them. */
+      errBox.innerHTML =
+        `<b>${missing.length === 1 ? 'One thing is missing' : missing.length + ' things are missing'}</b>
+         <ul>${missing.map((r, i) =>
+           `<li><button type="button" data-jump="${i}">${esc(r.label)}</button></li>`).join('')}</ul>`;
+      errBox.classList.remove('hide');
+      $$('[data-jump]', errBox).forEach(b => b.onclick = () => {
+        const r = missing[+b.dataset.jump];
+        r.box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        const el = $('input,select,textarea', r.box);
+        if (el) setTimeout(() => el.focus({ preventScroll: true }), 260);
+      });
+      errBox.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      errBox.focus({ preventScroll: true });
+
+      stat.textContent = '';
+      stat.className = 'svc-stat';
       return;
     }
+    errBox.classList.add('hide');
+    $$('.svc-f', form).forEach(b => b.classList.remove('err'));
 
     send.disabled = true;
     const customer = { name: data.name, phone: data.phone };
@@ -815,19 +888,27 @@ function communityHTML() {
 
 function servicesBandHTML() {
   const S = SERVICES;
+  /* `c` is the button label. Naming the action beats a generic "Learn more"
+     on all six — it tells you what happens next before you commit. */
   const cards = [
     S.batDoctor.enabled && { k: 'bat_doctor', href: '#/service/bat-doctor', t: 'Bat Doctor',
-      d: 'Cracked, loose or dead? Send a photo, get a price before you post it.' },
+      d: 'Cracked, loose or dead? Send a photo, get a price before you post it.',
+      c: 'Send a photo' },
     S.customBat.enabled && { k: 'custom_bat', href: '#/service/custom', t: 'Build your own',
-      d: 'Your wood, your profile, your weight. Cut by hand to your spec.' },
+      d: 'Your wood, your profile, your weight. Cut by hand to your spec.',
+      c: 'Start a build' },
     S.tradeIn.enabled && { k: 'trade_in', href: '#/service/trade-in', t: 'Trade in your old bat',
-      d: 'We value it, you get that much off a new one.' },
+      d: 'We value it, you get that much off a new one.',
+      c: 'Get a valuation' },
     S.wholesale.enabled && { k: 'wholesale', href: '#/service/wholesale', t: 'Bulk & wholesale',
-      d: `Club and academy rates from ${S.wholesale.min} bats.` },
+      d: `Club and academy rates from ${S.wholesale.min} bats.`,
+      c: 'Get club rates' },
     S.jersey.enabled && { k: 'jersey', href: '#/service/jersey', t: 'Team jerseys',
-      d: 'Names, numbers and your crest, printed to order.' },
+      d: 'Names, numbers and your crest, printed to order.',
+      c: 'Kit the team out' },
     S.video.enabled && { k: 'video', href: '#/service/video', t: `Send a video, get ${S.video.rewardOff}% off`,
-      d: 'Film yourself playing. If we use it, you get money off.' }
+      d: 'Film yourself playing. If we use it, you get money off.',
+      c: 'Send a video' }
   ].filter(Boolean);
   if (!cards.length) return '';
 
@@ -846,13 +927,20 @@ function servicesBandHTML() {
           /* Colour is passed as a custom property rather than baked into a
              class per service. One rule set styles all six, and adding a
              seventh service means adding a colour, not a stylesheet. */
+          /* The whole card is the link. The pill below only LOOKS like a
+             button — a real <button> or a second <a> inside this one would
+             be invalid markup, and it would shrink the tap target to itself
+             on the phones most of this traffic comes from. */
           return `
           <a class="svcband-card rv" href="${c.href}"
              style="--svc:${id.accent};--svc-tint:${id.tint}">
+            <span class="svcband-wash" aria-hidden="true"></span>
             <span class="svcband-art">${SVC_ART[id.art] || ICON.star}</span>
-            <b>${esc(c.t)}</b>
-            <p>${esc(c.d)}</p>
-            <span class="svcband-go">${ICON.arrow}</span>
+            <span class="svcband-info">
+              <b>${esc(c.t)}</b>
+              <p>${esc(c.d)}</p>
+            </span>
+            <span class="svcband-btn">${esc(c.c || 'Open')}</span>
           </a>`;
         }).join('')}
       </div>

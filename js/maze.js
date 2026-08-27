@@ -16,7 +16,8 @@ const when = t => t ? new Date(t).toLocaleString('en-IN', { dateStyle: 'medium',
 
 let DB = { products: [], orders: [], coupons: [], scores: [], settings: {},
            categories: [{ id: 'bats', name: 'Bats', sort: 0 }], catSynced: false,
-           branches: [], stock: [], brSynced: false };
+           branches: [], stock: [], brSynced: false,
+           psGroups: [], playstyles: [], prodStyles: [], psSynced: false };
 
 /* Which branch the screen is showing. '' = every branch combined, which
    only a founder may choose; a manager is pinned to their own and the
@@ -264,7 +265,8 @@ async function loadAll() {
     }
   };
   const [products, orders, coupons, scores, settings, invoices, categories,
-         branches, stock, monthPL, perf, bestSeller, deadStock, loyalty] = await Promise.all([
+         branches, stock, monthPL, perf, bestSeller, deadStock, loyalty,
+         psGroups, playstyles, prodStyles] = await Promise.all([
     get('products?select=*&order=sort.asc', []),
     get('orders?select=*&order=created_at.desc&limit=200', []),
     get('coupons?select=*&order=unlock_runs.asc', []),
@@ -280,7 +282,12 @@ async function loadAll() {
     get('v_product_performance?select=*&order=profit.desc', null),
     get('v_month_best_seller?select=*&rank=eq.1&order=month.desc', null),
     get('v_dead_stock?select=*&order=tied_up.desc', null),
-    get('v_customer_loyalty?select=*&order=spend.desc&limit=200', null)
+    get('v_customer_loyalty?select=*&order=spend.desc&limit=200', null),
+    /* play styles — null means 017 has not been run, which the Bats tab
+       reports rather than showing an empty manager that saves nothing */
+    get('playstyle_groups?select=*&order=sort.asc', null),
+    get('playstyles?select=*&order=sort.asc', null),
+    get('product_playstyles?select=*', null)
   ]);
   DB.products = products || [];
   DB.orders   = orders   || [];
@@ -293,6 +300,13 @@ async function loadAll() {
   DB.brSynced = Array.isArray(branches);
   DB.branches = DB.brSynced && branches.length ? branches : [];
   DB.stock = Array.isArray(stock) ? stock : [];
+
+  /* All three tables arrive together or not at all — 017 creates them in one
+     migration — so one flag covers the whole feature. */
+  DB.psSynced   = Array.isArray(playstyles) && Array.isArray(psGroups);
+  DB.psGroups   = DB.psSynced ? psGroups   : [];
+  DB.playstyles = DB.psSynced ? playstyles : [];
+  DB.prodStyles = Array.isArray(prodStyles) ? prodStyles : [];
 
   /* AN.live tells every screen whether it is showing complete figures
      from the database or falling back to whatever the browser downloaded */
@@ -714,6 +728,7 @@ function viewProducts() {
       <span class="sp">
         ${exportBar('products')}
         <button class="btn ghost sm" id="catManage">Categories…</button>
+        <button class="btn ghost sm" id="psManage">Play styles…</button>
         <button class="btn primary sm" id="pNew">+ New product</button>
       </span>
     </div>
@@ -817,6 +832,7 @@ function wireProducts() {
   }, (BRANCH ? branchName(BRANCH) + ' only. ' : '') +
      'Stock value uses cost price. Products with no cost recorded count as zero.');
   $('#catManage').onclick = manageCategories;
+  $('#psManage').onclick = managePlaystyles;
   $('#pNew').onclick = () => editProduct(null);
   $$('[data-edit]').forEach(b => b.onclick = () => editProduct(b.dataset.edit));
   $$('[data-move]').forEach(b => b.onclick = () => moveStock(b.dataset.move));
@@ -1169,6 +1185,199 @@ function moveStock(productId) {
   });
 }
 
+/* ============================================================
+   PLAY STYLES — marketing bats by the player, not the timber
+
+   A category says what a product IS and a product has one. A
+   play style says who it is FOR, and a bat has several: the
+   Toss Power X is an attacker's bat that happens to pick up
+   light. So this is a separate axis with its own join table,
+   not a second use of products.category.
+
+   Two groups ship with it — "Best for" and "Weight feel" — and
+   the owner can add styles to either.
+   ============================================================ */
+
+const stylesOf   = pid => DB.prodStyles.filter(r => r.product_id === pid).map(r => r.playstyle_id);
+const styleById  = id => DB.playstyles.find(s => s.id === id);
+const styleName  = id => (styleById(id) || {}).name || id;
+const stylesIn   = gid => DB.playstyles.filter(s => s.group_id === gid)
+                                       .sort((a, b) => a.sort - b.sort);
+const batCount   = sid => DB.prodStyles.filter(r => r.playstyle_id === sid).length;
+/* A bat nobody has confirmed still carries the suggester's rows. Showing
+   that in the manager is the difference between "the owner agreed" and
+   "nobody has looked yet". */
+const autoCount  = sid => DB.prodStyles.filter(r => r.playstyle_id === sid && r.auto).length;
+
+function managePlaystyles() {
+  if (!DB.psSynced) {
+    openModal('Play styles', `<div class="f"><div class="hint">The play-style tables are not
+      in the database yet. Run <code>sql/017-playstyles.sql</code> once in the Supabase SQL
+      editor, reload this page, and this screen goes live with every bat already
+      suggested.</div></div>`);
+    return;
+  }
+
+  const group = g => `
+    <div class="ps-group">
+      <h4>${esc(g.name)}</h4>
+      <p class="hint">${esc(g.hint || '')}</p>
+      ${stylesIn(g.id).map(s => {
+        const n = batCount(s.id), a = autoCount(s.id);
+        return `<div class="att-row${s.active ? '' : ' off'}">
+          <span style="flex:1">
+            <b>${esc(s.emoji || '')} ${esc(s.name)}</b>
+            <span class="pid">${esc(s.id)}</span>
+            ${s.tagline ? `<br><span class="muted">${esc(s.tagline)}</span>` : ''}
+          </span>
+          <span class="muted" style="flex:none">${n} bat${n === 1 ? '' : 's'}${
+            a ? ` · <span title="Suggested, not yet confirmed by you">${a} auto</span>` : ''}</span>
+          <button class="btn ghost sm" data-psedit="${esc(s.id)}">Edit</button>
+          <button class="btn danger sm" data-psdel="${esc(s.id)}"
+            ${n ? 'disabled title="Remove it from every bat first"' : ''}>Delete</button>
+        </div>`;
+      }).join('') || '<p class="muted">Nothing in this group yet.</p>'}
+      <div class="row" style="margin-top:10px">
+        <input class="ps-new" data-psadd="${esc(g.id)}" placeholder="Add a style to ${esc(g.name)} — e.g. Finisher">
+      </div>
+    </div>`;
+
+  openModal('Play styles', `
+    <div class="f">
+      <p class="hint">These are the chips a customer filters by on the shop, and the
+        landing pages search engines see. A bat can carry several.</p>
+      ${DB.psGroups.sort((a, b) => a.sort - b.sort).map(group).join('')}
+      <div class="row" style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
+        <button type="button" class="btn ghost sm" id="psAuto">Suggest tags for every bat</button>
+        <div class="hint">Reads each bat's profile, edge and weight and fills in what it can.
+          It never changes a bat you have edited yourself — those stay exactly as you set them.</div>
+        <span class="up-stat" id="psAutoStat"></span>
+      </div>
+    </div>`, async () => {
+    /* Save = whatever was typed into the "add" boxes. Empty ones are ignored,
+       so closing without typing is not an error. */
+    const added = [];
+    for (const inp of $$('.ps-new')) {
+      const name = inp.value.trim();
+      if (!name) continue;
+      const gid = inp.dataset.psadd, id = slugify(name);
+      if (!id) { toast('That name needs letters or numbers', true); return false; }
+      if (DB.playstyles.some(s => s.id === id)) { toast(`"${name}" already exists`, true); return false; }
+      added.push({ id, group_id: gid, name,
+                   sort: stylesIn(gid).length, active: true });
+    }
+    if (!added.length) return;
+    try {
+      for (const row of added) { await insertRow('playstyles', row); DB.playstyles.push(row); }
+      toast(added.length === 1 ? 'Style added' : added.length + ' styles added');
+      render();
+    } catch (e) { toast(writeError(e), true); return false; }
+  });
+
+  /* The modal body is built before it is in the DOM, so wire after a tick —
+     the same pattern manageCategories() uses for its delete buttons. */
+  setTimeout(() => {
+    $$('[data-psedit]').forEach(b => b.onclick = () => editPlaystyle(b.dataset.psedit));
+
+    $$('[data-psdel]').forEach(b => b.onclick = async () => {
+      const id = b.dataset.psdel;
+      if (!confirm(`Delete the style "${styleName(id)}"?`)) return;
+      try {
+        await deleteRow('playstyles', 'id', id);
+        DB.playstyles = DB.playstyles.filter(s => s.id !== id);
+        toast('Style deleted');
+        const m = document.querySelector('.modal'); if (m) m.remove();
+        render();
+      } catch (e) { toast(writeError(e), true); }
+    });
+
+    const auto = $('#psAuto');
+    if (auto) auto.onclick = async () => {
+      const stat = $('#psAutoStat');
+      auto.disabled = true; stat.textContent = 'Reading the catalogue…';
+      try {
+        const n = await supaRpc('suggest_playstyles');
+        DB.prodStyles = await supa('product_playstyles?select=*') || [];
+        stat.textContent = `Done — ${n} suggestions across the catalogue.`;
+        toast('Tags suggested');
+        const m = document.querySelector('.modal'); if (m) m.remove();
+        managePlaystyles();
+      } catch (e) {
+        stat.textContent = '';
+        toast(writeError(e), true);
+      } finally { auto.disabled = false; }
+    };
+  }, 20);
+}
+
+/**
+ * Write the ticked chips back for one bat.
+ *
+ * Everything this writes is auto = false, and that is the whole point: the
+ * moment a person has looked at a bat and decided, the suggester must stop
+ * having an opinion about it. Re-running "Suggest tags" only clears rows
+ * still marked auto, so a bat edited here is never quietly re-tagged.
+ *
+ * Replace-then-insert rather than a diff. Seven rows per bat is not worth
+ * reconciling, and a delete followed by an insert cannot leave a half-applied
+ * state the way three separate patches could.
+ */
+async function savePlaystyles(pid) {
+  const want = $$('.f_ps').filter(c => c.checked).map(c => c.value);
+  await deleteRow('product_playstyles', 'product_id', pid);
+  if (want.length) {
+    await insertRow('product_playstyles',
+      want.map(sid => ({ product_id: pid, playstyle_id: sid, auto: false })));
+  }
+  DB.prodStyles = DB.prodStyles.filter(r => r.product_id !== pid)
+    .concat(want.map(sid => ({ product_id: pid, playstyle_id: sid, auto: false })));
+}
+
+/* Rename, re-word, reorder, retire. The id never changes — it is the URL of
+   the landing page and the value sitting in customers' bookmarked filters. */
+function editPlaystyle(id) {
+  const s = styleById(id);
+  if (!s) return;
+  openModal(`Edit — ${esc(s.name)}`, `
+    <div class="f">
+      <div class="grid2">
+        <div class="row"><label>Name</label><input id="ps_name" value="${esc(s.name)}"></div>
+        <div class="row"><label>Emoji</label><input id="ps_emoji" value="${esc(s.emoji || '')}" maxlength="4">
+          <div class="hint">Shown on this screen only, to make the list quicker to scan.
+            The shop draws its own line icons.</div></div>
+      </div>
+      <div class="row"><label>Tagline</label><input id="ps_tag" value="${esc(s.tagline || '')}"
+        placeholder="Built to clear the rope">
+        <div class="hint">One line. It sits under the heading on the shop and on the
+          landing page for this style.</div></div>
+      <div class="row"><label>Sort order</label><input id="ps_sort" type="number" value="${s.sort ?? 0}"></div>
+      <div class="row"><label class="check"><input type="checkbox" id="ps_active"
+        ${s.active ? 'checked' : ''}> Show it on the storefront</label>
+        <div class="hint">Turning this off hides the chip and the landing page but keeps
+          every bat you have assigned to it.</div></div>
+      <div class="row"><label>Web address</label>
+        <div class="hint"><code>${esc(s.id)}</code> — fixed, because links and search
+          results already point at it. Renaming above changes only what people read.</div></div>
+    </div>`, async () => {
+    const row = {
+      id: s.id,
+      name: $('#ps_name').value.trim(),
+      emoji: $('#ps_emoji').value.trim() || null,
+      tagline: $('#ps_tag').value.trim() || null,
+      sort: Number($('#ps_sort').value || 0),
+      active: $('#ps_active').checked
+    };
+    if (!row.name) { toast('Name cannot be empty', true); return false; }
+    try {
+      await saveRow('playstyles', row, 'id');
+      Object.assign(s, row);
+      toast('Saved');
+      const m = document.querySelector('.modal'); if (m) m.remove();
+      managePlaystyles();
+    } catch (e) { toast(writeError(e), true); return false; }
+  });
+}
+
 /* ---------- category manager ----------
    Create freely; delete only when empty. The database enforces the same
    rule with a restrict foreign key, so even a raced delete cannot orphan
@@ -1279,6 +1488,24 @@ function editProduct(id) {
         <textarea id="f_images" class="up-urls">${esc((p.images || []).join('\n'))}</textarea>
         <div class="hint">The first photo is the one shown on the shop and product page.
           Leave empty to keep the generated bat art.</div></div>
+      ${DB.psSynced ? `<div class="row"><label>Play styles</label>
+        ${DB.psGroups.sort((a, b) => a.sort - b.sort).map(g => {
+          const live = stylesIn(g.id).filter(s => s.active);
+          if (!live.length) return '';
+          const mine = isNew ? [] : stylesOf(p.id);
+          return `<div class="ps-pick">
+            <span class="ps-pick-h">${esc(g.name)}</span>
+            ${live.map(s => `<label class="ps-chip">
+              <input type="checkbox" class="f_ps" value="${esc(s.id)}"
+                ${mine.includes(s.id) ? 'checked' : ''}>
+              ${esc(s.emoji || '')} ${esc(s.name)}</label>`).join('')}
+          </div>`;
+        }).join('')}
+        <div class="hint">Who this bat is for. Drives the shop's "Best for" filter and the
+          landing pages. ${isNew ? 'Save the bat first and these apply straight away.'
+            : (stylesOf(p.id).length && DB.prodStyles.some(r => r.product_id === p.id && r.auto)
+               ? 'These were suggested from the specs — tick or untick anything and it becomes your decision.'
+               : '')}</div></div>` : ''}
       <div class="row"><label>Spec data (JSON)</label>
         <textarea id="f_data" style="min-height:190px">${esc(JSON.stringify(p.data || {}, null, 2))}</textarea>
         <div class="hint">For bats: wood, profile, weight, features and so on. For other
@@ -1324,6 +1551,7 @@ function editProduct(id) {
     try {
       if (isNew) { await insertRow('products', row); DB.products.push(row); }
       else       { await saveRow('products', row); Object.assign(p, row); }
+      if (DB.psSynced) await savePlaystyles(row.id);
       toast('Saved');
       render();
     } catch (e) {

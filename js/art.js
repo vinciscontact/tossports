@@ -324,6 +324,43 @@ const ICON = {
   hammer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5l5 5-3 3-5-5z"/><path d="M11 8L3 16l3 3 8-8"/></svg>',
   rupee: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4h10M7 9h10M16 4c0 4-3.5 5-6.5 5H7l8 11"/></svg>',
   arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  /* the catalogue, as a rack of tiles — for the bottom bar's Shop tab,
+     where ICON.cart is already spoken for by the bag */
+  grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.8"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
   insta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg>'
+};
+
+/* ------------------------------------------------------------
+   PLAY-STYLE ICONS
+
+   Same 1.8px stroke and 24-box as the set above, so they sit
+   beside the trust-bar and button icons without looking imported.
+
+   Drawn from the game rather than from stock symbolism: a blade
+   and a ball leaving it, a blade held straight, a mark rising
+   or sinking on a scale. No emoji — those render differently on
+   every device and read as chat, not as a storefront.
+
+   Keyed by play-style id. The owner can invent styles in the
+   Maze Room, so anything unknown falls back to PS_ICON._ rather
+   than rendering an empty box.
+   ------------------------------------------------------------ */
+const PS_ICON = {
+  /* blade angled through the ball, ball leaving with it */
+  attacker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l5-5"/><path d="M8.5 14.5l4-4a2 2 0 012.8 0l1.2 1.2a2 2 0 010 2.8l-4 4z" transform="rotate(-45 12 12)"/><circle cx="18" cy="6" r="2"/><path d="M13.5 4.5h2M14.8 8.6l1.4-1.4"/></svg>',
+  /* two arcs either side of a centre line — works both ways */
+  'all-rounder': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16"/><path d="M7 8a6 6 0 000 8"/><path d="M17 8a6 6 0 010 8"/><circle cx="12" cy="12" r="1.6"/></svg>',
+  /* blade held straight, ball stopped in front of it */
+  defender: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9.5" y="3" width="5" height="12" rx="2"/><path d="M12 15v6"/><path d="M4.5 9.5a8 8 0 000 5M19.5 9.5a8 8 0 010 5"/></svg>',
+  /* a mark starting out and stepping up */
+  beginner: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 20v-4M12 20v-8M18 20v-12"/><circle cx="6" cy="13" r="1.6"/></svg>',
+  /* mark riding high on the scale */
+  light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17h16"/><path d="M8 12l4-4 4 4"/><path d="M12 8v9"/></svg>',
+  /* mark sitting level */
+  medium: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16"/><path d="M9 8.5h6M9 15.5h6"/><circle cx="12" cy="12" r="2.4"/></svg>',
+  /* mark pressing down on the scale */
+  heavy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M8 12l4 4 4-4"/><path d="M12 16V7"/></svg>',
+  /* fallback: a plain blade, for any style invented later */
+  _: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="13" rx="2.5"/><path d="M12 16v5"/></svg>'
 };

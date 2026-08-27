@@ -1295,8 +1295,15 @@ canvas.gp-cv{display:block;width:100%;height:auto;image-rendering:pixelated;
   .card-spec i{font-size:.67rem}
 }
 
-/* ---------- designed banner slides ---------- */
-.s-banner{padding:0;min-height:0;position:relative;background:#0a0a0a;display:block;overflow:hidden}
+/* ---------- designed banner slides ----------
+   min-height, not 0. These used to collapse to nothing and let the flex
+   track stretch them to whatever the coded night-match slide was — which
+   worked only for as long as that slide existed and was first. The moment
+   a designed banner led the carousel instead, every slide computed to 0px
+   and the whole hero vanished. Sizing themselves costs nothing (the track
+   still stretches them all to the tallest) and removes the dependency. */
+.s-banner{padding:0;min-height:100vh;min-height:100svh;
+  position:relative;background:#0a0a0a;display:block;overflow:hidden}
 .bn-pic{display:block;width:100%;height:100%}
 .bn-pic img{display:block;width:100%;height:100%;object-fit:cover;object-position:center}
 
@@ -2154,23 +2161,6 @@ body.pdp-open .fab{bottom:82px}
   font:inherit;font-size:.94rem}
 .eng-txt.err{border-color:#e5484d}
 
-/* ---------- services band ---------- */
-.svcband-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
-.svcband-card{position:relative;display:grid;gap:7px;align-content:start;padding:22px 20px 46px;
-  border:1px solid var(--line);border-radius:16px;background:#fff;
-  text-decoration:none;color:inherit;transition:.2s var(--ease)}
-.svcband-card:hover{transform:translateY(-3px);border-color:var(--orange);
-  box-shadow:0 16px 34px rgba(11,11,36,.1)}
-.svcband-ico{display:grid;place-items:center;width:40px;height:40px;border-radius:11px;
-  background:rgba(255,138,30,.12);color:var(--orange);margin-bottom:5px}
-.svcband-ico svg{width:21px;height:21px}
-.svcband-card b{font-size:1.02rem}
-.svcband-card p{margin:0;font-size:.87rem;color:var(--ink-70)}
-.svcband-go{position:absolute;left:20px;bottom:18px;color:var(--orange);opacity:0;
-  transform:translateX(-6px);transition:.2s var(--ease)}
-.svcband-go svg{width:19px;height:19px}
-.svcband-card:hover .svcband-go{opacity:1;transform:none}
-
 /* ---------- community ---------- */
 .comm-grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
 .comm-card{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;
@@ -2295,56 +2285,113 @@ body.pdp-open .fab{bottom:82px}
    a colour in SVC_ID, not another block of CSS.
    ============================================================ */
 
-/* ---------- the card band ---------- */
+/* ---------- the card band ----------
+
+   Adapted from a Uiverse card by Javierrocadev: a colour banner
+   across the top, a circular badge straddling it, and on hover
+   the banner balloons into a circle while the text lifts.
+
+   THREE THINGS CHANGED to make it survive here.
+
+   1. The original morphs by animating WIDTH (350px -> 300px).
+      These cards are grid items, so animating width would either
+      do nothing or shove the neighbours around mid-hover. The
+      balloon is a transform on the wash instead, and the card
+      only changes border-radius. Nothing reflows.
+
+   2. The original paints one rainbow on every card. Each card
+      here inherits its own service colour through --svc, so the
+      colour still tells you which service you are looking at.
+
+   3. The original puts a <button> inside. This card is a single
+      <a>, so the pill is a span that only looks like one — the
+      whole card stays one tap target, which matters on a phone.
+
+   Contrast: on hover the wash covers the text, so the text turns
+   white. Every --svc clears 4.5:1 against white, and that holds
+   in both directions, so white on the accent is safe too.
+   ---------------------------------------------------------- */
 
 /* Fixed three-up rather than auto-fit. auto-fit gave four columns at wide
-   widths and stranded the last two in a half-empty row — the gap that made
-   the whole block look unfinished. Three columns divide six exactly. */
-.svcband-grid{display:grid;gap:16px;grid-template-columns:repeat(3,1fr)}
+   widths and stranded the last two in a half-empty row. Three divides six. */
+.svcband-grid{display:grid;gap:18px;grid-template-columns:repeat(3,1fr)}
 @media (max-width:900px){.svcband-grid{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:560px){.svcband-grid{grid-template-columns:1fr}}
 
-.svcband-card{position:relative;display:grid;gap:8px;align-content:start;
-  padding:26px 24px 52px;border-radius:18px;background:#fff;
-  border:1px solid var(--line);text-decoration:none;color:inherit;
-  overflow:hidden;transition:transform .22s var(--ease),box-shadow .22s var(--ease),
-    border-color .22s var(--ease)}
+.svcband-card{position:relative;display:flex;flex-direction:column;align-items:center;
+  text-align:center;gap:10px;min-height:310px;padding:0 22px 26px;
+  background:#fff;border:1px solid var(--line);border-radius:16px;
+  text-decoration:none;color:inherit;overflow:hidden;isolation:isolate;
+  transition:border-radius .5s var(--ease),box-shadow .35s var(--ease),
+             transform .35s var(--ease),color .35s var(--ease)}
+.svcband-card>*{position:relative;z-index:1}
 
-/* A wash of the service colour bleeding in from the top right. It is the
-   thing that stops six white rectangles reading as one repeated card, and
-   it is a pseudo-element so it can sit behind the text without a wrapper. */
-.svcband-card::before{content:'';position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(420px 220px at 108% -14%, var(--svc-tint), transparent 62%);
-  transition:opacity .22s var(--ease)}
-.svcband-card>*{position:relative}
+/* the banner, and the balloon it becomes */
+.svcband-wash{position:absolute;z-index:0;top:0;left:0;right:0;height:104px;
+  border-radius:15px 15px 0 0;border-bottom:3px solid #fff;
+  background:linear-gradient(40deg, var(--svc) 0%,
+    color-mix(in srgb, var(--svc) 74%, #fff) 55%,
+    color-mix(in srgb, var(--svc) 46%, var(--orange)) 100%);
+  transition:height .5s var(--ease),width .5s var(--ease),
+             border-radius .5s var(--ease),transform .5s var(--ease),
+             inset .5s var(--ease)}
 
-.svcband-card:hover{transform:translateY(-4px);border-color:var(--svc);
-  box-shadow:0 18px 40px rgba(11,11,36,.12)}
+.svcband-card:hover,.svcband-card:focus-visible{transform:translateY(-4px);
+  border-radius:130px;box-shadow:0 22px 48px rgba(11,11,36,.18);color:#fff}
+.svcband-card:focus-visible{outline:3px solid var(--svc);outline-offset:3px}
 
-.svcband-art{display:grid;place-items:center;width:56px;height:56px;border-radius:15px;
-  background:var(--svc-tint);color:var(--svc);margin-bottom:6px;
-  transition:transform .3s var(--ease)}
-.svcband-art .svc-art-svg{width:32px;height:32px;display:block}
-.svcband-card:hover .svcband-art{transform:scale(1.06) rotate(-3deg)}
+/* A square that fills the card and rounds to a circle. aspect-ratio keeps it
+   a true circle rather than the ellipse a percentage height would give on a
+   card that is taller than it is wide. */
+.svcband-card:hover .svcband-wash,
+.svcband-card:focus-visible .svcband-wash{
+  top:50%;left:50%;right:auto;width:126%;height:auto;aspect-ratio:1;
+  border-radius:50%;border-bottom:none;transform:translate(-50%,-50%) scale(.95)}
 
-.svcband-card b{font-size:1.06rem;line-height:1.25}
-.svcband-card p{margin:0;font-size:.88rem;color:var(--ink-70)}
+/* the badge straddling the banner */
+.svcband-art{display:grid;place-items:center;width:92px;height:92px;flex:none;
+  margin-top:56px;border-radius:50%;background:#fff;color:var(--svc);
+  border:4px solid #fff;box-shadow:0 6px 18px rgba(11,11,36,.16);
+  transition:transform .5s var(--ease),box-shadow .35s var(--ease)}
+.svcband-art .svc-art-svg{width:48px;height:48px;display:block}
+.svcband-card:hover .svcband-art{transform:translateY(-6px) scale(1.04)}
 
-.svcband-go{position:absolute;left:24px;bottom:20px;color:var(--svc);
-  opacity:0;transform:translateX(-8px);transition:.22s var(--ease)}
-.svcband-go svg{width:20px;height:20px}
-.svcband-card:hover .svcband-go{opacity:1;transform:none}
+.svcband-info{display:flex;flex-direction:column;align-items:center;gap:7px;
+  transition:transform .5s var(--ease)}
+.svcband-card:hover .svcband-info{transform:translateY(-8%)}
+.svcband-card b{font-size:1.08rem;line-height:1.3}
+.svcband-card p{margin:0;font-size:.88rem;line-height:1.45;color:var(--ink-70);
+  transition:color .35s var(--ease)}
+.svcband-card:hover p{color:rgba(255,255,255,.88)}
 
-/* a rule in the service colour along the bottom, drawn on hover */
-.svcband-card::after{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;
-  background:var(--svc);transform:scaleX(0);transform-origin:left;
-  transition:transform .28s var(--ease)}
-.svcband-card:hover::after{transform:scaleX(1)}
+/* looks like a button, is part of the link */
+.svcband-btn{margin-top:auto;padding:9px 20px;border-radius:100px;font-size:.83rem;
+  font-weight:700;background:var(--svc);color:#fff;border:1px solid transparent;
+  transition:background .35s var(--ease),color .35s var(--ease),
+             transform .35s var(--ease),border-color .35s var(--ease)}
+.svcband-card:hover .svcband-btn{background:#fff;color:var(--svc);
+  border-color:#fff;transform:scale(1.06)}
 
+@media (max-width:560px){
+  .svcband-card{min-height:290px;padding:0 18px 22px}
+  .svcband-art{width:82px;height:82px;margin-top:48px}
+  .svcband-art .svc-art-svg{width:42px;height:42px}
+  .svcband-card:hover{border-radius:110px}
+}
+/* The morph is the whole point, so when motion is unwelcome it does not
+   happen at all — no half-animated middle state. */
 @media (prefers-reduced-motion:reduce){
-  .svcband-card,.svcband-art,.svcband-go,.svcband-card::after{transition:none}
-  .svcband-card:hover{transform:none}
-  .svcband-card:hover .svcband-art{transform:none}
+  .svcband-card,.svcband-wash,.svcband-art,.svcband-info,.svcband-btn,
+  .svcband-card p{transition:none}
+  .svcband-card:hover{transform:none;border-radius:16px;color:inherit}
+  .svcband-card:hover .svcband-wash{top:0;left:0;right:0;width:auto;height:104px;
+    aspect-ratio:auto;border-radius:15px 15px 0 0;transform:none;
+    border-bottom:3px solid #fff}
+  .svcband-card:hover .svcband-art,
+  .svcband-card:hover .svcband-info,
+  .svcband-card:hover .svcband-btn{transform:none}
+  .svcband-card:hover p{color:var(--ink-70)}
+  .svcband-card:hover .svcband-btn{background:var(--svc);color:#fff}
 }
 
 /* ---------- the form page header ---------- */
@@ -2429,3 +2476,298 @@ body.pdp-open .fab{bottom:82px}
    assistive tech even though the numbered heading carries it visually */
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
   overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+
+/* ============================================================
+   SHOP BY HOW YOU PLAY
+
+   A dark band between two light sections. It is doing a
+   different job from the tier row above it — that one sorts by
+   budget, this one sorts by the player — and the tonal break is
+   what stops the two reading as one long shelf.
+
+   Two card shapes on purpose. "Best for" is a set of unrelated
+   choices, so those cards list what each style is made of.
+   "Weight feel" is one continuum cut into bands, so those carry
+   a scale with their own band lit: light and heavy are not two
+   options, they are two ends of the same line.
+   ============================================================ */
+.sty{position:relative;background:var(--navy-900);color:#fff;overflow:hidden}
+.sty .eyebrow{color:var(--orange)}
+.sty .d2{color:#fff}
+.sty-sub{max-width:54ch;color:rgba(255,255,255,.62);margin:14px 0 38px}
+
+/* one soft light behind the heading, the same trick the hero uses */
+.sty-glow{position:absolute;top:-18%;left:-8%;width:52%;height:70%;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(255,138,30,.16),transparent 72%);
+  filter:blur(12px)}
+
+.sty-block{position:relative;margin-bottom:34px}
+.sty-block:last-child{margin-bottom:0}
+.sty-h{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;font-weight:800;
+  color:rgba(255,255,255,.42);margin-bottom:14px;
+  display:flex;align-items:center;gap:12px}
+/* rule that runs out from the label to the edge of the row */
+.sty-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.12)}
+
+.sty-row{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.sty-row-w{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+
+/* ---------- the card ----------
+
+   These were ~7% white on a navy band, which is barely a card at
+   all — the complaint was that they were not visible, and it was
+   right. The fix is a moving edge: a striped gradient scrolling
+   behind the card with the readable panel sitting 2px inside it,
+   so what you see is a bright animated hairline around dark
+   content. Contrast comes from the edge, not from lightening the
+   panel until the text struggles.
+
+   Adapted from a Uiverse card, with two changes that matter.
+
+   1. The original scrolls background-position on the card
+      itself. That repaints the full card area every frame, and
+      there are seven of them. This translates an oversized
+      pseudo-element instead — transform is composited, so the
+      whole row costs the GPU almost nothing.
+
+   2. The original's hover shifts the inner panel out by 20px.
+      These are grid items; that would push it over its
+      neighbour. The edge thickens and brightens instead, which
+      reads as the same reveal without breaking the row.
+   ---------------------------------------------------------- */
+.sty-card{position:relative;display:block;padding:2px;border-radius:18px;
+  overflow:hidden;isolation:isolate;text-decoration:none;color:inherit;
+  transition:transform .18s var(--ease),padding .18s var(--ease),
+             box-shadow .18s var(--ease)}
+
+/* the moving stripes. Oversized and rotated so translating it never
+   exposes an edge, and so the stripes read as diagonal. */
+.sty-edge{position:absolute;z-index:0;top:-60%;left:-60%;width:220%;height:220%;
+  /* Every band is bright. The first version put a near-background navy in
+     the cycle, which made the ring vanish for half its length and read as
+     broken rather than moving. */
+  background:repeating-linear-gradient(45deg,
+    #FF8A1E 0 20px,
+    #FFC489 20px 34px,
+    #FFFFFF 34px 40px,
+    #E06F00 40px 60px);
+  opacity:.85;
+  animation:styEdge 14s linear infinite;
+  will-change:transform}
+@keyframes styEdge{
+  from{transform:translate3d(0,0,0)}
+  /* 120px = two full stripe cycles (20+14+6+20). Divided by sqrt(2)
+     because the travel is along the 45° diagonal, so the loop closes on
+     an exact repeat and there is no jump at the seam. */
+  to{transform:translate3d(84.853px,-84.853px,0)}
+}
+
+/* the panel you actually read */
+.sty-inner{position:relative;z-index:1;display:flex;flex-direction:column;
+  height:100%;padding:20px 18px 52px;border-radius:16px;
+  background:#141433;
+  transition:background .18s var(--ease)}
+
+/* ---------- what is inside ---------- */
+.sty-ico{display:grid;place-items:center;width:42px;height:42px;border-radius:11px;
+  background:rgba(255,138,30,.12);border:1px solid rgba(255,138,30,.22);
+  color:var(--orange);margin-bottom:16px;transition:background .18s var(--ease)}
+.sty-ico svg{width:22px;height:22px}
+.sty-card:hover .sty-ico{background:rgba(255,138,30,.22)}
+
+.sty-name{font-family:var(--f-display);font-size:1.42rem;line-height:1;
+  letter-spacing:.01em;text-transform:uppercase;color:#fff}
+.sty-tag{margin-top:8px;font-size:.86rem;line-height:1.42;color:rgba(255,255,255,.6)}
+
+/* what the style is built from — the shop's own words for the shapes */
+.sty-spec{margin-top:14px;font-size:.72rem;letter-spacing:.05em;font-weight:700;
+  color:rgba(255,255,255,.44);text-transform:uppercase}
+
+.sty-card:hover{transform:translateY(-4px);padding:4px;
+  box-shadow:0 18px 44px rgba(0,0,0,.5)}
+.sty-card:hover .sty-edge{opacity:1;animation-duration:5s}
+.sty-card:hover .sty-inner{background:#191940}
+.sty-card:focus-visible{outline:2px solid var(--orange);outline-offset:3px}
+
+/* ---------- the weight scale ---------- */
+/* Segments, not a slider: the bat is cut to order, so this shows which
+   band the model sits in, never a single number pretending to be exact. */
+.sty-scale{display:flex;gap:5px;margin-top:16px}
+.sty-scale i{flex:1;height:5px;border-radius:100px;background:rgba(255,255,255,.13);
+  transition:background .18s var(--ease)}
+.sty-scale i.on{background:var(--orange);box-shadow:0 0 12px rgba(255,138,30,.55)}
+.sty-row-w .sty-spec{margin-top:9px;color:rgba(255,255,255,.68);
+  font-family:var(--f-display);font-size:.98rem;letter-spacing:.02em}
+
+/* ---------- the arrow ---------- */
+/* positioned against .sty-inner, which is the padded box now */
+.sty-go{position:absolute;left:18px;bottom:16px;display:grid;place-items:center;
+  width:30px;height:30px;border-radius:100px;color:#fff;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
+  transition:background .18s var(--ease),transform .18s var(--ease),
+             border-color .18s var(--ease)}
+.sty-go svg{width:15px;height:15px}
+.sty-card:hover .sty-go{background:var(--orange);border-color:var(--orange);
+  color:var(--navy-900);transform:translateX(4px)}
+
+@media (max-width:560px){
+  .sty-row,.sty-row-w{grid-template-columns:1fr 1fr;gap:10px}
+  .sty-card{border-radius:14px}
+  .sty-inner{padding:16px 14px 48px;border-radius:12px}
+  .sty-ico{width:36px;height:36px;margin-bottom:12px}
+  .sty-ico svg{width:19px;height:19px}
+  .sty-name{font-size:1.16rem}
+  .sty-tag{font-size:.79rem}
+  .sty-go{left:14px;bottom:14px}
+}
+
+/* A permanently moving edge is exactly what someone asking for less motion
+   is asking to be spared. The stripes stop and hold as a static gradient —
+   the card keeps its bright border, it just stops travelling. */
+@media (prefers-reduced-motion:reduce){
+  .sty-card,.sty-go,.sty-ico,.sty-inner,.sty-edge{transition:none}
+  .sty-edge{animation:none}
+  .sty-card:hover{transform:none;padding:2px}
+  .sty-card:hover .sty-edge{animation:none}
+}
+
+/* ============================================================
+   BOTTOM NAVIGATION — phones only
+
+   The header nav is display:none below 900px. That left a phone
+   with no way to reach Shop, the finder or the game except by
+   finding a link inside the page, which on a storefront is the
+   kind of gap that quietly costs orders.
+
+   Pinned to the bottom rather than added to the header because
+   that is where a thumb reaches on a large phone, and because
+   the header is already carrying the logo, search and bag.
+   ============================================================ */
+.btmnav{display:none}
+
+@media (max-width:899px){
+  .btmnav{position:fixed;left:0;right:0;bottom:0;z-index:60;
+    display:grid;grid-template-columns:repeat(4,1fr);
+    background:var(--navy-900);
+    border-top:1px solid rgba(255,255,255,.10);
+    /* iPhone home indicator — without this the labels sit under it */
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    box-shadow:0 -6px 22px rgba(11,11,36,.28)}
+
+  .btmnav a,.btmnav button{position:relative;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:3px;padding:9px 4px 8px;
+    font-size:.63rem;font-weight:700;letter-spacing:.02em;text-align:center;
+    color:rgba(255,255,255,.62);text-decoration:none;background:none;border:0;
+    font-family:inherit;cursor:pointer;transition:color .18s var(--ease)}
+  .btmnav-i{display:grid;place-items:center;width:23px;height:23px}
+  .btmnav-i svg{width:21px;height:21px}
+
+  /* the active tab: orange, with a short bar above it */
+  .btmnav a.on,.btmnav button.on{color:var(--orange)}
+  .btmnav a.on::before,.btmnav button.on::before{content:'';position:absolute;
+    top:0;left:50%;transform:translateX(-50%);width:26px;height:3px;
+    border-radius:0 0 3px 3px;background:var(--orange)}
+  .btmnav a:active,.btmnav button:active{color:#fff}
+
+  /* the bag count, same shape as the header's */
+  .btmnav-dot{position:absolute;top:5px;right:50%;margin-right:-20px;
+    min-width:16px;height:16px;padding:0 4px;border-radius:100px;
+    background:var(--orange);color:var(--navy-900);
+    font-size:.6rem;font-weight:800;line-height:16px}
+  .btmnav-dot.hide{display:none}
+
+  /* Nothing should end up underneath the bar — page bottom, the sticky buy
+     bar, and the chat button and its panel all get pushed clear of it.
+     The chat button sits at z-index 60 too, so the bar is lifted above it:
+     a navigation you cannot tap is worse than a chat button moved up. */
+  .btmnav{z-index:70}
+  body{padding-bottom:calc(58px + env(safe-area-inset-bottom,0px))}
+  .buybar{bottom:calc(58px + env(safe-area-inset-bottom,0px))}
+  .bot-fab{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
+  .bot-panel{bottom:calc(58px + env(safe-area-inset-bottom,0px))}
+}
+
+/* ============================================================
+   SERVICE FORM — the steps as a timeline
+
+   Four numbered blocks stacked with nothing joining them read as
+   four unrelated forms. A spine down the left, with each number
+   sitting on it, makes the same content one sequence you can see
+   your way through — and gives the step numbers a job beyond
+   decoration.
+
+   The spine is drawn per group, from its own disc down to the
+   next, so the last group simply has none and the line stops
+   exactly where the form does rather than running past it.
+   ============================================================ */
+.svc-group{position:relative;padding-left:56px}
+.svc-group::before{content:'';position:absolute;left:16px;top:34px;bottom:-34px;
+  width:2px;background:linear-gradient(to bottom,
+    color-mix(in srgb, var(--svc) 34%, transparent), var(--line))}
+.svc-group:last-of-type::before{display:none}
+
+/* the disc, sitting on the spine */
+.svc-step{display:flex;align-items:center;min-height:34px;margin-bottom:16px}
+.svc-step span{position:absolute;left:0;top:0;display:grid;place-items:center;
+  width:34px;height:34px;border-radius:50%;background:var(--svc);color:#fff;
+  font-weight:900;font-size:.86rem;
+  box-shadow:0 0 0 4px var(--paper), 0 2px 8px color-mix(in srgb, var(--svc) 35%, transparent)}
+.svc-step h2{font-size:1.06rem;font-weight:800;margin:0;letter-spacing:-.01em}
+
+/* ---------- progress ---------- */
+.svc-prog{display:flex;align-items:center;gap:12px;margin-bottom:26px}
+.svc-prog-track{flex:1;height:6px;border-radius:100px;background:var(--line);overflow:hidden}
+.svc-prog-track i{display:block;height:100%;width:0;border-radius:100px;
+  background:var(--svc);transition:width .35s var(--ease)}
+.svc-prog-txt{flex:none;font-size:.76rem;font-weight:800;letter-spacing:.03em;
+  text-transform:uppercase;color:var(--ink-50)}
+.svc-prog.done .svc-prog-txt{color:var(--svc)}
+
+/* ---------- what is still missing ---------- */
+.svc-errbox{margin-bottom:22px;padding:15px 17px;border-radius:13px;
+  background:#FEF1F1;border:1px solid #F3C9C9;color:#8E1F22}
+.svc-errbox.hide{display:none}
+.svc-errbox b{display:block;font-size:.94rem;margin-bottom:7px}
+.svc-errbox ul{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:7px}
+.svc-errbox button{font:inherit;font-size:.82rem;font-weight:700;cursor:pointer;
+  padding:5px 12px;border-radius:100px;border:1px solid #E3AEAE;
+  background:#fff;color:#8E1F22}
+.svc-errbox button:hover{background:#8E1F22;color:#fff;border-color:#8E1F22}
+
+/* ---------- the send button ---------- */
+/* The accent finishes the journey here rather than reverting to orange —
+   a Bat Doctor form is red from the card that opened it to the button
+   that sends it. */
+.svc-formsec .svc-actions .btn-primary{background:var(--svc);border-color:var(--svc);color:#fff}
+.svc-formsec .svc-actions .btn-primary:hover{filter:brightness(1.08)}
+
+@media (max-width:680px){
+  .svc-group{padding-left:44px}
+  .svc-group::before{left:13px}
+  .svc-step span{width:28px;height:28px;font-size:.78rem}
+  .svc-group::before{top:28px}
+
+  /* Sticky send, sitting on top of the bottom nav rather than fighting it.
+     A long form should never make you scroll back down to finish. */
+  .svc-formsec .svc-actions{position:sticky;z-index:40;
+    bottom:calc(58px + env(safe-area-inset-bottom,0px));
+    margin:0 -18px -12px;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px));
+    background:color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter:blur(8px);
+    border-top:1px solid var(--line);
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .svc-formsec .svc-actions .btn-primary{flex:1;min-width:0}
+  /* No room for it beside a full-width button, and it was being clipped
+     mid-word. The same count is in the progress bar directly above. */
+  .svc-formsec .svc-actions .svc-steps-note{display:none}
+
+  /* The chat button lands exactly on the sticky send. On a page whose whole
+     purpose is a form, the form wins — the button moves above it rather
+     than being removed, since "Rather just ask?" is still a real option. */
+  body:has(.svc-formsec) .bot-fab{
+    bottom:calc(132px + env(safe-area-inset-bottom,0px))}
+}
+@media (prefers-reduced-motion:reduce){
+  .svc-prog-track i{transition:none}
+}

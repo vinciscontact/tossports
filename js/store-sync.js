@@ -56,9 +56,42 @@ async function syncSettings() {
     if (s.ship_fee      != null) SHIP_FEE       = Number(s.ship_fee);
     if (s.razorpay_key)   RAZORPAY_KEY   = String(s.razorpay_key);
     if (s.announcement)   STORE_NOTE     = String(s.announcement);
+    /* The database re-prices every web order from the catalogue, engraving
+       included, so this number has to be the same on both sides. Reading it
+       from settings is what stops the shown total and the recorded total
+       drifting apart the day someone changes the price. */
+    if (s.engraving_price != null) SERVICES.engraving.price = Number(s.engraving_price);
     LIVE.settings = true;
     return true;
   } catch (e) { console.warn('settings sync:', e.message); return false; }
+}
+
+/* ---------- play styles ----------
+   Who each bat is for, as the Maze Room decided. Three small tables the
+   shop turns into one row of chips per group. All of it degrades: with no
+   connection PLAYSTYLES stays empty, the "Best for" filter simply does not
+   render, and every other filter works exactly as before. */
+let PLAYSTYLE_GROUPS = [];
+let PLAYSTYLES = [];
+let PROD_STYLES = {};        // { productId: [styleId, …] }
+
+async function syncPlaystyles() {
+  try {
+    const [groups, styles, links] = await Promise.all([
+      supa('playstyle_groups?select=*&order=sort.asc'),
+      supa('playstyles?select=*&order=sort.asc'),
+      supa('product_playstyles?select=product_id,playstyle_id')
+    ]);
+    if (!Array.isArray(groups) || !Array.isArray(styles)) return false;
+    PLAYSTYLE_GROUPS = groups;
+    PLAYSTYLES = styles;
+    PROD_STYLES = {};
+    (links || []).forEach(r => {
+      (PROD_STYLES[r.product_id] = PROD_STYLES[r.product_id] || []).push(r.playstyle_id);
+    });
+    LIVE.playstyles = true;
+    return true;
+  } catch (e) { console.warn('playstyle sync:', e.message); return false; }
 }
 
 /* ---------- orders ---------- */
@@ -73,10 +106,15 @@ async function pushOrder(order) {
       body: {
         id: order.id,
         customer: order.info || {},
+        /* `engrave` travels with the line because the database re-prices the
+           order from the catalogue, and an engraved bat costs more than a
+           plain one. Dropping it here made the recomputed total too low and
+           lost the text the workshop has to cut. */
         items: (order.items || []).map(l => {
           const p = byId(l.id) || {};
           return { id: l.id, name: p.name || l.id, price: p.price || 0,
-                   qty: l.qty, variant: l.variant || null };
+                   qty: l.qty, variant: l.variant || null,
+                   engrave: l.engrave || null };
         }),
         subtotal: order.subtotal, shipping: order.shipping,
         discount: order.off || 0, total: order.total,
@@ -129,9 +167,12 @@ async function pushScore(name, runs, wkts, balls) {
 
 /* ---------- boot ---------- */
 async function syncStore() {
-  const [c, s, k] = await Promise.all([syncCatalog(), syncSettings(), syncCategories()]);
+  const [c, s, k, ps] = await Promise.all([
+    syncCatalog(), syncSettings(), syncCategories(), syncPlaystyles()
+  ]);
   LIVE.categories = k;
-  if (c || s || k) console.info('Toss: live data', LIVE);
+  LIVE.playstyles = ps;
+  if (c || s || k || ps) console.info('Toss: live data', LIVE);
   else console.info('Toss: running on bundled catalogue (offline or not configured)');
   return LIVE;
 }

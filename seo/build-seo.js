@@ -23,9 +23,7 @@ const path = require('path');
 const { SITE, BUSINESS, CLUSTERS: C1, GUIDES: G1, FAQS } = require('./seo-data');
 const { TURF_PAGES, AREAS, CLUSTERS_2, GUIDES_2 } = require('./seo-data-extra');
 const { LEGAL } = require('./legal-data');
-
-/* one map, so nothing can accidentally target the same phrase twice */
-const CLUSTERS = Object.assign({}, C1, CLUSTERS_2);
+const { loadTags, playstyleClusters } = require('./playstyle-rules');
 const GUIDES = G1.concat(GUIDES_2);
 
 const ROOT = path.resolve(__dirname, '..');
@@ -41,6 +39,15 @@ function loadProducts() {
 }
 
 const { products: PRODUCTS, WOOD, PROFILE } = loadProducts();
+
+/* Who each bat is for. Curated in the Maze Room where that file has been
+   pulled down, derived from the specs otherwise — loadTags() says which. */
+const PLAYSTYLE = loadTags(PRODUCTS);
+const PLAYSTYLE_TAGS = PLAYSTYLE.tags;
+
+/* One map, so nothing can accidentally target the same phrase twice, and so
+   the footer link list and the sitemap pick up the style pages for free. */
+const CLUSTERS = Object.assign({}, C1, CLUSTERS_2, playstyleClusters(PLAYSTYLE_TAGS));
 
 /* ------------------------------------------------------------
    Product URLs.
@@ -901,7 +908,9 @@ Object.keys(CLUSTERS).forEach(slug => {
   add(slug + '/index.html', categoryPage(slug, CLUSTERS[slug]),
       SITE + '/' + slug + '/', '0.9', 'weekly');
 });
-console.log('  ' + Object.keys(CLUSTERS).length + ' category pages');
+console.log('  ' + Object.keys(CLUSTERS).length + ' category pages' +
+  ' (incl. ' + Object.keys(playstyleClusters({})).length + ' play-style pages)');
+console.log('    play-style tags: ' + PLAYSTYLE.note);
 
 /* product pages */
 PRODUCTS.forEach(p => {

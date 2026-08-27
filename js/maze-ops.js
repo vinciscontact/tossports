@@ -1532,7 +1532,7 @@ function wireBoards() {
    a section.
    ============================================================ */
 
-let REQ = { rows: [], loaded: false, kind: '', status: 'open' };
+let REQ = { rows: [], loaded: false, kind: '', status: 'open', signed: {} };
 
 const REQ_KIND = {
   bat_doctor: 'Bat Doctor',  custom_bat: 'Custom bat', jersey: 'Jerseys',
@@ -1540,10 +1540,65 @@ const REQ_KIND = {
 };
 const REQ_STATUS = ['new', 'quoted', 'accepted', 'done', 'declined'];
 
+/* ------------------------------------------------------------
+   Signing request photos.
+
+   The `requests` bucket is private — it holds photos of people's
+   homes and the videos the consent box asks about, and a public
+   bucket is enumerable by anyone who asks the storage list
+   endpoint. So nothing here has a permanent URL; staff get links
+   that are signed for an hour against their own session.
+
+   Rows written before this change stored a full public URL rather
+   than a path. Those are reduced back to a path so old and new
+   requests both render, and anything that is neither is dropped —
+   a `photos` array is filled in by an anonymous submitter, and a
+   javascript: link in it would run inside this panel.
+   ------------------------------------------------------------ */
+const REQ_PATH_RE = /^[a-z_]+\/[A-Za-z0-9._-]+$/;
+
+function reqPhotoPath(u) {
+  const s = String(u || '');
+  if (REQ_PATH_RE.test(s)) return s;
+  /* legacy: …/storage/v1/object/public/requests/<kind>/<file> */
+  const m = s.match(/\/storage\/v1\/object\/(?:public\/)?requests\/(.+)$/);
+  const p = m ? decodeURIComponent(m[1].split('?')[0]) : '';
+  return REQ_PATH_RE.test(p) ? p : '';
+}
+
+async function signRequestPhotos(rows) {
+  const paths = [];
+  rows.forEach(r => (r.photos || []).forEach(u => {
+    const p = reqPhotoPath(u);
+    if (p && paths.indexOf(p) < 0) paths.push(p);
+  }));
+  if (!paths.length) return {};
+
+  /* One round trip for the whole screen rather than one per photo. */
+  const res = await fetch(SUPA_URL + '/storage/v1/object/sign/requests', {
+    method: 'POST', headers: supaHeaders(),
+    body: JSON.stringify({ expiresIn: 3600, paths: paths })
+  });
+  if (!res.ok) throw new Error('Could not open the photos for this list.');
+
+  const out = {};
+  (await res.json() || []).forEach(row => {
+    if (row && row.signedURL && !row.error) {
+      out[row.path] = SUPA_URL + '/storage/v1' + row.signedURL;
+    }
+  });
+  return out;
+}
+
 async function loadRequests() {
   try {
     REQ.rows = await supa('requests?select=*&order=created_at.desc&limit=300') || [];
   } catch (e) { REQ.rows = []; toast(e.message, true); }
+  /* A photo that will not sign must not cost us the whole screen — the
+     phone number and the description are the part staff actually need. */
+  try {
+    REQ.signed = await signRequestPhotos(REQ.rows);
+  } catch (e) { REQ.signed = {}; console.warn('request photos:', e.message); }
   REQ.loaded = true;
 }
 
@@ -1610,10 +1665,17 @@ function reqCard(r) {
 
     ${(r.photos || []).length ? `
       <div class="reqshots">
-        ${r.photos.map(u => /\.(mp4|mov|webm|m4v)$/i.test(u)
-          ? `<a href="${esc(u)}" target="_blank" rel="noopener" class="reqvid">▶ video</a>`
-          : `<a href="${esc(u)}" target="_blank" rel="noopener">
-               <img src="${esc(u)}" alt="" loading="lazy"></a>`).join('')}
+        ${r.photos.map(u => {
+          /* Never the stored string — only a URL this panel signed itself.
+             An unsignable photo shows as missing rather than as a link to
+             wherever the submitter pointed it. */
+          const src = REQ.signed[reqPhotoPath(u)] || '';
+          if (!src) return '<span class="muted reqvid">photo unavailable</span>';
+          return /\.(mp4|mov|webm|m4v)$/i.test(reqPhotoPath(u))
+            ? `<a href="${esc(src)}" target="_blank" rel="noopener" class="reqvid">▶ video</a>`
+            : `<a href="${esc(src)}" target="_blank" rel="noopener">
+                 <img src="${esc(src)}" alt="" loading="lazy"></a>`;
+        }).join('')}
       </div>` : ''}
 
     ${r.staff_note ? `<p class="reqnote">${esc(r.staff_note)}</p>` : ''}
@@ -1846,7 +1908,7 @@ function fulRow(o) {
       : '<span class="muted">—</span>'}</td>
     <td>
       ${phone.length === 10 ? `<a class="btn ghost sm" target="_blank" rel="noopener"
-        data-wa="${o.id}"
+        data-wa="${esc(o.id)}"
         href="https://wa.me/91${phone}?text=${encodeURIComponent(orderMsg(o))}">WhatsApp</a>` : ''}
       <button class="btn ghost sm" data-ship="${esc(o.id)}">Tracking</button>
       ${o.notified_at
@@ -1890,7 +1952,7 @@ function wireFulfil() {
   $$('[data-ship]').forEach(b => b.onclick = () => {
     const id = b.dataset.ship, o = FUL.rows.find(x => x.id === id);
     if (!o) return;
-    openModal('Tracking for ' + id, `
+    openModal('Tracking for ' + esc(id), `
       <div class="row"><label>Courier</label>
         <select id="s_cour">
           <option value="">Choose…</option>

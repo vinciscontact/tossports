@@ -655,3 +655,32 @@ body.printing .inv{max-width:760px;margin:0 auto}
    neutral state that does not shout */
 .gate-err{color:#c22f34}
 .gate-err b{color:inherit}
+
+/* ---------- play styles ----------
+   Two axes the shop filters by: how a player bats, and how the bat picks
+   up. The manager groups them; the product form ticks them. */
+.ps-group{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:14px}
+.ps-group h4{margin:0;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-60)}
+.ps-group .hint{margin-top:2px}
+.ps-group .att-row.off{opacity:.5}
+.ps-new{width:100%;background:var(--bg);border:1.5px solid var(--line);
+  border-radius:9px;padding:8px 11px;font-size:.85rem}
+
+/* The picker in the product form. A chip is a label wrapping its own
+   checkbox, so the whole pill is the hit area rather than a 13px box. */
+.ps-pick{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:9px}
+.ps-pick:last-of-type{margin-bottom:0}
+.ps-pick-h{flex:0 0 100%;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-60);font-weight:700}
+.ps-chip{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
+  background:var(--panel-2);border:1.5px solid var(--line);border-radius:100px;
+  padding:6px 13px;font-size:.83rem;font-weight:600;transition:background .12s,border-color .12s}
+.ps-chip:hover{border-color:var(--ink-60)}
+/* Driven by the checkbox itself, not by a class the render put there: a
+   class would be right on first paint and wrong the moment anyone clicked. */
+.ps-chip:has(input:checked){background:var(--orange);border-color:var(--orange);color:#fff}
+/* The native box is redundant once the pill itself reads as on or off, but
+   it stays in the DOM so the label keeps working and so does the keyboard. */
+.ps-chip input{position:absolute;opacity:0;width:0;height:0}
+.ps-chip:focus-within{outline:2px solid var(--orange);outline-offset:2px}

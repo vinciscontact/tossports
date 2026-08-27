@@ -23,7 +23,18 @@ let cart = [];
 try { cart = JSON.parse(localStorage.getItem('toss_cart') || '[]'); } catch (e) { cart = []; }
 const saveCart = () => localStorage.setItem('toss_cart', JSON.stringify(cart));
 
-let filters = { wood: [], profile: [], ball: [], tier: [], division: [], sort: 'pop', cat: 'bats' };
+let filters = { wood: [], profile: [], ball: [], tier: [], division: [],
+                style: [], weight: [], sort: 'pop', cat: 'bats' };
+
+/* Who a bat is for, as tagged in the Maze Room. A bat carries several, so
+   these read from the join the sync built rather than a field on the product. */
+const stylesOf = p => (typeof PROD_STYLES !== 'undefined' && PROD_STYLES[p.id]) || [];
+const styleMeta = id => (typeof PLAYSTYLES !== 'undefined' &&
+  PLAYSTYLES.find(s => s.id === id)) || null;
+/* The live styles in one group, in the order the owner sorted them. */
+const stylesInGroup = gid => (typeof PLAYSTYLES !== 'undefined' ? PLAYSTYLES : [])
+  .filter(s => s.group_id === gid && s.active !== false)
+  .sort((a, b) => (a.sort || 0) - (b.sort || 0));
 let lastOrder = null;
 
 /* ---------- coupons earned in the gully cricket game ---------- */
@@ -115,9 +126,15 @@ function removeItem(key) {
   if (location.hash.startsWith('#/checkout')) route();
 }
 function syncCart() {
-  const n = cartCount(), dot = $('#cartDot');
-  dot.textContent = n;
-  dot.classList.toggle('hide', n === 0);
+  const n = cartCount();
+  /* Two counters now — the header's and the bottom bar's. They must never
+     disagree, so they are written together rather than the bottom bar being
+     refreshed from somewhere else and drifting. */
+  [$('#cartDot'), $('#bnCartDot')].forEach(dot => {
+    if (!dot) return;
+    dot.textContent = n;
+    dot.classList.toggle('hide', n === 0);
+  });
 }
 function variantName(p, vid) {
   if (!p.variants || !vid) return null;
@@ -193,7 +210,11 @@ function filtered() {
     (!filters.profile.length || filters.profile.includes(p.profile)) &&
     (!filters.ball.length    || filters.ball.some(b => (p.ball || []).includes(b))) &&
     (!filters.tier.length    || filters.tier.includes(p.tier)) &&
-    (!filters.division.length || filters.division.includes(division(p)))
+    (!filters.division.length || filters.division.includes(division(p))) &&
+    /* OR within a group, AND across groups: "attacker or all-rounder, and
+       light" is what a person means when they tick three chips. */
+    (!filters.style.length  || filters.style.some(v => stylesOf(p).includes(v))) &&
+    (!filters.weight.length || filters.weight.some(v => stylesOf(p).includes(v)))
   );
   const s = filters.sort;
   /* "price on request" items always sink to the bottom, whichever way we sort */
@@ -213,10 +234,14 @@ function activeChips() {
   filters.ball.forEach(v => out.push({ g: 'ball', v, l: BALL_LABEL[v] }));
   filters.tier.forEach(v => out.push({ g: 'tier', v, l: TIER_LABEL[v] }));
   filters.division.forEach(v => out.push({ g: 'division', v, l: DIVISION[v].label }));
+  /* A style the owner has since retired can still be sitting in a bookmarked
+     URL, so fall back to the raw id rather than crashing on a missing name. */
+  filters.style.forEach(v  => out.push({ g: 'style',  v, l: (styleMeta(v) || {}).name || v }));
+  filters.weight.forEach(v => out.push({ g: 'weight', v, l: (styleMeta(v) || {}).name || v }));
   return out;
 }
 /* filter state lives in the URL so filtered views are shareable and Back works */
-const FKEYS = ['wood', 'profile', 'ball', 'tier', 'division'];
+const FKEYS = ['wood', 'profile', 'ball', 'tier', 'division', 'style', 'weight'];
 
 function shopURL() {
   const q = [];
@@ -405,7 +430,33 @@ function filterPanelHTML() {
           <span>${o.l}</span><span class="n">${count(g, o.v)}</span>
         </label>`).join('')}
     </div>`;
+  /* One block per play-style group, driven entirely by what the Maze Room
+     holds — add "Finisher" there and it appears here with no code change.
+     Renders nothing at all when the tables are absent or empty, which is
+     also what happens offline. */
+  const styleGroups = (typeof PLAYSTYLE_GROUPS === 'undefined' ? [] : PLAYSTYLE_GROUPS)
+    .slice().sort((a, b) => (a.sort || 0) - (b.sort || 0))
+    .map(g => {
+      const key = g.id === 'weight' ? 'weight' : 'style';
+      const live = stylesInGroup(g.id);
+      if (!live.length) return '';
+      const n = sid => PRODUCTS.filter(p => prodCat(p) === 'bats' &&
+        stylesOf(p).includes(sid)).length;
+      return `
+        <div class="fgroup">
+          <b>${esc(g.name)}</b>
+          ${live.map(s => `
+            <label class="chk">
+              <input type="checkbox" data-f="${key}" value="${esc(s.id)}"
+                ${filters[key].includes(s.id) ? 'checked' : ''}>
+              <span>${esc(s.name)}</span>
+              <span class="n">${n(s.id)}</span>
+            </label>`).join('')}
+        </div>`;
+    }).join('');
+
   return (
+    styleGroups +
     grp('Division', 'division',
       Object.keys(DIVISION).map(k => ({ v: k, l: DIVISION[k].label }))) +
     grp('Wood', 'wood', Object.values(WOOD).map(w => ({ v: w.key, l: w.label }))) +
@@ -489,6 +540,123 @@ function mkArt(stage) {
   </svg>`;
 }
 
+/* ---------------- SHOP BY HOW YOU PLAY ----------------
+   The catalogue sorted by the player rather than by the timber. Someone
+   who knows they swing hard does not know they want a laminated blade
+   with thick edges — but they do know they are an attacker, and this is
+   the door that says so.
+
+   Every card is a pre-filtered shop link, so the row costs one line of
+   state and stays shareable. Renders nothing until the Maze Room has
+   styles with bats in them, which is also the offline behaviour. */
+/* The weight bands, spelled out. These are the definition the database
+   tags against (sql/017), not something derivable from the catalogue, so
+   they are written down rather than computed. A style the owner invents
+   later simply has no band and renders without one. */
+const WEIGHT_BAND = {
+  light:  'under 760g',
+  medium: '760 – 840g',
+  heavy:  '840g and up'
+};
+
+/* What a style is made of, in the shop's own vocabulary. Derived from the
+   bats actually tagged into it, so an owner-invented style describes
+   itself correctly without anyone writing copy for it.
+ *
+ * Ranked by what is DISTINCTIVE, not by what is commonest. Ranking by
+ * count gave All-rounder and Beginner the same three words, because the
+ * standard blade is the commonest shape in the catalogue and so it leads
+ * everywhere — three cards saying the same thing reads as a bug. Dividing
+ * each profile's share inside the style by its share of the whole
+ * catalogue surfaces what the style has MORE of than the shop at large,
+ * which is the thing worth printing. */
+function styleProfiles(sid, limit) {
+  const inStyle = {}, overall = {};
+  let nStyle = 0, nAll = 0;
+  PRODUCTS.forEach(p => {
+    if (prodCat(p) !== 'bats' || !p.profile) return;
+    overall[p.profile] = (overall[p.profile] || 0) + 1; nAll++;
+    if (stylesOf(p).includes(sid)) {
+      inStyle[p.profile] = (inStyle[p.profile] || 0) + 1; nStyle++;
+    }
+  });
+  if (!nStyle) return [];
+  const lift = k => (inStyle[k] / nStyle) / ((overall[k] || 1) / nAll);
+  return Object.keys(inStyle)
+    /* lift first, then raw count, so a profile represented by a single bat
+       cannot outrank one that genuinely defines the style */
+    .sort((a, b) => (lift(b) - lift(a)) || (inStyle[b] - inStyle[a]))
+    .slice(0, limit || 2)
+    .map(k => (PROFILE[k] || {}).label || k);
+}
+
+function styleRowsHTML() {
+  if (typeof PLAYSTYLE_GROUPS === 'undefined' || !PLAYSTYLE_GROUPS.length) return '';
+
+  const block = g => {
+    const isWeight = g.id === 'weight';
+    const key = isWeight ? 'weight' : 'style';
+    const live = stylesInGroup(g.id);
+    const cards = live
+      .map(s => ({ s, n: PRODUCTS.filter(p => prodCat(p) === 'bats' &&
+        stylesOf(p).includes(s.id)).length }))
+      .filter(x => x.n > 0);        /* never advertise a door into an empty room */
+    if (!cards.length) return '';
+
+    return `
+      <div class="sty-block">
+        <h3 class="sty-h">${esc(g.name)}</h3>
+        <div class="sty-row${isWeight ? ' sty-row-w' : ''}">
+          ${cards.map(({ s }) => {
+            /* Position on the scale comes from the style's own order in its
+               group, so three bands or five both work without a rewrite. */
+            const idx = live.findIndex(x => x.id === s.id);
+            const scale = isWeight ? `
+              <span class="sty-scale" aria-hidden="true">
+                ${live.map((_, i) =>
+                  `<i class="${i === idx ? 'on' : ''}"></i>`).join('')}
+              </span>` : '';
+            const spec = isWeight
+              ? (WEIGHT_BAND[s.id] || '')
+              : styleProfiles(s.id).join(' · ');
+
+            /* The inner panel is what you read; the card itself is only the
+               animated edge behind it. Two elements because a single one
+               cannot both scroll a gradient and hold still. */
+            return `
+            <a class="sty-card" href="#/shop?${key}=${encodeURIComponent(s.id)}">
+              <span class="sty-edge" aria-hidden="true"></span>
+              <span class="sty-inner">
+                <span class="sty-ico">${PS_ICON[s.id] || PS_ICON._}</span>
+                <b class="sty-name">${esc(s.name)}</b>
+                ${s.tagline ? `<span class="sty-tag">${esc(s.tagline)}</span>` : ''}
+                ${scale}
+                ${spec ? `<span class="sty-spec">${esc(spec)}</span>` : ''}
+                <span class="sty-go" aria-hidden="true">${ICON.arrow}</span>
+              </span>
+            </a>`;
+          }).join('')}
+        </div>
+      </div>`;
+  };
+
+  const blocks = PLAYSTYLE_GROUPS.slice()
+    .sort((a, b) => (a.sort || 0) - (b.sort || 0)).map(block).join('');
+  if (!blocks) return '';
+
+  return `
+  <section class="sec sty dark">
+    <span class="sty-glow" aria-hidden="true"></span>
+    <div class="wrap">
+      <p class="eyebrow">Find your game</p>
+      <h2 class="d2">Shop by how <span class="hl-2">you play.</span></h2>
+      <p class="sty-sub">Not sure which wood or profile you want? Start from the way you bat —
+        we will show you the bats built for it.</p>
+      ${blocks}
+    </div>
+  </section>`;
+}
+
 function viewHome() {
   const best = PRODUCTS.filter(p => p.popularity >= 80)
     .sort((a, b) => b.popularity - a.popularity).slice(0, 8);
@@ -501,6 +669,11 @@ function viewHome() {
      (its baked buttons land on the slide's destination); below 900px the
      artwork becomes a backdrop and real HTML copy takes over — the same
      dual treatment the old banners used, driven by CSS that never left. */
+  /* `n` is any filename stem — 1, 2, 3 or a word — so a slide can be named
+     for what it says rather than for the order it happens to sit in.
+     `eager` belongs on the first slide only: it is the LCP image, and
+     lazy-loading the thing the visitor is already looking at delays the
+     one paint the score is measured on. */
   const bnSlide = (n, o) => `
     <div class="car-slide s-banner" data-href="${o.href}"${o.ext ? ' data-ext="1"' : ''}
          role="link" tabindex="0" aria-label="${esc(o.alt)}">
@@ -511,7 +684,8 @@ function viewHome() {
         <img src="images/hero/slide-${n}-1280.jpg"
           srcset="images/hero/slide-${n}-800.jpg 800w, images/hero/slide-${n}-1280.jpg 1280w,
             images/hero/slide-${n}-1920.jpg 1920w"
-          sizes="100vw" alt="${esc(o.alt)}" loading="lazy" decoding="async">
+          sizes="100vw" alt="${esc(o.alt)}"
+          ${o.eager ? 'fetchpriority="high" decoding="async"' : 'loading="lazy" decoding="async"'}>
       </picture>
       <div class="bn-live"><div class="wrap">${o.live}</div></div>
     </div>`;
@@ -520,30 +694,18 @@ function viewHome() {
   <section class="car dark" id="car" aria-roledescription="carousel" aria-label="Featured">
     <div class="car-track" id="carTrack">
 
-      <div class="hero-live car-slide s-live" id="heroLive">
-        <span class="hv-cone l"></span><span class="hv-cone r"></span>
-        <span class="hv-lamp l"></span><span class="hv-lamp r"></span>
-        <span class="hv-haze"></span>
-        <span class="hv-embers" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-        <div class="wrap hv-grid">
-          <div class="hv-copy">
-            <p class="eyebrow hv-in s1">India's gully cricket ecosystem</p>
-            <h1 class="d1 hv-in s2">From street cricket<span class="hl-2">to greatness.</span></h1>
-            <p class="lede hv-in s3">29 bats shaped by hand in our own unit — Sri Lankan wood,
-              Kashmir Willow and Poplar. From ₹950.</p>
-            <div class="car-cta hv-in s4">
-              <a href="#/shop" class="btn btn-primary">Shop All Bats ${ICON.arrow}</a>
-              <a href="#/finder" class="btn btn-ghost">Find My Bat — 30s</a>
-            </div>
-            <p class="hv-proof hv-in s5">36.9K on Instagram · 4M reel reach · played by 170-player clubs</p>
+      ${bnSlide('power', { href: '#/shop', eager: true,
+        alt: 'Engineered for power, built for performance — handcrafted Toss cricket bats',
+        live: `
+          <p class="eyebrow">New arrival</p>
+          <h1 class="d1">Engineered for power.<span class="hl-2">Built for performance.</span></h1>
+          <p class="lede">29 bats shaped by hand in our own unit — Sri Lankan wood,
+            Kashmir Willow and Poplar. From ₹950.</p>
+          <div class="car-cta">
+            <a href="#/shop" class="btn btn-primary">Shop All Bats ${ICON.arrow}</a>
+            <a href="#/finder" class="btn btn-ghost">Find My Bat — 30s</a>
           </div>
-          <div class="hv-stage" id="hvStage">
-            <span class="hv-ball"></span>
-            <div class="hv-bat">${batArt(px || PRODUCTS[0], { glow: true, eager: true })}</div>
-            <span class="hv-shadow"></span>
-          </div>
-        </div>
-      </div>
+          <p class="hv-proof">36.9K on Instagram · 4M reel reach · played by 170-player clubs</p>` })}
 
       ${bnSlide(1, { href: '#/shop',
         alt: 'From street cricket to greatness — premium cricket gear built by Toss',
@@ -603,6 +765,7 @@ function viewHome() {
   </section>
 
   ${tierRowHTML()}
+  ${styleRowsHTML()}
   ${socialProofHTML()}
 
   ${testimonialsHTML()}
@@ -2433,6 +2596,10 @@ function route(keepScroll) {
   document.body.classList.toggle('pdp-open', page === 'product');
 
   $$('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + path));
+  /* The bottom bar lights on the PAGE, not the exact path, so a product page
+     still shows Shop as where you are rather than nothing at all. */
+  $$('#btmnav a').forEach(a => a.classList.toggle('on',
+    a.dataset.nav === page || (a.dataset.nav === 'shop' && page === 'product')));
 
   if (!keepScroll) window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   if (typeof trackPage === 'function') trackPage();
@@ -2912,6 +3079,16 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
   $('#yr').textContent      = new Date().getFullYear();
 
   $('#cartBtn').onclick   = () => { renderCart(); openDrawer('#cartDrawer'); };
+
+  /* ---- bottom bar (phones only; the CSS hides it from 900px up) ---- */
+  {
+    const ico = { bnShop: ICON.grid, bnFind: PS_ICON._, bnPlay: ICON.star, bnCartIco: ICON.cart };
+    Object.keys(ico).forEach(id => { const el = $('#' + id); if (el) el.innerHTML = ico[id]; });
+    const bc = $('#bnCart');
+    /* Opens the same drawer the header bag does, rather than routing
+       somewhere — one cart, reached from two places. */
+    if (bc) bc.onclick = () => { renderCart(); openDrawer('#cartDrawer'); };
+  }
   $('#searchBtn').onclick = () => { openDrawer('#searchDrawer'); setTimeout(() => $('#sInput').focus(), 320); runSearch(''); };
   $('#sInput').oninput    = e => runSearch(e.target.value);
   $('#fReset').onclick    = () => { clearFilters(); };

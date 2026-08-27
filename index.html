@@ -61,7 +61,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/styles.css?v=82">
+<link rel="stylesheet" href="css/styles.css?v=94">
 <link rel="icon" href="images/logo/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="images/logo/favicon-180.png">
 </head>
@@ -283,6 +283,24 @@
   </aside>
 </div>
 
+<!-- ===== bottom navigation (phones only) =====
+     The header nav is display:none below 900px, which left a phone with no
+     way to reach Shop, the finder or the game except from links inside the
+     page. This is that navigation, put where a thumb actually reaches.
+     Hidden from ≥900px, where the header nav takes over. -->
+<nav class="btmnav" id="btmnav" aria-label="Primary">
+  <a href="#/shop" data-nav="shop">
+    <span class="btmnav-i" id="bnShop"></span><span>Shop</span></a>
+  <a href="#/finder" data-nav="finder">
+    <span class="btmnav-i" id="bnFind"></span><span>Find My Bat</span></a>
+  <a href="#/game" data-nav="game">
+    <span class="btmnav-i" id="bnPlay"></span><span>Play &amp; Win</span></a>
+  <button type="button" id="bnCart">
+    <span class="btmnav-i" id="bnCartIco"></span><span>Bag</span>
+    <span class="btmnav-dot hide" id="bnCartDot">0</span>
+  </button>
+</nav>
+
 <!-- ===== filter drawer ===== -->
 <div class="drawer drawer-left" id="filterDrawer">
   <div class="drawer-bg" data-close></div>
@@ -320,12 +338,12 @@
 
 <script src="js/config.js?v=49"></script>
 <script src="js/products.js?v=47"></script>
-<script src="js/art.js?v=64"></script>
-<script src="js/services.js?v=3"></script>
+<script src="js/art.js?v=66"></script>
+<script src="js/services.js?v=7"></script>
 <script src="js/game.js?v=47"></script>
-<script src="js/store-sync.js?v=53"></script>
+<script src="js/store-sync.js?v=55"></script>
 <script src="js/nav-play.js?v=68"></script>
 <script src="js/chatbot.js?v=63"></script>
-<script src="js/app.js?v=79"></script>
+<script src="js/app.js?v=85"></script>
 </body>
 </html>
