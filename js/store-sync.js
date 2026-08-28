@@ -112,9 +112,15 @@ async function pushOrder(order) {
            lost the text the workshop has to cut. */
         items: (order.items || []).map(l => {
           const p = byId(l.id) || {};
+          /* `warranty` travels for the same reason `engrave` does: the
+             database re-prices the order from the catalogue, and a bat
+             with cover costs more than one without. Dropping it here
+             would make the recomputed total too low and lose the plan
+             the customer actually paid for. */
           return { id: l.id, name: p.name || l.id, price: p.price || 0,
                    qty: l.qty, variant: l.variant || null,
-                   engrave: l.engrave || null };
+                   engrave: l.engrave || null,
+                   warranty: l.warranty || null };
         }),
         subtotal: order.subtotal, shipping: order.shipping,
         discount: order.off || 0, total: order.total,

@@ -33,7 +33,13 @@ const ORDER = [
   ['010-analytics.sql',       'P&L, product performance, dead stock, loyalty views'],
   ['011-services.sql',        'Requests, product Q&A, order tracking'],
   ['012-fulfilment.sql',      'Stock decrement on order, courier and tracking fields'],
-  ['013-supabase-auth.sql',   'Moves logins from Firebase to Supabase Auth']
+  ['013-supabase-auth.sql',   'Moves logins from Firebase to Supabase Auth'],
+  ['016-security-fixes.sql',  'Order id format, server-side pricing, private request photos'],
+  ['017-playstyles.sql',      'Play-style vocabulary and product mapping'],
+  ['018-customer-accounts.sql','Customer sign-in, order history, claiming past orders'],
+  ['019-corporate-and-warranty.sql','Corporate requests, and the paid extended warranty'],
+  ['020-coupon-kinds.sql',        'Game, loyalty, referral and offer codes'],
+  ['021-order-versioning.sql',    'Row versions, so the Sheet sync cannot overwrite newer edits']
 ];
 
 const missing = ORDER.filter(([f]) => !fs.existsSync(path.join(DIR, f)));

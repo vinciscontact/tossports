@@ -94,7 +94,6 @@ finance, staff, attendance, payroll, tasks, SOPs and leaderboards.
 |---|---|
 | WhatsApp Business API automation | Requires Meta verification, a BSP account and per-conversation fees. Click-to-chat delivers most of the value at zero cost. |
 | Automated salary disbursement | Client chose records-only. Payouts need business KYC and a funded account. |
-| Customer accounts / login | No demand identified. Orders work without one. |
 | Multi-language (Tamil) | Offered and declined for v1. |
 | Marketplace sync (Amazon/Flipkart) | Not requested. |
 
@@ -152,6 +151,35 @@ after button-phone games.
 | FR-4.5 | Reward codes stay hidden until earned, then reveal by decode animation | ✅ |
 | FR-4.6 | Rewards are real discounts, applying at checkout | ✅ |
 | FR-4.7 | Shared leaderboard | ✅ |
+
+### 5.4a Customer accounts
+
+Added after the original scope, at the client's request. Sign-in is Google
+through Supabase Auth — no password to store, and nothing to leak.
+
+The account is a convenience laid over a shop that works without one: anonymous
+checkout is untouched, and `#/track` still answers "where is my bat" with no
+account at all.
+
+| ID | Requirement | Status |
+|---|---|---|
+| FR-8.1 | Sign in with Google; no password ever stored | ⚠️ Built; needs the provider enabled (§11 C9) |
+| FR-8.2 | A customer reads their own orders and nothing else, enforced by RLS | ✅ |
+| FR-8.3 | Reorder — refill the bag from a past order, priced from today's catalogue | ✅ |
+| FR-8.4 | Saved name, phone and addresses, prefilled at checkout | ✅ |
+| FR-8.5 | Service requests (Bat Doctor, trade-in, wholesale) visible with their quotes | ✅ |
+| FR-8.6 | Delivery followed per order, with a link to the courier | ✅ |
+| FR-8.7 | Orders placed while signed in are attributed automatically | ✅ |
+| FR-8.8 | Past guest orders claimable with order number + phone | ✅ |
+
+**The linking problem.** Checkout has never collected an email and Google gives
+no phone, so a new account has nothing to match its history against. Three
+mechanisms close it, in descending order of trust: new orders are stamped with
+the signed-in user as they are placed; service requests — which *do* carry an
+email — link themselves against the verified Google address; and past orders are
+claimed by proving one order number against the phone it was placed with, after
+which every unclaimed order on that phone follows. An order already claimed can
+never be taken by a second claimant.
 
 ### 5.5 Chatbot
 
@@ -263,7 +291,9 @@ lock is cosmetic. This is a hard dependency (§11).
 
 ### 8.1 Data model
 
-13 tables + 1 view, all with row-level security enabled, 31 policies.
+26 tables and 10 views, all with row-level security enabled. (The original
+13 covered the core; billing, stock, categories, access control, branches,
+analytics, services, play styles and customer accounts each added their own.)
 
 | Table | Holds |
 |---|---|
@@ -277,6 +307,7 @@ lock is cosmetic. This is a hard dependency (§11).
 | `payroll` | Payslip records |
 | `sops` · `sop_acks` | Procedures and acknowledgement |
 | `expenses` | Finance |
+| `customer_profiles` | Customer name, phone and saved addresses — own-row access only |
 | `customer_stats` (view) | Customer leaderboard, inherits order policy |
 
 Functions: `is_admin`, `my_role`, `my_staff_id`, `has_role`, `claim_staff`,
@@ -290,7 +321,9 @@ Functions: `is_admin`, `my_role`, `my_staff_id`, `has_role`, `claim_staff`,
 |---|---|
 | Admin access | Firebase UID must appear in `staff`; policies key off it |
 | Salary privacy | Owner-only read; everyone else sees only their own row |
-| Order book | Public may insert an order, never read one |
+| Order book | Public may insert an order, never read one. A signed-in customer reads only rows carrying their own user id |
+| Order ownership | Stamped by a database trigger from the session, never taken from the request body |
+| Claiming past orders | Requires a valid order number *and* its phone; an order already claimed cannot be taken by a second claimant |
 | Discount codes | Not publicly readable; validated by database function |
 | Product/price tampering | Write policies restricted to owner/manager |
 | Secrets | Supabase URL, publishable key and Firebase web config are public by design. The Postgres password and `service_role` key must never appear in source. |
@@ -331,6 +364,7 @@ Role isolation tested by impersonating each role's JWT at database level.
 | Maze Room (11 sections, 4 roles) | ✅ Complete |
 | Database + security | ✅ Complete and verified |
 | Storefront ↔ database wiring | ✅ Complete |
+| Customer accounts (orders, reorder, addresses, requests) | ⚠️ Built; awaiting C9 and C10 |
 | Product photography | ❌ Not started — client dependency |
 | Live payments | ⚠️ Awaiting key |
 | Deployment | ❌ Local only, by client instruction |
@@ -355,6 +389,8 @@ These block launch and cannot be resolved from the codebase.
 | C6 | Rotate the Postgres password (shared in plaintext during setup) | Credential exposure | Client |
 | C7 | Confirm the WhatsApp number (two exist across sources) | Orders may route to the wrong phone | Client |
 | C8 | Decide hosting and repoint DNS from the GoDaddy parked page | Site not reachable | Client |
+| C9 | Enable Google as an auth provider in Supabase (Client ID + Secret from Google Cloud) and allow-list the deployed origin under Authentication → URL Configuration | **Customer sign-in unusable.** The button returns a 400 | Client |
+| C10 | Run `sql/018-customer-accounts.sql` against the database | Account area loads nothing; claiming fails | Client |
 
 C3, C4, C5 and C7 are now editable in the Maze Room and need no developer.
 
@@ -411,5 +447,6 @@ js/store-sync.js    database sync       sql/schema.sql      core schema
 js/game.js          Gully Cricket       sql/002-…           operations layer
 js/chatbot.js       chatbot             sql/003-…           email→UID binding
 js/nav-play.js      living navbar       sql/004-…           role repair
-                                        sql/SETUP.md        setup guide
+js/services.js      services + track    sql/018-…           customer accounts
+js/account.js       customer accounts   sql/SETUP.md        setup guide
 ```

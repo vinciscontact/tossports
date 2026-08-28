@@ -569,6 +569,7 @@ function orderDetail(o) {
             <tr><th>Channel</th><td>${esc(o.channel || 'web')}</td></tr>
             <tr><th>Payment</th><td>${esc(o.method || '—')} ${o.paid ? '· paid' : '· unpaid'}</td></tr>
             <tr><th>Status</th><td>${esc(o.status)}</td></tr>
+            ${c.email ? `<tr><th>Email</th><td><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></td></tr>` : ''}
             ${seller ? `<tr><th>Sold by</th><td>${esc(seller.name)}</td></tr>` : ''}
             <tr><th>Bill</th><td>${inv ? esc(inv.number) : '<i>not billed yet</i>'}</td></tr>
           </table>
@@ -1536,7 +1537,8 @@ let REQ = { rows: [], loaded: false, kind: '', status: 'open', signed: {} };
 
 const REQ_KIND = {
   bat_doctor: 'Bat Doctor',  custom_bat: 'Custom bat', jersey: 'Jerseys',
-  wholesale:  'Wholesale',   trade_in:   'Trade-in',   video:  'Videos'
+  wholesale:  'Wholesale',   trade_in:   'Trade-in',   video:  'Videos',
+  corporate:  'Corporate'
 };
 const REQ_STATUS = ['new', 'quoted', 'accepted', 'done', 'declined'];
 

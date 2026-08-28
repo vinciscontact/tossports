@@ -76,7 +76,12 @@ const SVC_ART = (() => {
     /* film frame with a play mark */
     video: w(`<rect x="7" y="12" width="34" height="24" rx="3"/>
       <path d="M7 18h4M7 24h4M7 30h4M37 18h4M37 24h4M37 30h4"/>
-      <path d="M21 19l8 5-8 5z"/>`)
+      <path d="M21 19l8 5-8 5z"/>`),
+
+    /* an office block with a gift tag on it — corporate gifting */
+    corporate: w(`<path d="M8 40V12a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v28"/>
+      <path d="M26 40V22h12a2 2 0 0 1 2 2v16"/><path d="M5 40h38"/>
+      <path d="M13 17h6M13 24h6M13 31h6M31 28h4M31 34h4"/>`)
   };
 })();
 
@@ -87,7 +92,10 @@ const SVC_ID = {
   trade_in:   { accent: '#007C41', tint: '#E6F2EC', art: 'trade_in'   },
   wholesale:  { accent: '#9E5E00', tint: '#F5EFE6', art: 'wholesale'  },
   jersey:     { accent: '#C0357A', tint: '#F9EBF2', art: 'jersey'     },
-  video:      { accent: '#6B3FC4', tint: '#F0ECF9', art: 'video'      }
+  video:      { accent: '#6B3FC4', tint: '#F0ECF9', art: 'video'      },
+  /* Teal — the one hue left that clears 4.5:1 on white and on its own
+     tint without colliding with the six above. Measured, not picked. */
+  corporate:  { accent: '#00666E', tint: '#E4F1F2', art: 'corporate'  }
 };
 
 const svcId = k => SVC_ID[k] || { accent: 'var(--orange-700)', tint: 'var(--paper-alt)', art: null };
@@ -159,11 +167,12 @@ const SVC = {
     minNote: () => `Minimum order ${SERVICES.jersey.min} jerseys.`,
     fields: [
       { k: 'team', g: 'The team', t: 'text', label: 'Team name', req: true, ph: 'As it should print' },
-      { k: 'qty', g: 'The team', t: 'number', label: 'How many jerseys?', req: true, min: 1, ph: '11' },
-      { k: 'sizes', g: 'Sizes and names', t: 'text', label: 'Size breakdown', req: true,
-        ph: '2 S, 5 M, 3 L, 1 XL', hint: () => 'Available: ' + SERVICES.jersey.sizes.join(', ') },
-      { k: 'names', g: 'Sizes and names', t: 'textarea', label: 'Names and numbers',
-        ph: 'One per line — Karthik 07, Arun 18…', hint: 'You can send this later if it is not final.' },
+      /* Name, size and number per jersey. The total and the size
+         breakdown are counted from these rows in collect(), so there is
+         no separate quantity box to fall out of step with them. */
+      { k: 'players', g: 'Sizes and names', t: 'roster', req: true,
+        label: 'Name, size and number on each jersey',
+        opts: () => SERVICES.jersey.sizes.map(v => ({ v, label: v })) },
       { k: 'when', g: 'Timing', t: 'text', label: 'Needed by', ph: 'Tournament date, if there is one' }
     ]
   },
@@ -184,6 +193,44 @@ const SVC = {
       { k: 'mix', g: 'The order', t: 'textarea', label: 'Which bats?', ph: 'Model names, or just a budget per bat and we will suggest.' },
       { k: 'gst', g: 'Who you are', t: 'text', label: 'GSTIN (optional)', ph: 'For a tax invoice' },
       { k: 'when', g: 'Timing', t: 'text', label: 'Needed by' }
+    ]
+  },
+
+  /* Corporate is deliberately NOT folded into wholesale. A club buying 25
+     bats wants a rate; a company buying 25 wants them branded, invoiced to
+     a PO and delivered before an event. Same quantity, different
+     conversation, so different questions. */
+  corporate: {
+    slug: 'corporate',
+    title: 'Corporate & gifting orders',
+    eyebrow: 'For companies and events',
+    lede: 'Bats for a tournament, a client gift or an employee event — branded with your logo ' +
+          'and invoiced properly. Tell us what the occasion is and we will come back with a ' +
+          'quote and a mock-up.',
+    cta: 'Request a corporate quote',
+    photos: { min: 0, max: 3, label: 'Your logo or brand guide',
+      hint: 'Optional — the highest quality file you have.' },
+    fields: [
+      { k: 'company', g: 'Your company', t: 'text', label: 'Company name', req: true },
+      { k: 'contact', g: 'Your company', t: 'text', label: 'Your role', ph: 'HR, admin, marketing…' },
+      { k: 'gst',     g: 'Your company', t: 'text', label: 'GSTIN (optional)',
+        ph: 'For a tax invoice' },
+      { k: 'occasion', g: 'The order', t: 'radios', label: 'What is it for?', req: true, opts: () => [
+        { v: 'gifting',    label: 'Client or employee gifting' },
+        { v: 'tournament', label: 'Corporate tournament' },
+        { v: 'event',      label: 'An event or launch' },
+        { v: 'other',      label: 'Something else' } ] },
+      { k: 'qty', g: 'The order', t: 'number', label: 'How many?', req: true, min: 1, ph: '25',
+        hint: () => `Corporate pricing starts at ${SERVICES.corporate.min}.` },
+      { k: 'branding', g: 'The order', t: 'radios', label: 'Branding needed?', req: true, opts: () => [
+        { v: 'logo',     label: 'Our logo on the bat' },
+        { v: 'engraved', label: 'Engraved names' },
+        { v: 'both',     label: 'Both' },
+        { v: 'none',     label: 'No branding' } ] },
+      { k: 'budget', g: 'The order', t: 'text', label: 'Budget per piece (optional)',
+        ph: '₹1,500 — helps us suggest the right bat' },
+      { k: 'when', g: 'Timing', t: 'text', label: 'Needed by', req: true,
+        ph: 'The event date — branding takes time' }
     ]
   },
 
@@ -212,7 +259,8 @@ const SVC = {
     title: 'Send us a video, get money off',
     eyebrow: 'Customer films',
     lede: () => `Film yourself playing with your Toss bat. If we use it, you get ` +
-                `${SERVICES.video.rewardOff}% off your next order.`,
+                `${SERVICES.video.rewardMin}–${SERVICES.video.rewardOff}% off your next ` +
+                `order — how much depends on how good the footage is.`,
     cta: 'Submit my video',
     photos: { min: 1, max: 1, label: 'Your video', hint: () =>
       `At least ${SERVICES.video.minSeconds} seconds. Shot sideways (landscape) works best.`,
@@ -256,6 +304,31 @@ function svcField(f) {
   } else if (f.t === 'number') {
     input = `<input id="${id}" type="number" inputmode="numeric" min="${f.min || 0}"
       placeholder="${esc(f.ph || '')}">`;
+  } else if (f.t === 'roster') {
+    /* One row per jersey: the name that gets printed, the size, and the
+       number. This replaced a free-text "2 S, 5 M" breakdown plus a
+       separate names box — two fields describing the same eleven people,
+       which meant they could disagree and often did.
+
+       A jersey IS a name, a size and a number, so that is the unit the
+       form collects. The size breakdown and the total are counted from
+       the rows rather than asked for again. */
+    const sizes = val(f.opts);
+    const row = `
+      <div class="svc-row">
+        <input type="text" data-r="name" placeholder="Name on jersey" aria-label="Name on jersey">
+        <select data-r="size" aria-label="Size">
+          <option value="">Size</option>
+          ${sizes.map(o => `<option value="${esc(o.v)}">${esc(o.label)}</option>`).join('')}
+        </select>
+        <input type="text" data-r="num" inputmode="numeric" maxlength="3"
+               placeholder="No." aria-label="Number on jersey">
+        <button type="button" data-delrow aria-label="Remove this jersey">&times;</button>
+      </div>`;
+    input = `<div class="svc-roster">
+      <div class="svc-rows" data-rows>${row.repeat(3)}</div>
+      <button type="button" class="svc-addrow" data-addrow>+ Add another</button>
+    </div>`;
   } else {
     input = `<input id="${id}" type="text" placeholder="${esc(f.ph || '')}"
       ${f.max ? `maxlength="${val(f.max)}"` : ''}>`;
@@ -310,7 +383,7 @@ function viewService(slug) {
           ${kind === 'bat_doctor' ? `<span>${ICON.truck} ${esc(SERVICES.batDoctor.turnaround)}</span>` : ''}
           ${s.minNote ? `<span>${ICON.check} ${esc(val(s.minNote))}</span>` : ''}
           ${kind === 'trade_in' ? `<span>${ICON.rupee} Valued from photos, no obligation</span>` : ''}
-          ${kind === 'video' ? `<span>${ICON.star} ${SERVICES.video.rewardOff}% off your next order</span>` : ''}
+          ${kind === 'video' ? `<span>${ICON.star} Up to ${SERVICES.video.rewardOff}% off your next order</span>` : ''}
           ${kind === 'custom_bat' ? `<span>${ICON.hammer} Shaped by hand in our own unit</span>` : ''}
           ${wa ? `<a href="https://wa.me/${wa}?text=${encodeURIComponent('Hi Toss, about ' + s.title + ' — ')}"
              target="_blank" rel="noopener">${ICON.whatsapp} Rather just ask?</a>` : ''}
@@ -501,6 +574,26 @@ function wireService(slug) {
       if (t === 'radios') {
         const on = $('input:checked', box);
         v = on ? on.value : '';
+      } else if (t === 'roster') {
+        /* Flattened to one readable line per jersey. It has to be a
+           STRING, not an array: both the WhatsApp handoff and the Maze
+           Room render payload values with String(), so an array of
+           objects would reach staff as "[object Object]".
+
+           The size breakdown and the total are derived here and written
+           alongside, so the supplier gets "3 M, 2 L" without anybody
+           counting rows by hand. */
+        const rows = [], bySize = {};
+        $$('.svc-row', box).forEach(r => {
+          const g = sel => { const el = $(sel, r); return el ? el.value.trim() : ''; };
+          const nm = g('[data-r="name"]'), sz = g('[data-r="size"]'), no = g('[data-r="num"]');
+          if (!nm && !sz && !no) return;              // untouched row
+          rows.push(`${nm || '—'} · ${sz || '—'} · ${no || '—'}`);
+          if (sz) bySize[sz] = (bySize[sz] || 0) + 1;
+        });
+        v = rows.join('\n');
+        out.sizes = Object.keys(bySize).map(s => bySize[s] + ' ' + s).join(', ');
+        out.qty   = rows.length ? String(rows.length) : '';
       } else {
         const el = $('input,select,textarea', box);
         v = el ? el.value.trim() : '';
@@ -551,10 +644,34 @@ function wireService(slug) {
     $('#svcProg').classList.toggle('done', done === st.length);
   }
 
+  function addRosterRow() {
+    const rows = $('[data-rows]', form);
+    if (!rows) return;
+    const first = $('.svc-row', rows);
+    if (!first) return;
+    const clone = first.cloneNode(true);
+    $$('input,select', clone).forEach(el => { el.value = ''; });
+    rows.appendChild(clone);
+    const nm = $('[data-r="name"]', clone);
+    if (nm) nm.focus();
+  }
+
   /* input covers typing, change covers radios, selects and the file picker.
      Both are needed: a radio fires change but never input. */
   form.addEventListener('input', paintProgress);
   form.addEventListener('change', paintProgress);
+  form.addEventListener('click', e => {
+    if (e.target.closest('[data-addrow]')) { addRosterRow(); return; }
+    const del = e.target.closest('[data-delrow]');
+    if (del) {
+      const rows = $('[data-rows]', form);
+      /* Never leave nothing to type into — the last row is emptied
+         rather than removed. */
+      if ($$('.svc-row', rows).length > 1) del.closest('.svc-row').remove();
+      else $$('input,select', del.closest('.svc-row')).forEach(el => { el.value = ''; });
+      paintProgress();
+    }
+  });
   paintProgress();
 
   form.onsubmit = async e => {
@@ -850,7 +967,7 @@ function communityHTML() {
   const c = TOSS_LINKS.community, o = TOSS_LINKS.offers;
   if (!c && !o) return '';
   return `
-  <section class="sec comm">
+  <section class="sec sec--band comm">
     <div class="wrap">
       <div class="comm-grid">
         ${c ? `
@@ -886,64 +1003,62 @@ function communityHTML() {
    to be built and then never found.
    ============================================================ */
 
-function servicesBandHTML() {
+/* ------------------------------------------------------------
+   THE TILE ROW — directly under the hero.
+
+   The same six services as the band below, compressed to what fits
+   on one line: the artwork, the name, two words of promise and an
+   arrow. It is navigation, not persuasion — someone who arrives
+   knowing they want a repair should not have to scroll past the
+   whole shop to find out repairs exist.
+
+   Reuses SVC_ID and SVC_ART — the accent colour and line drawing
+   each service already owns — so a tile looks like the form it
+   leads to, and a seventh service needs a colour rather than a
+   stylesheet. This replaced the taller six-card band that used to
+   sit further down the page.
+
+   `short` is separate from the band's longer `d` because the tile
+   has room for about four words. Truncating the long one with an
+   ellipsis would put the interesting half off-screen.
+   ------------------------------------------------------------ */
+function serviceTilesHTML() {
   const S = SERVICES;
-  /* `c` is the button label. Naming the action beats a generic "Learn more"
-     on all six — it tells you what happens next before you commit. */
-  const cards = [
-    S.batDoctor.enabled && { k: 'bat_doctor', href: '#/service/bat-doctor', t: 'Bat Doctor',
-      d: 'Cracked, loose or dead? Send a photo, get a price before you post it.',
-      c: 'Send a photo' },
-    S.customBat.enabled && { k: 'custom_bat', href: '#/service/custom', t: 'Build your own',
-      d: 'Your wood, your profile, your weight. Cut by hand to your spec.',
-      c: 'Start a build' },
-    S.tradeIn.enabled && { k: 'trade_in', href: '#/service/trade-in', t: 'Trade in your old bat',
-      d: 'We value it, you get that much off a new one.',
-      c: 'Get a valuation' },
-    S.wholesale.enabled && { k: 'wholesale', href: '#/service/wholesale', t: 'Bulk & wholesale',
-      d: `Club and academy rates from ${S.wholesale.min} bats.`,
-      c: 'Get club rates' },
-    S.jersey.enabled && { k: 'jersey', href: '#/service/jersey', t: 'Team jerseys',
-      d: 'Names, numbers and your crest, printed to order.',
-      c: 'Kit the team out' },
-    S.video.enabled && { k: 'video', href: '#/service/video', t: `Send a video, get ${S.video.rewardOff}% off`,
-      d: 'Film yourself playing. If we use it, you get money off.',
-      c: 'Send a video' }
+  /* Seven of these share one row, so each gets roughly 110px of text.
+     Both lines are kept to a SINGLE WORD wherever the language allows —
+     a two-word label wraps, and a wrapped label in a 12px tile is what
+     made this row look broken. The longer phrasing still exists on the
+     service page each tile opens. */
+  const tiles = [
+    S.batDoctor.enabled && { k: 'bat_doctor', href: '#/service/bat-doctor',
+      t: 'Bat Doctor',   short: 'Repairs' },
+    S.customBat.enabled && { k: 'custom_bat', href: '#/service/custom',
+      t: 'Custom bat',   short: 'Your spec' },
+    S.tradeIn.enabled   && { k: 'trade_in',   href: '#/service/trade-in',
+      t: 'Trade in',     short: 'Old for new' },
+    S.wholesale.enabled && { k: 'wholesale',  href: '#/service/wholesale',
+      t: 'Bulk',         short: `${S.wholesale.min}+ bats` },
+    S.jersey.enabled    && { k: 'jersey',     href: '#/service/jersey',
+      t: 'Jerseys',      short: 'Printed kit' },
+    S.video.enabled     && { k: 'video',      href: '#/service/video',
+      t: 'Send a video', short: `Up to ${S.video.rewardOff}% off` },
+    S.corporate.enabled && { k: 'corporate',  href: '#/service/corporate',
+      t: 'Corporate',    short: 'Gifting' }
   ].filter(Boolean);
-  if (!cards.length) return '';
+  if (!tiles.length) return '';
 
   return `
-  <section class="sec svcband">
-    <div class="wrap">
-      <div class="sec-head rv"><div>
-        <p class="eyebrow">More than a shop</p>
-        <h2 class="d2">We also fix, build and kit out</h2>
-      </div>
-      <a href="#/track" class="link-arrow">Track an order ${ICON.arrow}</a></div>
-
-      <div class="svcband-grid">
-        ${cards.map(c => {
-          const id = svcId(c.k);
-          /* Colour is passed as a custom property rather than baked into a
-             class per service. One rule set styles all six, and adding a
-             seventh service means adding a colour, not a stylesheet. */
-          /* The whole card is the link. The pill below only LOOKS like a
-             button — a real <button> or a second <a> inside this one would
-             be invalid markup, and it would shrink the tap target to itself
-             on the phones most of this traffic comes from. */
-          return `
-          <a class="svcband-card rv" href="${c.href}"
-             style="--svc:${id.accent};--svc-tint:${id.tint}">
-            <span class="svcband-wash" aria-hidden="true"></span>
-            <span class="svcband-art">${SVC_ART[id.art] || ICON.star}</span>
-            <span class="svcband-info">
-              <b>${esc(c.t)}</b>
-              <p>${esc(c.d)}</p>
-            </span>
-            <span class="svcband-btn">${esc(c.c || 'Open')}</span>
-          </a>`;
-        }).join('')}
-      </div>
+  <section class="svctiles">
+    <div class="wrap svctiles-row">
+      ${tiles.map(c => {
+        const id = svcId(c.k);
+        return `
+        <a class="svctile" href="${c.href}" style="--svc:${id.accent};--svc-tint:${id.tint}">
+          <span class="svctile-art" aria-hidden="true">${SVC_ART[id.art] || ICON.star}</span>
+          <span class="svctile-txt"><b>${esc(c.t)}</b><i>${esc(c.short)}</i></span>
+          <span class="svctile-go" aria-hidden="true">${ICON.arrow}</span>
+        </a>`;
+      }).join('')}
     </div>
   </section>`;
 }

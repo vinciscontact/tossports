@@ -1938,26 +1938,122 @@ function writeError(e) {
 /* ---------------- coupons ---------------- */
 function viewCoupons() {
   return `
-    <div class="head"><h2>Rewards</h2></div>
-    <p class="muted" style="margin-bottom:16px">Codes players unlock by scoring in Gully Cricket.
-      These are never listed publicly — the storefront validates them through a database function,
-      so the codes stay a surprise until they're earned.</p>
+    <div class="head"><h2>Rewards</h2>
+      <button class="btn primary sm" id="cNew">New code</button></div>
+    <p class="muted" style="margin-bottom:16px">Discount codes — game rewards, loyalty codes,
+      referrals, festival offers. These are never listed publicly: the storefront validates them
+      through a database function, so a code only works for someone who was given it.
+      Leave <b>Unlocks at</b> empty for a code that is not earned by playing.</p>
     ${DB.coupons.length ? `<div class="tbl-wrap"><table>
-      <thead><tr><th>Code</th><th class="num">Discount</th><th class="num">Min spend</th>
+      <thead><tr><th>Code</th><th>Type</th><th class="num">Discount</th><th class="num">Min spend</th>
         <th class="num">Unlocks at</th><th class="num">Used</th><th>Active</th><th></th></tr></thead>
       <tbody>${DB.coupons.map(c => `<tr>
-        <td><b style="font-family:ui-monospace,monospace">${esc(c.code)}</b></td>
+        <td><b style="font-family:ui-monospace,monospace">${esc(c.code)}</b>
+          ${c.referred_by ? `<div class="pid">via ${esc(c.referred_by)}</div>` : ''}</td>
+        <td><span class="tag">${esc(COUPON_KIND[c.kind || 'game'] || c.kind || 'Game')}</span></td>
         <td class="num">${inr(c.discount)}</td>
         <td class="num">${inr(c.min_spend)}</td>
-        <td class="num">${c.unlock_runs ?? '—'} runs</td>
+        <!-- "runs" only means something for a code earned by playing -->
+        <td class="num">${c.unlock_runs == null ? '—' : c.unlock_runs + ' runs'}</td>
         <td class="num">${c.uses}</td>
         <td><span class="pill ${c.active ? 'on' : 'off'}">${c.active ? 'On' : 'Off'}</span></td>
         <td style="text-align:right"><button class="btn ghost sm" data-cedit="${esc(c.code)}">Edit</button></td>
       </tr>`).join('')}</tbody></table></div>`
-      : `<div class="empty">No reward codes found.</div>`}`;
+      : `<div class="empty">No codes yet. Use <b>New code</b> to make one.</div>`}`;
 }
 
+/* What a code is for. `game` is first because it is what every existing
+   row is, and the default in the database. */
+const COUPON_KIND = {
+  game:     'Game reward',
+  loyalty:  'Loyalty',
+  referral: 'Referral',
+  offer:    'Offer'
+};
+
 function wireCoupons() {
+  /* Creating a code was the one thing this screen could not do — it could
+     edit the two seeded by the schema and nothing else, so a loyalty or
+     referral code meant opening the SQL editor. Same modal as Edit, plus
+     the code itself, which is the primary key and therefore the only
+     field that cannot be changed afterwards. */
+  const nb = $('#cNew');
+  if (nb) nb.onclick = () => {
+    openModal('New reward code', `
+      <div class="f">
+        <div class="grid2">
+          <div class="row"><label>Code</label>
+            <input id="c_code" placeholder="TOSS100" autocomplete="off"
+                   style="font-family:ui-monospace,monospace;text-transform:uppercase">
+            <div class="hint">Letters and numbers. This is what the customer types at
+              checkout, and it cannot be changed later — delete and remake instead.</div></div>
+          <div class="row"><label>Type</label>
+            <select id="c_kind">
+              ${Object.keys(COUPON_KIND).map(k =>
+                `<option value="${k}"${k === 'referral' ? ' selected' : ''}>${COUPON_KIND[k]}</option>`).join('')}
+            </select>
+            <div class="hint">Only <b>Game</b> codes use the runs field.</div></div>
+        </div>
+        <div class="grid2">
+          <div class="row"><label>Discount (₹)</label>
+            <input id="c_off" type="number" min="1" value="100"></div>
+          <div class="row"><label>Minimum spend (₹)</label>
+            <input id="c_min" type="number" min="0" value="0"></div>
+          <div class="row" id="c_runs_row"><label>Unlocks at (runs)</label>
+            <input id="c_runs" type="number" min="0" placeholder="Leave empty">
+            <div class="hint">Only for codes earned in Gully Cricket.</div></div>
+          <div class="row" id="c_ref_row"><label>Referred by</label>
+            <input id="c_ref" placeholder="Name or phone of who passed it on">
+            <div class="hint">So you know who to thank when it gets used.</div></div>
+        </div>
+        <div class="row"><label>Label</label>
+          <input id="c_label" placeholder="What this code is for"></div>
+        <div class="row"><label class="check">
+          <input type="checkbox" id="c_active" checked> Active</label></div>
+      </div>`, async () => {
+      const code = ($('#c_code').value || '').trim().toUpperCase();
+      if (!/^[A-Z0-9._-]{3,24}$/.test(code)) {
+        toast('Code must be 3–24 letters or numbers', true); return false;
+      }
+      if (DB.coupons.some(c => c.code.toUpperCase() === code)) {
+        toast(`"${code}" already exists`, true); return false;
+      }
+      const off = Number($('#c_off').value || 0);
+      if (off < 1) { toast('Discount must be at least ₹1', true); return false; }
+
+      const kind = $('#c_kind').value || 'game';
+      const row = {
+        code: code,
+        kind: kind,
+        discount: off,
+        min_spend: Number($('#c_min').value || 0),
+        /* A runs threshold on anything but a game code would be a rule
+           nobody can satisfy — a loyalty code is handed over, not earned
+           by batting — so it is discarded rather than saved. */
+        unlock_runs: (kind === 'game' && $('#c_runs').value !== '')
+          ? Number($('#c_runs').value) : null,
+        referred_by: kind === 'referral' ? ($('#c_ref').value.trim() || null) : null,
+        label: $('#c_label').value.trim(),
+        active: $('#c_active').checked
+      };
+      try {
+        await insertRow('coupons', row);
+        DB.coupons.push(Object.assign({ uses: 0 }, row));
+        toast(`${code} created`); render();
+      } catch (e) { toast(writeError(e), true); return false; }
+    });
+
+    /* Show only the field the chosen type actually uses. */
+    const kindSel = $('#c_kind');
+    const sync = () => {
+      const k = kindSel.value;
+      const runs = $('#c_runs_row'), ref = $('#c_ref_row');
+      if (runs) runs.style.display = k === 'game' ? '' : 'none';
+      if (ref)  ref.style.display  = k === 'referral' ? '' : 'none';
+    };
+    if (kindSel) { kindSel.onchange = sync; sync(); }
+  };
+
   $$('[data-cedit]').forEach(b => b.onclick = () => {
     const c = DB.coupons.find(x => x.code === b.dataset.cedit);
     openModal(`Edit — ${esc(c.code)}`, `

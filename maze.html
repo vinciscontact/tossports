@@ -84,10 +84,15 @@
 
 <div id="toast" class="toast"></div>
 
-<script src="js/config.js?v=51"></script>
+<!-- Declares which surface this is BEFORE config.js reads it. The staff
+     session and the customer session are kept under different keys, and
+     the URL cannot be trusted to tell them apart — this page is served
+     as /maze, not /maze.html, on both `serve` and Vercel. -->
+<script>var TOSS_SURFACE = 'maze';</script>
+<script src="js/config.js?v=57"></script>
 <script src="js/maze-export.js?v=1"></script>
 <script src="js/maze-bill.js?v=9"></script>
-<script src="js/maze-ops.js?v=28"></script>
-<script src="js/maze.js?v=30"></script>
+<script src="js/maze-ops.js?v=30"></script>
+<script src="js/maze.js?v=32"></script>
 </body>
 </html>

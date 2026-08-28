@@ -2,6 +2,13 @@
 # The storefront uses the compressed reel at images/reel/toss-reel.mp4.
 images/marketing video/
 
+# Secrets. .env.example is the map and IS committed; a real .env never is.
+# Nothing in the browser reads these — this site has no build step — so a
+# .env here would only ever be a place a service_role key goes to die.
+.env
+.env.*
+!.env.example
+
 # OS noise
 Thumbs.db
 .DS_Store
@@ -9,11 +16,6 @@ Thumbs.db
 # Local tooling
 node_modules/
 .claude/
-
-# v2 build output — regenerate with: node v2-appsscript/build.js
-v2-appsscript/web/
-v2-appsscript/migrate/csv/
-v2-appsscript/migrate/*.csv
 
 # SEO build output — regenerate with: node seo/build-seo.js
 dist/

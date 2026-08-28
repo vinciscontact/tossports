@@ -28,9 +28,18 @@ const SUPA_KEY = 'sb_publishable_RsGkbtn8GloAZxGFKWz-Ew_m6KGKyJn';
    exist, and the cards appear the moment the links are pasted in.
    ============================================================ */
 const TOSS_LINKS = {
-  community: '',            // https://chat.whatsapp.com/…  Toss Brothers
+  /* Toss Brothers. This lived hardcoded in app.js as WA_GROUP, which meant
+     the community section here read an empty string and hid itself while a
+     perfectly good invite sat twenty lines away in another file. One copy,
+     in the place the owner was always told to edit. */
+  community: 'https://chat.whatsapp.com/JxcsJgTyLHw4exbmwXYZn4?s=sw&p=i&mlu=0&amv=1',
   offers:    '',            // https://chat.whatsapp.com/…  offers & updates
-  whatsapp:  '919176995707' // the number orders already go to
+  whatsapp:  '919176995707',// the number orders already go to
+
+  /* The profile, not the broadcast channel, and without the ?igsi=
+     parameter Instagram appends when you copy a link from the app — that
+     token identifies the share it came from, not the account. */
+  instagram: 'https://www.instagram.com/toss_sportz'
 };
 
 /* ------------------------------------------------------------
@@ -60,8 +69,20 @@ const DELIVERY = {
     { prefix: '',    label: 'Rest of India',  days: '4–7 working days' }
   ],
   /* Where a tracking number can be followed. The order stores which
-     courier, so the tracking page can link straight to it. */
+     courier, so the tracking page can link straight to it.
+
+     None of these accept a consignment number as a query parameter —
+     they are all search forms that POST. So the link opens the
+     courier's tracking page and the number is shown next to it, big
+     enough to read and copy. Pretending we can deep-link straight to
+     a consignment would mean shipping a button that lands on an empty
+     form, which is worse than not promising it.
+
+     An order may also carry its own `tracking_url`, set in the Maze
+     Room, and that always wins — so the day a courier does support a
+     direct link, staff can paste it per order with no code change. */
   couriers: {
+    professional: { label: 'The Professional Couriers', url: 'https://www.tpcindia.com/' },
     dtdc:     { label: 'DTDC',        url: 'https://www.dtdc.in/tracking.asp' },
     delhivery:{ label: 'Delhivery',   url: 'https://www.delhivery.com/track/package/' },
     bluedart: { label: 'Blue Dart',   url: 'https://www.bluedart.com/tracking' },
@@ -99,8 +120,10 @@ const SERVICES = {
       { id: 'crack',   label: 'Crack in the blade',      from: 300, to: 700 },
       { id: 'toe',     label: 'Toe damage or swelling',  from: 250, to: 500 },
       { id: 'handle',  label: 'Handle loose or broken',  from: 400, to: 900 },
-      { id: 'grip',    label: 'Grip replacement',        from: 100, to: 200 },
-      { id: 'knock',   label: 'Knocking in / oiling',    from: 300, to: 600 },
+      /* Grip replacement and knocking-in / oiling were listed here and are
+         NOT services Toss offers. Removed rather than disabled, because a
+         priced option on the form is a promise — somebody posts a bat in
+         expecting a ₹150 re-grip and there is nobody to do it. */
       { id: 'other',   label: 'Something else',          from: null, to: null }
     ],
     turnaround: '3–7 days once it reaches the workshop'
@@ -130,8 +153,31 @@ const SERVICES = {
   },
 
   /* Customer video. The reward is issued only after a person has
-     watched the video and approved it. */
-  video: { enabled: true, rewardOff: 15, minSeconds: 15 },
+     watched the video and approved it.
+
+     A RANGE, not a fixed number: how good the footage is decides what it
+     is worth, and staff settle the figure when they approve it.
+     `rewardOff` stays the ceiling so every "up to" on the site reads from
+     one place. */
+  video: { enabled: true, rewardMin: 10, rewardOff: 15, minSeconds: 15 },
+
+  /* Corporate and gifting orders. Kept apart from wholesale because the
+     conversation is different — branding, invoicing and a delivery date
+     against an event, rather than club rates against a quantity. */
+  corporate: { enabled: true, min: 10 },
+
+  /* Extended warranty, sold per bat at checkout the way engraving is.
+     Toss Power X already ships with 3 months, so on that bat these
+     EXTEND the cover rather than repeat it — see warrantyFor() in
+     js/app.js, which is what stops somebody paying ₹100 for a 3-month
+     warranty they already have. */
+  warranty: {
+    enabled: true,
+    plans: [
+      { id: '3',  months: 3, price: 100 },
+      { id: '6',  months: 6, price: 200 }
+    ]
+  },
 
   /* Jersey. Sizes are the supplier's, so they live here. */
   jersey: {
@@ -170,7 +216,30 @@ const SERVICES = {
    Room.
    ============================================================ */
 
-const SESS_KEY = 'toss_maze_session';
+/* ------------------------------------------------------------
+   Two surfaces, two sessions.
+
+   This file is loaded by BOTH index.html and maze.html, so a
+   single storage key would mean a customer signing in on the shop
+   overwrites the staff session in the same browser — and, worse,
+   that every storefront request would then carry a staff token.
+   The owner testing the shop on their own laptop is not an edge
+   case here; it is the most likely person to hit it.
+
+   maze.html declares itself, in an inline script above this one.
+   The first attempt at this inferred the surface from the URL
+   instead, and it was wrong the moment it was tried: both `serve`
+   and Vercel strip `.html`, so the page loads at /maze and a test
+   for /maze.html quietly reported "this is the storefront" — the
+   exact confusion the split exists to prevent, and silent.
+
+   The path check survives as a fallback for a page opened as a
+   file:// URL or from a server that does keep the extension, and
+   it now accepts both spellings.
+   ------------------------------------------------------------ */
+const IS_MAZE = (typeof TOSS_SURFACE !== 'undefined' && TOSS_SURFACE === 'maze')
+  || /(^|\/)maze(\.html)?$/i.test(location.pathname);
+const SESS_KEY  = IS_MAZE ? 'toss_maze_session' : 'toss_customer_session';
 let SESSION = null;          // { access_token, refresh_token, expires_at, user }
 let refreshTimer = null;
 
@@ -235,6 +304,81 @@ function adopt(j) {
 async function signIn(email, password) {
   return adopt(await authFetch('token?grant_type=password',
     { email: String(email).trim(), password: password }));
+}
+
+/* ------------------------------------------------------------
+   Creating a customer account.
+
+   Returns { session, needsConfirm }. Supabase decides which:
+   with "Confirm email" on (the default) the response carries a
+   user but NO access token, because nothing is proven until the
+   link is clicked. With it off, a session comes straight back and
+   the customer is signed in.
+
+   Both are normal, so the caller is told which happened rather
+   than having to infer it from a missing field — and the "check
+   your email" screen is only shown when there is actually an
+   email on the way.
+
+   Note this depends on SMTP being configured. Supabase's built-in
+   mailer sends two messages an hour for the whole project, which
+   is fine for testing and useless in production; without a real
+   provider a customer can create an account and then never be
+   able to confirm it.
+   ------------------------------------------------------------ */
+async function signUp(email, password) {
+  const j = await authFetch('signup', {
+    email: String(email).trim(),
+    password: password,
+    /* Where the confirmation link comes back to. Same rule as the
+       password reset: absolute, no fragment, allow-listed. */
+    gotrue_meta_security: {},
+    options: { email_redirect_to: resetRedirectURL() }
+  });
+  if (j && j.access_token) return { session: adopt(j), needsConfirm: false };
+  return { session: null, needsConfirm: true };
+}
+
+/* ------------------------------------------------------------
+   Google sign-in.
+
+   A full-page redirect to Supabase, which bounces to Google and
+   back with the tokens in the URL fragment — the same fragment
+   consumeAuthFragment() has always parsed. No SDK, no popup, and
+   nothing added to the storefront's script budget, which keeps
+   NFR-4 ("no external JS dependencies on the storefront") true.
+
+   Where to come back to is stashed in localStorage rather than
+   carried on the URL, because `redirect_to` has to match the
+   project's allow-list exactly and must arrive with no fragment
+   of its own for Supabase to append to.
+
+   REQUIRES, in the Supabase dashboard — none of this is code:
+     · Authentication → Providers → Google: enabled, with the
+       Client ID and Secret from Google Cloud
+     · Authentication → URL Configuration → Redirect URLs: the
+       deployed origin AND whatever is used locally
+   Until then this returns a 400 from Supabase and the button
+   reports it rather than hanging.
+   ------------------------------------------------------------ */
+const RETURN_KEY = 'toss_auth_return';
+
+function signInWithGoogle(returnTo) {
+  try {
+    localStorage.setItem(RETURN_KEY, returnTo || location.hash || '#/account');
+  } catch (e) { /* private mode — they just land on the default page */ }
+  const back = location.origin + location.pathname;   // no fragment, no query
+  location.href = SUPA_URL + '/auth/v1/authorize?provider=google'
+    + '&redirect_to=' + encodeURIComponent(back);
+}
+
+/** Reads and clears where sign-in was started from. */
+function takeAuthReturn() {
+  try {
+    const v = localStorage.getItem(RETURN_KEY);
+    localStorage.removeItem(RETURN_KEY);
+    return v || null;
+  } catch (e) { return null; }
 }
 
 async function refreshSession() {
@@ -321,7 +465,13 @@ function consumeAuthFragment() {
     expires_at: Math.floor(Date.now() / 1000) + Number(q.get('expires_in') || 3600),
     user: null                    // filled in by fetchUser() below
   });
-  const type = q.get('type') || 'recovery';
+  /* Supabase puts `type=recovery` (or invite/signup) in the fragment for
+     an emailed link, and NOTHING for an OAuth callback. Defaulting the
+     absent case to 'recovery' would tell the caller that a plain Google
+     sign-in was a password reset — which is how maze.html came to show
+     its reset-password card after an OAuth round trip. 'session' is the
+     honest name for "you are simply signed in now". */
+  const type = q.get('type') || 'session';
   wipe();
   return type;
 }
@@ -380,8 +530,17 @@ async function checkToken() {
 function supaHeaders(extra) {
   return Object.assign({
     apikey: SUPA_KEY,
-    /* Falls back to the publishable key so the storefront — which has no
-       session and never will — keeps reading public data normally. */
+    /* Falls back to the publishable key, which is what an anonymous
+       visitor reads the catalogue with.
+
+       Customer accounts made this line load-bearing in a way it was not
+       when only the Maze Room could hold a session. A signed-in shopper
+       now sends their own token on EVERY storefront request, so a token
+       that has gone stale would 401 the catalogue and the leaderboard
+       too — public data that needs no token at all. checkToken() is
+       therefore run before anything else touches the network on the
+       storefront, and clears a rejected session so these fall back here.
+       See accountBootFinish() in js/account.js. */
     Authorization: 'Bearer ' + ((SESSION && SESSION.access_token) || SUPA_KEY),
     'Content-Type': 'application/json'
   }, extra || {});
