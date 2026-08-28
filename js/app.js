@@ -82,12 +82,47 @@ function toast(msg) {
 
 /* ---------------- cart ---------------- */
 function cartCount() { return cart.reduce((n, i) => n + i.qty, 0); }
+/* ------------------------------------------------------------
+   The extended warranty.
+
+   Sold per bat, like engraving. The only subtlety is Toss Power X,
+   which already ships with 3 months included: charging ₹100 for a
+   3-month cover somebody already has would be selling them
+   nothing. So the plans offered on a bat that has free cover are
+   described as what they ADD to it, and the 3-month plan is
+   dropped entirely there — it would extend the total by zero.
+   ------------------------------------------------------------ */
+const WARRANTY = () => (SERVICES.warranty && SERVICES.warranty.enabled)
+  ? SERVICES.warranty.plans : [];
+
+/** Months of cover a bat already comes with. 0 for most of them. */
+function freeWarrantyMonths(p) {
+  const m = String((p && p.warranty) || '').match(/(\d+)\s*month/i);
+  return m ? Number(m[1]) : 0;
+}
+
+/** The plans worth offering on this bat, with the months they actually add. */
+function warrantyPlansFor(p) {
+  const free = freeWarrantyMonths(p);
+  return WARRANTY()
+    .filter(w => w.months > free)          // never sell cover already included
+    .map(w => Object.assign({}, w, { adds: w.months - free, free: free }));
+}
+
+function warrantyPrice(line) {
+  if (!line || !line.warranty) return 0;
+  const w = WARRANTY().find(x => x.id === String(line.warranty));
+  return w ? w.price : 0;
+}
+
 function cartSubtotal() {
   return cart.reduce((n, i) => {
     const p = byId(i.id);
     if (!p || !p.price) return n;
-    /* engraving is priced per bat, so it multiplies with qty like the bat does */
-    return n + (p.price + (i.engrave ? SERVICES.engraving.price : 0)) * i.qty;
+    /* engraving and warranty are both priced per bat, so they multiply
+       with qty exactly like the bat does */
+    return n + (p.price + (i.engrave ? SERVICES.engraving.price : 0)
+                        + warrantyPrice(i)) * i.qty;
   }, 0);
 }
 function shipFee() {
@@ -124,6 +159,18 @@ function removeItem(key) {
   cart = cart.filter(x => x.key !== key);
   saveCart(); syncCart(); renderCart();
   if (location.hash.startsWith('#/checkout')) route();
+}
+/* Warranty is chosen at checkout, not when the bat goes in the bag, so it
+   is set on the existing line rather than being part of its key. Two bats
+   of the same model still merge into one line; changing the plan changes
+   it for that whole line, which is what "per bat" means when the line
+   carries a quantity. */
+function setWarranty(key, plan) {
+  const i = cart.find(x => x.key === key);
+  if (!i) return;
+  i.warranty = plan || null;
+  saveCart(); syncCart();
+  if (location.hash.startsWith('#/checkout')) route(true);
 }
 function syncCart() {
   const n = cartCount();
@@ -162,8 +209,16 @@ function cartWaText(info) {
     t += `${n + 1}. *${p.name}*${v ? ' — ' + v : ''}\n`;
     if (i.engrave) t += `   Engraved: "${i.engrave}" (+${fmt(SERVICES.engraving.price)} each)
 `;
+    if (i.warranty) {
+      const w = WARRANTY().find(x => x.id === String(i.warranty));
+      if (w) t += `   Warranty: ${w.months} months (+${fmt(w.price)} each)
+`;
+    }
     t += `   Qty ${i.qty}`;
-    t += hasPrice(p) ? ` × ${fmt(p.price)} = ${fmt(p.price * i.qty)}\n` : `  (price on request)\n`;
+    /* The per-unit figure has to include the add-ons, or the arithmetic in
+       the message will not reach the total printed underneath it. */
+    const unit = p.price + (i.engrave ? SERVICES.engraving.price : 0) + warrantyPrice(i);
+    t += hasPrice(p) ? ` × ${fmt(unit)} = ${fmt(unit * i.qty)}\n` : `  (price on request)\n`;
   });
   const sub = cartSubtotal(), sh = shipFee(), off = couponOff();
   t += `\nSubtotal: ${fmt(sub)}`;
@@ -172,6 +227,7 @@ function cartWaText(info) {
   t += `\n*Total: ${fmt(sub + sh - off)}*\n`;
   if (info) {
     t += `\n— Delivery details —\n${info.name}\n${info.phone}\n${info.address}\n${info.city} — ${info.pin}\n${info.state}`;
+    if (info.email) t += `\n${info.email}`;
     if (info.notes) t += `\nNote: ${info.notes}`;
   }
   t += `\n\nPlease confirm availability and dispatch.`;
@@ -271,32 +327,37 @@ function clearFilters() {
 }
 
 /* ---------------- components ---------------- */
-/* ---------------- designed banner slides ----------------
-   One asset, two treatments. Desktop gets the composition exactly as drawn,
-   with transparent anchors sitting over the printed buttons so they actually
-   click. Mobile can't read 10px baked text, so the artwork slides across to
-   the product side, a scrim drops over it, and real HTML copy renders on top.
-   Percentages are measured against the 1717x916 source, and the slide holds
-   that aspect ratio on desktop so the hotspots stay aligned at any width. */
-const WA_GROUP   = 'https://chat.whatsapp.com/JxcsJgTyLHw4exbmwXYZn4?s=sw&p=i&mlu=0&amv=1';
-const IG_CHANNEL = 'https://www.instagram.com/channel/AbYHB6_4jOmcJVFv/';
+
+/* Where the social buttons point. Both read from TOSS_LINKS so the owner
+   changes a group invite in one file without opening application code —
+   which is the whole reason that block exists. They were hardcoded here
+   while config.js held empty strings, so the community section silently
+   rendered nothing even though a working invite was in the repository. */
+const WA_GROUP   = TOSS_LINKS.community;
+const IG_PROFILE = TOSS_LINKS.instagram;
 
 /* ---------------- persuasion blocks ----------------
    Three tiers side by side rather than 29 bats. Hick's Law: the first
    decision on the page should be small. The middle option is marked as
    the popular one — the centre-stage effect reliably lifts people off
    the cheapest choice, which is also where the margin is better. */
-function tierRowHTML() {
+function tierRowHTML(flush) {
   const TIERS = [
-    { id: 'entry',   name: 'Starter',  line: 'First proper bat',
+    { id: 'entry',   name: 'Starter',      line: 'First proper bat',
       note: 'Street and soft tennis ball' },
-    { id: 'mid',     name: 'Regular',  line: 'What most players buy',
+    { id: 'mid',     name: 'Intermediate', line: 'What most players buy',
       note: 'Soft and medium ball, weekend matches', star: true },
-    { id: 'premium', name: 'Serious',  line: 'Tournament weapons',
+    { id: 'premium', name: 'Professional', line: 'Tournament weapons',
       note: 'Big edges, custom weights, warranty' }
   ];
   const cards = TIERS.map(t => {
-    const list = PRODUCTS.filter(p => p.tier === t.id && hasPrice(p));
+    /* Bats only. Tiers are applied to everything in the catalogue, not
+       just bats, so without the category check an ₹80 tennis ball sitting
+       in the mid tier became this card's "from" price — the Intermediate
+       bracket advertised "from ₹80" against a real cheapest bat of
+       ₹1,550, and counted the ball in its "8 bats". The card says bats,
+       so it has to count bats. */
+    const list = PRODUCTS.filter(p => p.tier === t.id && prodCat(p) === 'bats' && hasPrice(p));
     if (!list.length) return '';
     const from = Math.min(...list.map(p => p.price));
     const reviews = list.reduce((s, p) => s + (p.reviews || 0), 0);
@@ -312,8 +373,13 @@ function tierRowHTML() {
       </a>`;
   }).join('');
 
+  /* `flush` drops the top padding, for when this follows a section that
+     already ends in whitespace. It is a caller's decision because the same
+     block reads correctly with or without it depending on what is above —
+     on the homepage it now sits under the testimonials, which close with
+     their own margin. */
   return `
-  <section class="sec tiers-sec">
+  <section class="sec tiers-sec"${flush ? ' style="padding-top:0"' : ''}>
     <div class="wrap">
       <div class="sec-head rv">
         <p class="eyebrow">Start here</p>
@@ -663,95 +729,124 @@ function viewHome() {
   const px = byId('power-x');
   const entry = PRODUCTS.filter(p => p.tier === 'entry').sort((a,b)=>b.popularity-a.popularity).slice(0, 6);
 
-  /* THE HERO CAROUSEL — the coded night-match scene leads (live type,
-     real buttons, the text Google reads), and the three designed banners
-     slide in after it. Each banner is a whole-slide click on desktop
-     (its baked buttons land on the slide's destination); below 900px the
-     artwork becomes a backdrop and real HTML copy takes over — the same
-     dual treatment the old banners used, driven by CSS that never left. */
-  /* `n` is any filename stem — 1, 2, 3 or a word — so a slide can be named
-     for what it says rather than for the order it happens to sit in.
-     `eager` belongs on the first slide only: it is the LCP image, and
-     lazy-loading the thing the visitor is already looking at delays the
-     one paint the score is measured on. */
-  const bnSlide = (n, o) => `
-    <div class="car-slide s-banner" data-href="${o.href}"${o.ext ? ' data-ext="1"' : ''}
-         role="link" tabindex="0" aria-label="${esc(o.alt)}">
-      <picture class="bn-pic">
-        <source type="image/webp" srcset="images/hero/slide-${n}-800.webp 800w,
-          images/hero/slide-${n}-1280.webp 1280w, images/hero/slide-${n}-1920.webp 1920w"
-          sizes="100vw">
-        <img src="images/hero/slide-${n}-1280.jpg"
-          srcset="images/hero/slide-${n}-800.jpg 800w, images/hero/slide-${n}-1280.jpg 1280w,
-            images/hero/slide-${n}-1920.jpg 1920w"
-          sizes="100vw" alt="${esc(o.alt)}"
-          ${o.eager ? 'fetchpriority="high" decoding="async"' : 'loading="lazy" decoding="async"'}>
-      </picture>
-      <div class="bn-live"><div class="wrap">${o.live}</div></div>
-    </div>`;
+  /* THE HERO — copy on the left, the bats on the right.
+     The headline, the buttons and the proof line do NOT move: they are
+     the text Google reads and the thing a visitor is trying to finish
+     reading, and rotating them away mid-sentence was the weakness of the
+     old full-bleed carousel. Only the artwork cycles.
+
+     Each slide is a cutout — the transparent-background webp that
+     seo/cutout-photos.js produces — floated over the orange panel, so
+     these are photographs of the actual bats rather than a stock
+     composition. `sm/md/lg` are the three widths optimise-photos.js
+     writes; the browser picks one from `sizes`.
+
+     The first slide is the LCP image and is the only one loaded eagerly.
+     Lazy-loading the thing the visitor is already looking at delays the
+     one paint the score is measured on; loading all four eagerly costs
+     three images nobody has asked for yet. */
+  const HERO_SHOTS = [
+    { img: 'power-x-v2',        href: '#/product/power-x',
+      alt: 'Toss Power X — handmade Sri Lankan willow bat',
+      label: 'Toss Power X',       note: '3 years of research' },
+    { img: 'sri-lankan-mri-2',  href: '#/shop?wood=srilankan',
+      alt: 'Sri Lankan willow tennis-ball cricket bat',
+      label: 'Sri Lankan willow',  note: 'Dense grain, big ping' },
+    { img: 'varnished-bat-2',   href: '#/product/varnished-bat',
+      alt: 'Varnished tennis-ball cricket bat',
+      label: 'Varnished Bat',      note: 'Best seller' },
+    { img: 'leather-ball-bat-2', href: '#/shop',
+      alt: 'Leather-ball cricket bat made by Toss',
+      label: 'Leather-ball bats',  note: 'For the harder game' }
+  ];
+
+  /* All four bats are on stage at once, fanned across the panel — a single
+     cutout is about 80px wide against 600px tall, so one alone leaves most
+     of the orange empty. The rotation moves which bat is FEATURED rather
+     than swapping the picture: the active one comes forward, straightens
+     and takes the name tag while the rest sit back, dimmed and angled.
+
+     Every bat is a real link the whole time, so none of them is ever a
+     focusable thing the eye cannot see — which is the trap a cross-fade
+     would have set. Only four images load for the whole hero.
+
+     `sizes` is small because each bat occupies roughly a fifth of the
+     stage; asking for a 1400px file to paint 90px wastes the LCP. */
+  const heroShot = (s, i) => `
+    <a class="nhero-shot${i === 0 ? ' on' : ''}" href="${s.href}"
+       data-shot="${i}" style="--i:${i}" aria-label="${esc(s.label)} — ${esc(s.note)}">
+      <img src="images/product/${s.img}-sm-cut.webp"
+           srcset="images/product/${s.img}-sm-cut.webp 400w,
+                   images/product/${s.img}-md-cut.webp 800w"
+           sizes="(max-width:900px) 26vw, 15vw" alt="${esc(s.alt)}"
+           ${i === 0 ? 'fetchpriority="high" decoding="async"'
+                     : 'loading="lazy" decoding="async"'}>
+      <span class="nhero-tag"><b>${esc(s.label)}</b><i>${esc(s.note)}</i></span>
+    </a>`;
 
   return `
-  <section class="car dark" id="car" aria-roledescription="carousel" aria-label="Featured">
-    <div class="car-track" id="carTrack">
+  <section class="nhero dark" id="nhero">
+    <div class="wrap nhero-in">
 
-      ${bnSlide('power', { href: '#/shop', eager: true,
-        alt: 'Engineered for power, built for performance — handcrafted Toss cricket bats',
-        live: `
-          <p class="eyebrow">New arrival</p>
-          <h1 class="d1">Engineered for power.<span class="hl-2">Built for performance.</span></h1>
-          <p class="lede">29 bats shaped by hand in our own unit — Sri Lankan wood,
-            Kashmir Willow and Poplar. From ₹950.</p>
-          <div class="car-cta">
-            <a href="#/shop" class="btn btn-primary">Shop All Bats ${ICON.arrow}</a>
-            <a href="#/finder" class="btn btn-ghost">Find My Bat — 30s</a>
+      <div class="nhero-copy">
+        <p class="eyebrow">Handmade in Chennai</p>
+        <h1 class="d1">Bats made by hand.<span class="hl-2">Never resold.</span></h1>
+        <p class="lede">29 bats shaped in our own unit — Sri Lankan wood, Kashmir
+          Willow and Poplar. From ₹950.</p>
+        <div class="nhero-cta">
+          <a href="#/shop" class="btn btn-primary">Shop All Bats ${ICON.arrow}</a>
+          <a href="#/finder" class="btn btn-ghost">Find My Bat — 30s</a>
+
+          <!-- Secondary on purpose: icon-only and unfilled, so they read as
+               "also available" rather than competing with Shop All Bats.
+               Each is skipped if its link is blank, because a social button
+               that goes nowhere is worse than no social button. -->
+          ${WA_GROUP ? `
+            <a class="nhero-soc" href="${esc(WA_GROUP)}" target="_blank" rel="noopener"
+               aria-label="Join the Toss Brothers WhatsApp community"
+               title="Join the WhatsApp community">${ICON.whatsapp}</a>` : ''}
+          ${IG_PROFILE ? `
+            <a class="nhero-soc" href="${esc(IG_PROFILE)}" target="_blank" rel="noopener"
+               aria-label="Toss Sports on Instagram"
+               title="Follow on Instagram">${ICON.insta}</a>` : ''}
+        </div>
+        <!-- The three reasons someone hesitates, answered before they scroll. -->
+        <ul class="nhero-badges">
+          <li>${ICON.hammer}<span>Made in our unit</span></li>
+          <li>${ICON.truck}<span>Free over ₹1,500</span></li>
+          <li>${ICON.shield}<span>3-month warranty</span></li>
+        </ul>
+        <p class="hv-proof">36.9K on Instagram · 4M reel reach · played by 170-player clubs</p>
+      </div>
+
+      <div class="nhero-stage" id="nheroStage">
+        <span class="nhero-panel" aria-hidden="true"></span>
+
+        <!-- The round badge carries the game, which otherwise lost its only
+             promotion on this page when the old fourth slide went. -->
+        <a class="nhero-medal" href="#/game">
+          <span>Play<br>&amp; win</span><i aria-hidden="true">${ICON.arrow}</i>
+        </a>
+
+        <div class="nhero-shots" id="nheroShots">
+          ${HERO_SHOTS.map(heroShot).join('')}
+        </div>
+
+        <div class="nhero-nav">
+          <button class="nhero-arrow" id="nheroPrev" aria-label="Previous bat">${ICON.arrow}</button>
+          <div class="nhero-dots" id="nheroDots">
+            ${HERO_SHOTS.map((s, i) =>
+              `<button data-go="${i}"${i === 0 ? ' class="on"' : ''}
+                       aria-label="${esc(s.label)}"></button>`).join('')}
           </div>
-          <p class="hv-proof">36.9K on Instagram · 4M reel reach · played by 170-player clubs</p>` })}
-
-      ${bnSlide(1, { href: '#/shop',
-        alt: 'From street cricket to greatness — premium cricket gear built by Toss',
-        live: `
-          <p class="eyebrow">Premium cricket gear</p>
-          <h2 class="d1">Built for players<span class="hl-2">who breathe it.</span></h2>
-          <p class="lede">Bats, accessories and merchandise — straight from our unit.</p>
-          <div class="car-cta">
-            <a href="#/shop" class="btn btn-primary">Shop now ${ICON.arrow}</a>
-          </div>` })}
-
-      ${bnSlide(2, { href: WA_GROUP, ext: true,
-        alt: 'Join the Toss community — 36.9K on Instagram, tournaments and teams',
-        live: `
-          <p class="eyebrow">More than cricket. A community.</p>
-          <h2 class="d1">Join the<span class="hl-2">Toss community.</span></h2>
-          <div class="bn-stats">
-            <div><b>36.9K</b><span>Instagram</span></div>
-            <div><b>24.5K</b><span>YouTube</span></div>
-            <div><b>4M</b><span>Reel reach</span></div>
-          </div>
-          <div class="car-cta">
-            <a href="${WA_GROUP}" target="_blank" rel="noopener" class="btn btn-wa">
-              ${ICON.whatsapp} Join the group</a>
-            <a href="${IG_CHANNEL}" target="_blank" rel="noopener" class="btn btn-ghost">
-              ${ICON.insta} Tournaments</a>
-          </div>` })}
-
-      ${bnSlide(3, { href: '#/game',
-        alt: 'Play and win — score in Gully Cricket and earn exciting offers',
-        live: `
-          <p class="eyebrow">Free to play</p>
-          <h2 class="d1">Play &amp; win.<span class="hl-2">Earn offers.</span></h2>
-          <p class="lede">The button-phone classic. Score 30 and a discount code unlocks.</p>
-          <div class="car-cta">
-            <a href="#/game" class="btn btn-primary">Play the game ${ICON.arrow}</a>
-          </div>` })}
+          <button class="nhero-arrow" id="nheroNext" aria-label="Next bat">${ICON.arrow}</button>
+        </div>
+      </div>
 
     </div>
-    <button class="car-nav car-prev" id="carPrev" aria-label="Previous slide">${ICON.arrow}</button>
-    <button class="car-nav car-next" id="carNext" aria-label="Next slide">${ICON.arrow}</button>
-    <div class="car-dots" id="carDots">
-      ${[0, 1, 2, 3].map(i => `<button data-go="${i}" aria-label="Slide ${i + 1}"></button>`).join('')}
-    </div>
-    <div class="car-bar" id="carBar"></div>
   </section>
+
+  ${serviceTilesHTML()}
 
   <!-- Risk reduction, not feature listing. Each line answers a reason to
        hesitate, and is loss-framed where the loss is the real worry. -->
@@ -764,13 +859,7 @@ function viewHome() {
     </div>
   </section>
 
-  ${tierRowHTML()}
-  ${styleRowsHTML()}
-  ${socialProofHTML()}
-
-  ${testimonialsHTML()}
-
-  <section class="sec" style="padding-top:0">
+  <section class="sec">
     <div class="wrap">
       <div class="sec-head row rv">
         <div><p class="eyebrow">Most ordered</p><h2 class="d2">Best sellers</h2></div>
@@ -779,6 +868,13 @@ function viewHome() {
     </div>
     <div class="wrap"><div class="rail">${best.map(cardHTML).join('')}</div></div>
   </section>
+
+  ${styleRowsHTML()}
+  ${socialProofHTML()}
+
+  ${testimonialsHTML()}
+
+  ${tierRowHTML(true)}
 
   <section class="sec flag dark">
     <div class="wrap flag-grid">
@@ -810,9 +906,7 @@ function viewHome() {
 
   ${communityHTML()}
 
-  ${servicesBandHTML()}
-
-  <section class="sec">
+  <section class="sec sec--band">
     <div class="wrap">
       <div class="finder-cta rv">
         <div>
@@ -2269,6 +2363,12 @@ function viewCheckout() {
               <div class="field"><label for="cState">State</label>
                 <input id="cState" placeholder="Tamil Nadu" autocomplete="address-level1"><div class="msg hide"></div></div>
             </div>
+            <!-- Optional, and it must stay optional: this checkout converts on a
+                 phone number alone and most of these orders finish on WhatsApp.
+                 Its purpose is linking — an order carrying an email attaches
+                 itself to an account on sign-in, with no claim step. -->
+            <div class="field"><label for="cEmail">Email <span style="text-transform:none;font-weight:600">(optional — for your receipt and order history)</span></label>
+              <input id="cEmail" type="email" placeholder="you@example.com" autocomplete="email" inputmode="email"><div class="msg hide"></div></div>
             <div class="field"><label for="cNotes">Anything we should know? <span style="text-transform:none;font-weight:600">(optional)</span></label>
               <input id="cNotes" placeholder="Preferred weight, colour, scoop style…"></div>
           </div>
@@ -2304,13 +2404,31 @@ function viewCheckout() {
             ${cart.map(i => {
               const p = byId(i.id), v = variantName(p, i.variant);
               const eng = i.engrave ? SERVICES.engraving.price : 0;
+              const plans = hasPrice(p) ? warrantyPlansFor(p) : [];
+              const free = freeWarrantyMonths(p);
               return `<div class="mini-item">
                 <div class="mini-art">${batArt(p, { glow: false })}</div>
                 <b>${esc(p.name)}${v ? `<br><span style="color:var(--ink-50);font-weight:600;font-size:.78rem">${esc(v)}</span>` : ''}
                    ${i.engrave ? `<br><span style="color:var(--orange);font-weight:700;font-size:.78rem">Engraved “${esc(i.engrave)}”</span>` : ''}
                    <br><span style="color:var(--ink-50);font-weight:600;font-size:.78rem">Qty ${i.qty}</span></b>
-                <i class="num">${hasPrice(p) ? fmt((p.price + eng) * i.qty) : '—'}</i>
-              </div>`;
+                <i class="num">${hasPrice(p) ? fmt((p.price + eng + warrantyPrice(i)) * i.qty) : '—'}</i>
+              </div>
+              ${plans.length ? `
+              <div class="wty" data-wty-line="${esc(i.key)}">
+                <span class="wty-h">Extended warranty${free
+                  ? ` <em>${free} months already included</em>` : ''}</span>
+                <div class="wty-opts">
+                  <button type="button" class="wty-opt${!i.warranty ? ' on' : ''}"
+                          data-wty="${esc(i.key)}" data-plan="">No thanks</button>
+                  ${plans.map(w => `
+                    <button type="button" class="wty-opt${String(i.warranty) === w.id ? ' on' : ''}"
+                            data-wty="${esc(i.key)}" data-plan="${w.id}">
+                      <b>${w.months} months</b>
+                      <i>+${fmt(w.price)}${i.qty > 1 ? ' each' : ''}${free
+                        ? ` · ${w.adds} more` : ''}</i>
+                    </button>`).join('')}
+                </div>
+              </div>` : ''}`;
             }).join('')}
             <div class="coupon">
               <input id="cCoupon" placeholder="Discount code" value="${coupon || ''}" autocomplete="off">
@@ -2482,6 +2600,7 @@ function readForm() {
     address:$('#cAddr').value.trim(),
     city:   $('#cCity').value.trim(),
     state:  $('#cState').value.trim(),
+    email:  $('#cEmail') ? $('#cEmail').value.trim().toLowerCase() : '',
     notes:  $('#cNotes').value.trim()
   };
 }
@@ -2493,7 +2612,12 @@ function validate() {
     ['#cPin',   v => pinServed(v),           'Our couriers do not reach this PIN code yet — message us on WhatsApp'],
     ['#cAddr',  v => v.length >= 8,          'Please enter your address'],
     ['#cCity',  v => v.length >= 2,          'Enter your city'],
-    ['#cState', v => v.length >= 2,          'Enter your state']
+    ['#cState', v => v.length >= 2,          'Enter your state'],
+    /* Empty passes. The field is optional, so the only failure worth
+       reporting is a value that was typed and cannot be an address —
+       catching that here beats posting a receipt into a typo. */
+    ['#cEmail', v => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v),
+                                             'That email address looks wrong — or leave it blank']
   ];
   let ok = true, first = null;
   rules.forEach(([sel, test, msg]) => {
@@ -2586,6 +2710,7 @@ function route(keepScroll) {
   else if (page === 'checkout')   { html = viewCheckout();      dark = false; }
   else if (page === 'service')    { html = viewService(parts[1]); dark = true; }
   else if (page === 'track')      { html = viewTrack();         dark = true; }
+  else if (page === 'account')    { html = viewAccount();       dark = true; }
   else if (page === 'junior')     { html = viewJunior();        dark = true; }
   else                            { html = viewNotFound();      dark = false; }
 
@@ -2608,141 +2733,96 @@ function route(keepScroll) {
   onScroll();
 }
 
-/* ---------------- hero carousel ---------------- */
-let car = null, hvParallax = null;
-const CAR_MS = 6500;
+/* ---------------- hero ----------------
+
+   Only the artwork rotates. The headline, the buttons and the proof
+   line are static markup in viewHome(), which is what makes this so
+   much smaller than the full-bleed carousel it replaced: there is no
+   track to translate, no drag to axis-lock, and no live copy that has
+   to be made inert on the way out. Slides cross-fade in place.
+*/
+let car = null;
+const CAR_MS = 5200;
 
 function stopCarousel() {
   if (car && car.timer) clearInterval(car.timer);
   car = null;
-  if (hvParallax) { window.removeEventListener('pointermove', hvParallax); hvParallax = null; }
 }
 
 function wireHero() {
+  const stage = $('#nheroStage');
+  if (!stage) return;
+
+  const shots = $$('.nhero-shot', stage);
+  const dots  = $$('#nheroDots button');
+  if (shots.length < 2) return;          /* one bat needs no machinery */
+
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  car = { i: 0, n: shots.length, timer: null };
 
-  /* pointer parallax on the coded slide — the bat leans a few px toward
-     the cursor, the light cones drift the other way */
-  const stage = $('#hvStage'), hero = $('#heroLive');
-  if (hero && stage && !reduce && matchMedia('(pointer:fine)').matches) {
-    const cones = $$('#heroLive .hv-cone');
-    hvParallax = e => {
-      const r = hero.getBoundingClientRect();
-      if (e.clientY > r.bottom || r.bottom < 0 || r.width === 0) return;
-      const nx = (e.clientX / innerWidth - .5) * 2;
-      stage.style.transform = `translateX(${nx * 9}px)`;
-      cones.forEach(c => c.style.transform =
-        `${c.classList.contains('l') ? 'rotate(20deg)' : 'rotate(-20deg)'} translateX(${nx * -6}px)`);
-    };
-    window.addEventListener('pointermove', hvParallax);
-  }
-
-  /* the slide-across engine — one slide pushes out the last, exactly the
-     Amazon motion: autoplay, arrows, dots, swipe with an axis lock,
-     progress bar, and inert on hidden slides so nothing invisible can be
-     focused or clicked */
-  const root = $('#car'), track = $('#carTrack');
-  if (!root || !track) return;
-  const slides = $$('.car-slide', track);
-  const dots = $$('#carDots button');
-  const bar = $('#carBar');
-
-  car = { i: 0, n: slides.length, timer: null, t0: 0 };
-
+  /* Only a class changes. Every bat stays visible and focusable — they are
+     all real links to real products — so there is nothing to hide from a
+     screen reader and no tabindex to juggle. `.on` is purely which one is
+     brought forward. */
   function paint() {
-    track.style.transform = `translateX(-${car.i * 100}%)`;
+    shots.forEach((s, k) => s.classList.toggle('on', k === car.i));
     dots.forEach((d, k) => d.classList.toggle('on', k === car.i));
-    slides.forEach((s, k) => {
-      const off = k !== car.i;
-      s.setAttribute('aria-hidden', off ? 'true' : 'false');
-      if (off) s.setAttribute('inert', ''); else s.removeAttribute('inert');
-    });
-    root.scrollLeft = 0; track.scrollLeft = 0;
   }
+
   function go(i, manual) {
     car.i = (i + car.n) % car.n;
     paint();
     if (manual) restart();
   }
-  function tick() { go(car.i + 1); }
+
   function restart() {
     if (!car) return;
     if (car.timer) clearInterval(car.timer);
+    /* Reduced motion keeps the arrows and dots working — it removes the
+       movement nobody asked for, not the control the visitor reaches for. */
     if (reduce) return;
-    car.t0 = performance.now();
-    car.timer = setInterval(tick, CAR_MS);
+    car.timer = setInterval(() => go(car.i + 1), CAR_MS);
   }
 
-  $('#carPrev').onclick = () => go(car.i - 1, true);
-  $('#carNext').onclick = () => go(car.i + 1, true);
+  $('#nheroPrev').onclick = () => go(car.i - 1, true);
+  $('#nheroNext').onclick = () => go(car.i + 1, true);
   dots.forEach(d => d.onclick = () => go(+d.dataset.go, true));
 
-  root.addEventListener('mouseenter', () => car && car.timer && clearInterval(car.timer));
-  root.addEventListener('mouseleave', () => car && restart());
+  /* Pause while the pointer is over it — the bats are links, and one
+     sliding out from under a cursor mid-click is the oldest carousel
+     complaint there is. */
+  stage.addEventListener('mouseenter', () => car && car.timer && clearInterval(car.timer));
+  stage.addEventListener('mouseleave', () => car && restart());
 
-  /* swipe — only hijacks a gesture that's clearly horizontal */
-  let x0 = null, y0 = null, dx = 0, lock = null;
-  root.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    x0 = e.clientX; y0 = e.clientY; dx = 0; lock = null;
+  /* Swipe. Horizontal only, and the threshold is deliberately generous
+     because this sits at the top of a page people are scrolling past. */
+  let x0 = null, y0 = null, lock = null;
+  stage.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;      /* mouse users have arrows */
+    x0 = e.clientX; y0 = e.clientY; lock = null;
     if (car && car.timer) clearInterval(car.timer);
-  });
-  root.addEventListener('pointermove', e => {
-    if (x0 === null) return;
-    dx = e.clientX - x0;
-    const dy = e.clientY - y0;
-    if (lock === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+  }, { passive: true });
+
+  stage.addEventListener('pointermove', e => {
+    if (x0 === null || lock === 'y') return;
+    const dx = e.clientX - x0, dy = e.clientY - y0;
+    if (lock === null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
       lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-      if (lock === 'x') root.classList.add('dragging');
     }
-    if (lock === 'x') {
-      e.preventDefault();
-      track.style.transform = `translateX(calc(-${car.i * 100}% + ${dx}px))`;
+    if (lock === 'x' && Math.abs(dx) > 45) {
+      go(car.i + (dx < 0 ? 1 : -1), true);
+      x0 = null; lock = null;
     }
-  }, { passive: false });
-  function endDrag() {
-    if (x0 === null) return;
-    root.classList.remove('dragging');
-    if (lock === 'x' && Math.abs(dx) > 55) go(car.i + (dx < 0 ? 1 : -1));
-    else paint();
-    x0 = null; lock = null;
-    restart();
-  }
-  root.addEventListener('pointerup', endDrag);
-  root.addEventListener('pointercancel', endDrag);
-  root.addEventListener('pointerleave', endDrag);
+  }, { passive: true });
 
-  /* a banner is one big link — unless the tap was a swipe, or landed on a
-     real button inside the mobile overlay */
-  $$('.car-slide[data-href]', track).forEach(s => {
-    const open = () => {
-      const h = s.dataset.href;
-      if (s.dataset.ext) window.open(h, '_blank', 'noopener');
-      else location.hash = h.slice(1);
-    };
-    s.addEventListener('click', e => {
-      if (Math.abs(dx) > 10) return;
-      if (e.target.closest('a, button')) return;
-      open();
-    });
-    s.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
-    });
-  });
+  const endSwipe = () => { x0 = null; lock = null; if (car) restart(); };
+  stage.addEventListener('pointerup', endSwipe);
+  stage.addEventListener('pointercancel', endSwipe);
 
-  root.addEventListener('keydown', e => {
+  stage.addEventListener('keydown', e => {
     if (e.key === 'ArrowLeft')  go(car.i - 1, true);
     if (e.key === 'ArrowRight') go(car.i + 1, true);
   });
-
-  /* progress bar */
-  (function frame() {
-    if (!car) return;
-    if (bar) bar.style.width = car.timer
-      ? Math.min(100, ((performance.now() - car.t0) % CAR_MS) / CAR_MS * 100) + '%'
-      : '0%';
-    requestAnimationFrame(frame);
-  })();
 
   paint();
   restart();
@@ -2754,6 +2834,7 @@ function mount(page, parts) {
   if (page === 'home') { wireHero(); wireTrust(); }
   if (page === 'service') wireService(parts[1]);
   if (page === 'track')   wireTrack();
+  if (page === 'account') wireAccount();
 
   if (page === 'game') {
     BOARD_TIMER = setInterval(boardTick, 250);
@@ -2938,6 +3019,31 @@ function mount(page, parts) {
   }
 
   if (page === 'checkout') {
+    /* Saved details, for anyone signed in. Nothing is forced: these are a
+       starting point that someone posting a bat to a team-mate types
+       straight over. Signed out, acctPrefill() returns null and checkout
+       behaves exactly as it always has.
+
+       The empty-field check matters for the values the RENDER did not
+       write — a browser autofill, or a value restored on back-navigation —
+       since route() rebuilds this markup from scratch every time and would
+       otherwise stamp the saved address over whatever is sitting there.
+
+       Runs before the PIN listener below so the delivery estimate resolves
+       against the prefilled code rather than waiting for a keystroke. */
+    if (typeof acctPrefill === 'function') {
+      const pre = acctPrefill();
+      if (pre) {
+        [['#cName', pre.name], ['#cPhone', pre.phone], ['#cAddr', pre.address],
+         ['#cCity', pre.city], ['#cState', pre.state], ['#cPin', pre.pin],
+         ['#cEmail', pre.email]]
+          .forEach(([sel, val]) => {
+            const el = $(sel);
+            if (el && !el.value && val) el.value = val;
+          });
+      }
+    }
+
     /* Serviceability and the delivery estimate resolve while the field is
        being typed in. Finding out we cannot reach you AFTER paying is the
        worst possible moment to learn it. */
@@ -3057,6 +3163,9 @@ document.addEventListener('click', e => {
   const rm = e.target.closest('[data-rm]');
   if (rm) { removeItem(rm.dataset.rm); return; }
 
+  const wty = e.target.closest('[data-wty]');
+  if (wty) { setWarranty(wty.dataset.wty, wty.dataset.plan); return; }
+
   if (e.target.closest('[data-close]')) { closeDrawers(); return; }
 
   const chk = e.target.closest('.chk input');
@@ -3094,7 +3203,15 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
   $('#fReset').onclick    = () => { clearFilters(); };
 
   syncCart();
+
+  /* Before route(), always. A Google sign-in comes back with the tokens
+     in the URL fragment, and the router reads that same fragment as its
+     path — so the fragment has to be consumed and wiped first or a
+     successful sign-in lands on a 404. Synchronous, no network. */
+  const arrivedFromAuth = (typeof accountBootSync === 'function') ? accountBootSync() : null;
+
   route();
+  if (typeof acctHeader === 'function') acctHeader();
 
   /* the playful bits, mounted last so nothing above depends on them */
   if (typeof NavPlay !== 'undefined') NavPlay.mount();
@@ -3109,6 +3226,15 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
      it renders from the bundled catalogue immediately and quietly upgrades
      itself if live data arrives. */
   (async () => {
+    /* FIRST, and only when somebody is signed in. Every request below
+       carries whatever session is in localStorage, so a stale customer
+       token would 401 the catalogue and the leaderboard — public data
+       that never needed a token. This settles the session, clearing it
+       if the database refuses it, before anything depends on it. */
+    try {
+      if (typeof accountBootFinish === 'function') await accountBootFinish(arrivedFromAuth);
+    } catch (e) { console.warn('account sync skipped:', e.message); }
+
     try {
       if (typeof syncStore === 'function') {
         const live = await syncStore();
@@ -3122,5 +3248,13 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
         if (s) localStorage.setItem('toss_scores', JSON.stringify(s));
       }
     } catch (e) { console.warn('leaderboard sync skipped:', e.message); }
+
+    /* Their orders and saved address, fetched last: nothing on the page
+       waits for it, and checkout only needs it by the time somebody has
+       filled a bag. An account is a convenience laid over a shop that
+       already works without one. */
+    try {
+      if (typeof acctWarm === 'function') acctWarm();
+    } catch (e) { console.warn('account warm skipped:', e.message); }
   })();
 })();

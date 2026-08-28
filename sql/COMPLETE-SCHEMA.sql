@@ -28,7 +28,7 @@
 --     move behind a SECURITY DEFINER function that recomputes
 --     the total server-side. See the audit.
 --
---  Built 2026-08-25 from 13 migrations.
+--  Built 2026-08-28 from 19 migrations.
 -- ============================================================
 
 
@@ -2277,6 +2277,1355 @@ begin
     raise notice '% owner/manager row(s) ready to bind on first Supabase sign-in', v_n;
   end if;
 end $$;
+
+-- ############################################################
+-- #  14. 016-security-fixes.sql
+-- #  Order id format, server-side pricing, private request photos
+-- ############################################################
+
+-- ============================================================
+--  TOSS SPORTS — SECURITY FIXES
+--
+--  Closes the findings from the August 2026 application security
+--  review. Run after 015-handover-accounts.sql. Safe to re-run.
+--
+--  Three things change:
+--
+--    1. An order id can no longer be arbitrary text. It was a
+--       free-text primary key that anyone could choose, and the
+--       Maze Room printed it into an HTML attribute — so a
+--       stranger could put script into the staff panel and read
+--       the session token out of it.
+--
+--    2. The browser no longer decides what an order costs or
+--       whether it was paid. `orders` accepted anonymous inserts
+--       with no sanitising trigger — the one `requests` and
+--       `product_questions` have both had all along — so a
+--       crafted POST produced a paid-looking ₹1 order.
+--
+--    3. Customer photos and videos stop being public. The
+--       `requests` bucket was readable AND LISTABLE by anyone.
+--
+--  ⚠ Item 3 requires the matching JavaScript change (js/services.js
+--    and js/maze-ops.js in the same commit). Running this file
+--    without shipping that code leaves the Requests screen unable
+--    to show photos. Deploy both together.
+-- ============================================================
+
+
+-- ============================================================
+--  1. ORDER IDS ARE NOT A FREE TEXT FIELD
+--
+--  The storefront generates TOSS-K3M9QA-427 and the Maze Room
+--  generates TS-M1KX9P. Both fit comfortably. Anything carrying a
+--  quote, an angle bracket or a space does not, which is the
+--  point.
+--
+--  NOT VALID on purpose: it enforces on every new row from now
+--  on, without failing this migration on whatever test data
+--  happens to be sitting in the table already. To check the
+--  existing rows and promote it later:
+--
+--    select id from public.orders where id !~ '^[A-Za-z0-9._-]{4,40}$';
+--    alter table public.orders validate constraint orders_id_ck;
+-- ============================================================
+
+alter table public.orders drop constraint if exists orders_id_ck;
+alter table public.orders add constraint orders_id_ck
+  check (id ~ '^[A-Za-z0-9._-]{4,40}$') not valid;
+
+
+-- ============================================================
+--  2. THE DATABASE PRICES THE ORDER, NOT THE BROWSER
+--
+--  `orders_public_insert` grants a whole row on insert; RLS
+--  cannot withhold eight columns. So a trigger resets them, the
+--  same way requests_sanitise does for the service forms.
+--
+--  Staff-logged sales pass straight through. A counter sale, a
+--  WhatsApp order and a wholesale deal are all priced by a person
+--  who can see the bat, and re-pricing those from the catalogue
+--  would overwrite a real negotiated number with a wrong one.
+--  my_role() is null for anonymous callers and non-null for
+--  anyone on the staff list, which is exactly the line.
+-- ============================================================
+
+-- The engraving surcharge has to live where the trigger can read it.
+-- It was only in js/config.js, which is not a place the database can
+-- see, and an engraved bat costs more than a plain one.
+insert into public.settings (key, value)
+values ('engraving_price', '199'::jsonb)
+on conflict (key) do nothing;
+
+create or replace function public.orders_sanitise()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  it      jsonb;
+  v_sub   integer := 0;
+  v_qty   integer;
+  v_price integer;
+  v_eng   integer;
+  v_disc  integer := 0;
+  v_free  integer;
+  v_fee   integer;
+  v_cp    record;
+begin
+  -- Staff keep the numbers they typed. Only anonymous web orders are
+  -- recomputed, because only those were priced by a browser.
+  if public.my_role() is not null then
+    return new;
+  end if;
+
+  -- Columns a customer must never set for themselves. `paid` is the
+  -- important one: nothing about a Razorpay checkout that happens
+  -- entirely in the customer's browser proves money moved, so the
+  -- claim is recorded as unpaid and a person confirms it against the
+  -- Razorpay dashboard before the bat is posted.
+  new.status     := 'new';
+  new.paid       := false;
+  new.channel    := 'web';
+  new.staff_id   := null;
+  new.payment_id := null;
+  new.created_at := now();
+
+  select coalesce((value #>> '{}')::int, 199) into v_eng
+    from public.settings where key = 'engraving_price';
+  v_eng := coalesce(v_eng, 199);
+
+  for it in select value from jsonb_array_elements(coalesce(new.items, '[]'::jsonb)) loop
+    -- coalesce, not a raise: a "price on request" bat has price null and
+    -- the storefront sends those to WhatsApp rather than the cart, so this
+    -- is belt and braces. It lands at zero and staff price it by hand
+    -- rather than the whole order being refused.
+    select coalesce(p.price, 0) into v_price
+      from public.products p
+     where p.id = it->>'id' and p.active;
+
+    if not found then
+      raise exception 'Unknown or inactive product in order: %', it->>'id'
+        using errcode = 'check_violation';
+    end if;
+
+    -- Matches cartSubtotal() in js/app.js: engraving is per bat, so it
+    -- multiplies with quantity exactly like the bat does.
+    v_qty := greatest(1, least(20, coalesce((it->>'qty')::int, 1)));
+    if coalesce(it->>'engrave', '') <> '' then
+      v_price := v_price + v_eng;
+    end if;
+    v_sub := v_sub + v_price * v_qty;
+  end loop;
+
+  -- The coupon is re-checked here even though the storefront already
+  -- called validate_coupon: that call happened in a browser, and its
+  -- answer arrived back through one.
+  if new.coupon is not null then
+    select * into v_cp from public.validate_coupon(new.coupon, v_sub);
+    v_disc := case when v_cp.valid then coalesce(v_cp.discount, 0) else 0 end;
+    if v_disc = 0 then new.coupon := null; end if;
+  end if;
+
+  select coalesce((value #>> '{}')::int, 1500) into v_free
+    from public.settings where key = 'free_ship_over';
+  select coalesce((value #>> '{}')::int, 99) into v_fee
+    from public.settings where key = 'ship_fee';
+
+  new.subtotal := v_sub;
+  new.discount := least(v_disc, v_sub);        -- a discount never exceeds the goods
+  new.shipping := case
+                    when v_sub = 0 or v_sub >= coalesce(v_free, 1500) then 0
+                    else coalesce(v_fee, 99)
+                  end;
+  new.total    := greatest(0, new.subtotal - new.discount + new.shipping);
+  return new;
+end;
+$$;
+
+-- Name matters. BEFORE ROW triggers fire in alphabetical order, and
+-- 'orders_sanitise_ins' sorts before 'orders_take_stock_ins', so the
+-- items are validated before stock is taken against them.
+drop trigger if exists orders_sanitise_ins on public.orders;
+create trigger orders_sanitise_ins
+  before insert on public.orders
+  for each row execute function public.orders_sanitise();
+
+
+-- ============================================================
+--  3. REQUEST PHOTOS ARE PRIVATE
+--
+--  The bucket was created public with
+--    for select using (bucket_id = 'requests')
+--  and a comment reasoning that the URLs are unguessable. They
+--  did not have to be guessed: a select grant on storage.objects
+--  is precisely what the storage LIST endpoint checks, so
+--
+--    POST /storage/v1/object/list/requests  {"prefix":""}
+--
+--  handed any anonymous caller the name of every file. The bucket
+--  holds bat-doctor photos, trade-in photos and the customer
+--  videos the consent box is asked about — pictures of
+--  identifiable people.
+--
+--  It is private now, staff read it through signed URLs, and the
+--  upload policy no longer accepts arbitrary files at arbitrary
+--  paths.
+-- ============================================================
+
+update storage.buckets
+   set public             = false,
+       file_size_limit    = 26214400,      -- 25 MB, so the video service still fits
+       allowed_mime_types = array['image/webp','image/jpeg','image/png',
+                                  'video/mp4','video/quicktime','video/webm']
+ where id = 'requests';
+
+drop policy if exists requests_read on storage.objects;
+create policy requests_read on storage.objects for select
+  using (bucket_id = 'requests' and public.is_admin());
+
+-- Submitters are anonymous by nature — these are public forms — so the
+-- write stays open, but only into the six folders the service forms use
+-- and only for file types a photo or a video actually has. Without this
+-- the bucket is an open drop box on the shop's own domain.
+drop policy if exists requests_upload on storage.objects;
+create policy requests_upload on storage.objects
+  for insert to anon, authenticated
+  with check (
+    bucket_id = 'requests'
+    and (storage.foldername(name))[1] in
+        ('bat_doctor','custom_bat','jersey','wholesale','trade_in','video')
+    and name ~* '\.(webp|jpe?g|png|mp4|mov|webm)$'
+  );
+
+-- `photos` is a text[] the submitter fills in, and requests_sanitise reset
+-- everything around it but not it. A crafted POST could therefore put
+-- javascript:… into an array the Maze Room renders as a link. Only storage
+-- paths this project writes survive now.
+create or replace function public.requests_sanitise()
+returns trigger language plpgsql as $$
+begin
+  new.status     := 'new';
+  new.quote      := null;
+  new.coupon     := null;
+  new.staff_note := null;
+  new.created_at := now();
+  new.updated_at := now();
+  new.photos := coalesce((
+    select array_agg(u)
+      from unnest(coalesce(new.photos, '{}'::text[])) u
+     where u ~ '^[a-z_]+/[A-Za-z0-9._-]+$'
+  ), '{}'::text[]);
+  return new;
+end;
+$$;
+
+-- The trigger is recreated because the function signature is unchanged
+-- but re-pointing it costs nothing and makes this file re-runnable.
+drop trigger if exists requests_sanitise_ins on public.requests;
+create trigger requests_sanitise_ins
+  before insert on public.requests
+  for each row execute function public.requests_sanitise();
+
+
+-- ============================================================
+--  VERIFY — run these as the anon role, not as postgres
+-- ============================================================
+--
+--  Order ids are constrained:
+--    insert into public.orders (id, customer, items, subtotal, total, method)
+--    values ('x"><img src=x onerror=alert(1)>', '{}', '[]', 0, 0, 'cod');
+--    -- expect: new row violates check constraint "orders_id_ck"
+--
+--  Totals are recomputed and paid is forced false:
+--    insert into public.orders (id, customer, items, subtotal, total, paid, status, method)
+--    values ('TOSS-TEST01-1', '{"name":"t","phone":"9999999999"}',
+--            '[{"id":"regular-bat","qty":1}]', 1, 1, true, 'shipped', 'online');
+--    select subtotal, discount, shipping, total, paid, status
+--      from public.orders where id = 'TOSS-TEST01-1';
+--    -- expect: 950 | 0 | 99 | 1049 | false | new     (not 1 / true / shipped)
+--    delete from public.orders where id = 'TOSS-TEST01-1';   -- as an admin
+--
+--  Request photos cannot be listed:
+--    curl -X POST 'https://<project>.supabase.co/storage/v1/object/list/requests' \
+--         -H 'apikey: <anon key>' -H 'Content-Type: application/json' \
+--         -d '{"prefix":"","limit":100}'
+--    -- expect: []   (and the real list when called with a founder token)
+--
+--  A crafted photo link is dropped:
+--    insert into public.requests (kind, customer, payload, photos)
+--    values ('bat_doctor', '{}', '{}', array['javascript:alert(1)']);
+--    select photos from public.requests order by id desc limit 1;
+--    -- expect: {}
+-- ============================================================
+
+-- ############################################################
+-- #  15. 017-playstyles.sql
+-- #  Play-style vocabulary and product mapping
+-- ############################################################
+
+-- ============================================================
+--  TOSS SPORTS — PLAY STYLES
+--
+--  Marketing bats by the player rather than by the timber.
+--  "I'm an attacker who likes a light bat" is how a customer
+--  actually thinks; "Kashmir willow, scoop profile, 750–900g"
+--  is how a workshop thinks. This adds the first vocabulary
+--  without removing the second.
+--
+--  Two groups, because they answer different questions and a
+--  bat belongs in both:
+--
+--    Best for     — Attacker, Defender, All-rounder, Beginner
+--    Weight feel  — Light, Medium, Heavy
+--
+--  WHY THIS IS NOT `categories`
+--  ----------------------------
+--  `categories` is what a product IS — a bat, a ball — and a
+--  product has exactly one. A play style is who a product is
+--  FOR, and a bat has several: the Toss Power X is an attacker's
+--  bat AND can be made light AND can be made heavy. Bolting a
+--  second meaning onto products.category would have forced a
+--  choice between them and broken the shop's category chips.
+--  Hence a join table.
+--
+--  WEIGHT IS A RANGE, NOT A NUMBER
+--  -------------------------------
+--  Every bat is cut to the weight the customer asks for, so
+--  "Light" cannot mean "this bat weighs 700g". It means "this
+--  model sits light in the hand" — the Regular Bat centres on
+--  700g, the Flat Kashmir on 875g, and that gap is real.
+--
+--  The first version of these rules tagged on the ends of the
+--  range and produced a Medium chip matching all 29 bats, because
+--  every range overlaps 720–870g. Useless as a filter. They tag
+--  on the MIDPOINT now, in three bands that do not overlap, so
+--  each chip returns a different third of the catalogue:
+--  7 light, 12 medium, 10 heavy.
+--
+--  Run after 016-security-fixes.sql. Safe to re-run.
+-- ============================================================
+
+
+-- ---------- the two groups ----------
+create table if not exists public.playstyle_groups (
+  id    text primary key,          -- 'style' | 'weight'
+  name  text not null,             -- what the shop prints above the chips
+  hint  text,                      -- one line of help in the Maze Room
+  sort  integer not null default 0
+);
+
+insert into public.playstyle_groups (id, name, hint, sort) values
+  ('style',  'Best for',    'How the player bats. A bat can suit more than one.', 0),
+  ('weight', 'Weight feel', 'Which weights this model can be cut to.',            1)
+on conflict (id) do update
+  set name = excluded.name, hint = excluded.hint, sort = excluded.sort;
+
+
+-- ---------- the styles themselves ----------
+-- `id` doubles as the URL slug: /cricket-bats-for-attackers uses it, and so
+-- does the shop filter in the address bar. Renaming a style therefore changes
+-- its display name only — the link keeps working, which matters once the SEO
+-- pages are indexed.
+create table if not exists public.playstyles (
+  id         text primary key,
+  group_id   text not null references public.playstyle_groups(id) on update cascade,
+  name       text not null,
+  tagline    text,                          -- the marketing line
+  emoji      text,
+  sort       integer not null default 0,
+  active     boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists playstyles_group_idx on public.playstyles (group_id, sort);
+
+insert into public.playstyles (id, group_id, name, tagline, emoji, sort) values
+  ('attacker',   'style',  'Attacker',   'Built to clear the rope',            '💥', 0),
+  ('all-rounder','style',  'All-rounder','Rotate strike, then take them on',   '⚖️', 1),
+  ('defender',   'style',  'Defender',   'Holds an innings together',          '🛡️', 2),
+  ('beginner',   'style',  'Beginner',   'Your first proper bat',              '🌱', 3),
+  ('light',      'weight', 'Light',      'Fast hands, quicker swing',          '🪶', 0),
+  ('medium',     'weight', 'Medium',     'The weight most players settle on',  '🎯', 1),
+  ('heavy',      'weight', 'Heavy',      'Maximum power through the ball',     '🔨', 2)
+on conflict (id) do nothing;      -- never overwrite a renamed style
+
+
+-- ---------- which bat is for whom ----------
+-- `auto` records where the row came from. A suggestion the owner has not
+-- looked at yet is auto = true; the moment they tick or untick anything on a
+-- bat, that bat's rows become auto = false and re-running the suggester
+-- leaves them alone. Without this flag the suggester would either be
+-- single-use or would quietly undo the owner's judgement.
+create table if not exists public.product_playstyles (
+  product_id   text not null references public.products(id)   on delete cascade on update cascade,
+  playstyle_id text not null references public.playstyles(id) on delete cascade on update cascade,
+  auto         boolean not null default false,
+  primary key (product_id, playstyle_id)
+);
+
+create index if not exists pps_style_idx on public.product_playstyles (playstyle_id);
+
+
+-- ---------- who may read and write ----------
+alter table public.playstyle_groups   enable row level security;
+alter table public.playstyles         enable row level security;
+alter table public.product_playstyles enable row level security;
+
+-- The shop needs all three to render its filter chips, so read is public.
+-- None of it is sensitive: it is the marketing copy itself.
+drop policy if exists psg_public_read on public.playstyle_groups;
+create policy psg_public_read on public.playstyle_groups for select using (true);
+drop policy if exists psg_admin_write on public.playstyle_groups;
+create policy psg_admin_write on public.playstyle_groups for all
+  using (public.is_admin()) with check (public.is_admin());
+
+-- Only live styles are public. A style being built out, or retired after a
+-- season, should not appear on the shop while the owner decides.
+drop policy if exists ps_public_read on public.playstyles;
+create policy ps_public_read on public.playstyles for select using (active = true);
+drop policy if exists ps_admin_read on public.playstyles;
+create policy ps_admin_read on public.playstyles for select using (public.is_admin());
+drop policy if exists ps_admin_write on public.playstyles;
+create policy ps_admin_write on public.playstyles for all
+  using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists pps_public_read on public.product_playstyles;
+create policy pps_public_read on public.product_playstyles for select using (true);
+drop policy if exists pps_admin_write on public.product_playstyles;
+create policy pps_admin_write on public.product_playstyles for all
+  using (public.is_admin()) with check (public.is_admin());
+
+
+-- ============================================================
+--  THE SUGGESTER
+--
+--  29 bats across 7 styles is 203 yes/no decisions. Nobody is
+--  going to make those by hand, and a feature that ships empty
+--  looks broken. So the rules that already live in the finder
+--  quiz — js/app.js scoreProduct() — are written down here once,
+--  against the spec fields every bat already has.
+--
+--  It is a SUGGESTER, not a classifier. It writes auto = true
+--  rows and never touches a row the owner has confirmed. The
+--  Maze Room runs it from a button, so it can be re-run after
+--  the catalogue changes.
+--
+--  Returns the number of suggestions written.
+-- ============================================================
+
+create or replace function public.suggest_playstyles()
+returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  n integer;
+begin
+  if not public.is_admin() then
+    raise exception 'Only a manager or the owner can re-tag the catalogue';
+  end if;
+
+  -- Clear only what a previous run wrote. Anything the owner has touched
+  -- carries auto = false and survives.
+  delete from public.product_playstyles where auto;
+
+  with bat as (
+    select
+      p.id,
+      p.tier,
+      lower(coalesce(p.data->>'profile', ''))  as profile,
+      lower(coalesce(p.data->>'edge', ''))     as edge,
+      lower(coalesce(p.data->>'features', '')) as features,
+      -- The midpoint, not the ends. Every range overlaps 720–870g, so a rule
+      -- written on the ends tags all 29 bats "Medium" and the chip becomes a
+      -- synonym for "everything". The midpoint is where the model actually
+      -- sits when you pick it up, which is also what the finder quiz scores
+      -- against, so the two agree.
+      ( nullif(p.data->'weight'->>0, '')::numeric
+      + nullif(p.data->'weight'->>1, '')::numeric ) / 2 as wmid
+    from public.products p
+    where p.category = 'bats'
+  ),
+  tagged as (
+    -- ----- Best for -----
+    -- Thick edges, laminated blades and mongoose builds exist to hit through
+    -- the line. The edge test matters as much as the profile: a scoop called
+    -- "CS PRO — Scoop + Thick Edges" is an attacker's bat whatever its shape.
+    select id, 'attacker'::text as playstyle_id from bat
+     where profile in ('bigedge', 'multi', 'mongoose')
+        or edge ~ '(thick|big|massive)'
+    union
+    -- The do-everything shapes. A massive edge disqualifies: that bat has
+    -- committed to one job.
+    select id, 'all-rounder' from bat
+     where profile in ('standard', 'scoop', 'flat')
+       and edge !~ 'massive'
+    union
+    -- A defender's bat is the controlled one: classic blade, ordinary edge,
+    -- nothing exaggerated. Deliberately the narrowest rule here — in tennis
+    -- ball cricket this is a small, real segment, not half the catalogue.
+    select id, 'defender' from bat
+     where profile = 'standard'
+       and edge in ('standard', 'sleek edge', 'good edge')
+    union
+    -- Forgiving and affordable. Entry tier is the honest signal; the
+    -- features text confirms it where the workshop has said so.
+    select id, 'beginner' from bat
+     where tier = 'entry'
+        or features ~ 'beginner'
+
+    -- ----- Weight feel -----
+    -- Three bands that do not overlap, so each chip returns a different
+    -- third of the catalogue instead of the same 29 bats.
+    union
+    select id, 'light'  from bat where wmid is not null and wmid <  760
+    union
+    select id, 'medium' from bat where wmid >= 760 and wmid < 840
+    union
+    select id, 'heavy'  from bat where wmid >= 840
+  )
+  insert into public.product_playstyles (product_id, playstyle_id, auto)
+  select t.id, t.playstyle_id, true
+    from tagged t
+   where exists (select 1 from public.playstyles s
+                  where s.id = t.playstyle_id and s.active)
+  on conflict (product_id, playstyle_id) do nothing;   -- never clobber a manual row
+
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+revoke all on function public.suggest_playstyles() from public;
+revoke all on function public.suggest_playstyles() from anon;
+grant execute on function public.suggest_playstyles() to authenticated;
+
+
+-- ---------- run it once so the feature is not born empty ----------
+-- Wrapped because suggest_playstyles() refuses a non-admin caller, and the
+-- SQL editor runs as postgres, which has no staff row. This does the same
+-- work with the same rules and no permission check — appropriate for a
+-- migration, not for a function the browser can reach.
+do $$
+declare n integer;
+begin
+  delete from public.product_playstyles where auto;
+
+  with bat as (
+    select p.id, p.tier,
+           lower(coalesce(p.data->>'profile', ''))  as profile,
+           lower(coalesce(p.data->>'edge', ''))     as edge,
+           lower(coalesce(p.data->>'features', '')) as features,
+           ( nullif(p.data->'weight'->>0, '')::numeric
+           + nullif(p.data->'weight'->>1, '')::numeric ) / 2 as wmid
+      from public.products p
+     where p.category = 'bats'
+  ),
+  tagged as (
+    select id, 'attacker'::text as playstyle_id from bat
+     where profile in ('bigedge','multi','mongoose')
+        or edge ~ '(thick|big|massive)'
+    union select id, 'all-rounder' from bat where profile in ('standard','scoop','flat')
+                                     and edge !~ 'massive'
+    union select id, 'defender'    from bat where profile = 'standard'
+                                     and edge in ('standard','sleek edge','good edge')
+    union select id, 'beginner'    from bat where tier = 'entry' or features ~ 'beginner'
+    union select id, 'light'       from bat where wmid is not null and wmid <  760
+    union select id, 'medium'      from bat where wmid >= 760 and wmid < 840
+    union select id, 'heavy'       from bat where wmid >= 840
+  )
+  insert into public.product_playstyles (product_id, playstyle_id, auto)
+  select t.id, t.playstyle_id, true from tagged t
+  on conflict (product_id, playstyle_id) do nothing;
+
+  get diagnostics n = row_count;
+  raise notice 'Suggested % play-style assignments across the bat catalogue.', n;
+end $$;
+
+
+-- ============================================================
+--  VERIFY
+-- ============================================================
+--
+--  How the catalogue landed, style by style:
+--
+--    select s.group_id, s.name, count(pp.product_id) as bats
+--      from public.playstyles s
+--      left join public.product_playstyles pp on pp.playstyle_id = s.id
+--     group by s.group_id, s.name, s.sort
+--     order by s.group_id, s.sort;
+--
+--  Any bat the rules missed entirely (should be none):
+--
+--    select p.id, p.name from public.products p
+--     where p.category = 'bats'
+--       and not exists (select 1 from public.product_playstyles pp
+--                        where pp.product_id = p.id);
+--
+--  What a single bat was tagged as:
+--
+--    select s.group_id, s.name, pp.auto
+--      from public.product_playstyles pp
+--      join public.playstyles s on s.id = pp.playstyle_id
+--     where pp.product_id = 'toss-power-x'
+--     order by s.group_id, s.sort;
+--
+--  Anonymous callers can read the marketing data and write none of it:
+--
+--    select count(*) from public.playstyles;            -- 7
+--    insert into public.playstyles (id, group_id, name)
+--      values ('x','style','X');                        -- must be refused
+-- ============================================================
+
+-- ############################################################
+-- #  16. 018-customer-accounts.sql
+-- #  Customer sign-in, order history, claiming past orders
+-- ############################################################
+
+-- ============================================================
+--  TOSS SPORTS — CUSTOMER ACCOUNTS
+--
+--  The PRD listed customer accounts as out of scope ("no demand
+--  identified"). The client has since asked for them: sign in,
+--  see past orders, reorder, keep addresses, follow a delivery.
+--
+--  Sign-in is Google, through Supabase Auth. That decision is
+--  what shapes this file, because of one awkward fact:
+--
+--      Google gives us a verified EMAIL.
+--      Every order ever placed carries only a PHONE.
+--
+--  js/app.js collects name, phone, address, city, pin and state
+--  at checkout — never an email. So a new account cannot simply
+--  be matched to its history; there is no shared column to match
+--  on. Three mechanisms below close that gap, in order of how
+--  much they can be trusted:
+--
+--    1. FROM NOW ON  — orders_stamp_user() writes the signed-in
+--       user's id onto the order as it is placed. Nothing to
+--       reconcile later; this is the path that matters long term.
+--
+--    2. SERVICE REQUESTS — `requests` does collect an email, and
+--       Google has verified the one in the token, so those link
+--       themselves with no help from the customer.
+--
+--    3. PAST ORDERS — claim_orders() below. The customer proves
+--       one order is theirs and everything on that phone follows.
+--
+--  Safe to re-run.
+-- ============================================================
+
+
+-- ------------------------------------------------------------
+--  1. WHO AN ORDER BELONGS TO
+--
+--  Nullable, and it must stay nullable. Most orders in this
+--  business arrive over WhatsApp or across a counter and will
+--  never have an account behind them; a not-null column would
+--  make the storefront's anonymous checkout — the one that takes
+--  most of the money — impossible.
+--
+--  ON DELETE SET NULL rather than CASCADE. If a customer deletes
+--  their account the order does not evaporate: it is a financial
+--  record the business is required to keep, and the shop still
+--  has to post the bat. Only the link goes.
+-- ------------------------------------------------------------
+alter table public.orders
+  add column if not exists user_id uuid references auth.users(id) on delete set null;
+
+alter table public.requests
+  add column if not exists user_id uuid references auth.users(id) on delete set null;
+
+-- Partial: the account area only ever asks for rows that HAVE an
+-- owner, and the majority of this table never will. Indexing the
+-- nulls would be most of the table for no read it serves.
+create index if not exists orders_user_idx
+  on public.orders (user_id, created_at desc) where user_id is not null;
+
+create index if not exists requests_user_idx
+  on public.requests (user_id, created_at desc) where user_id is not null;
+
+
+-- ------------------------------------------------------------
+--  2. THE PROFILE
+--
+--  Deliberately thin. Name, phone and a list of addresses — the
+--  things that make the next checkout shorter. It holds nothing
+--  that is not already in an order, so a leak here costs nothing
+--  a leaked order would not have cost anyway.
+--
+--  `addresses` is jsonb and not its own table for the same reason
+--  `orders.items` is jsonb: this codebase already made that
+--  choice, and a customer has three addresses, not three hundred.
+--
+--  No email column with a UNIQUE on it. Supabase Auth already
+--  owns the email and already enforces uniqueness; a second copy
+--  here would only be a second thing to keep in step.
+-- ------------------------------------------------------------
+create table if not exists public.customer_profiles (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  name       text,
+  phone      text,
+  addresses  jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.customer_profiles enable row level security;
+
+-- A customer may read and write exactly one row: their own. The
+-- WITH CHECK is what stops the obvious attack — sending someone
+-- else's user_id in the body of an insert or an update.
+drop policy if exists cp_own_read on public.customer_profiles;
+create policy cp_own_read on public.customer_profiles
+  for select using (user_id = auth.uid());
+
+drop policy if exists cp_own_insert on public.customer_profiles;
+create policy cp_own_insert on public.customer_profiles
+  for insert with check (user_id = auth.uid());
+
+drop policy if exists cp_own_update on public.customer_profiles;
+create policy cp_own_update on public.customer_profiles
+  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- Staff need to see a customer to help them on the phone, but
+-- nobody in the Maze Room has any business editing someone's
+-- saved address behind their back. Read only, on purpose.
+drop policy if exists cp_admin_read on public.customer_profiles;
+create policy cp_admin_read on public.customer_profiles
+  for select using (public.is_admin());
+
+create or replace function public.customer_profiles_touch()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  new.updated_at := now();
+  -- user_id is the primary key and the whole basis of the policy
+  -- above. Pinning it to the caller means an UPDATE that tries to
+  -- move a row to another account changes nothing instead.
+  new.user_id := coalesce(auth.uid(), old.user_id, new.user_id);
+  return new;
+end;
+$$;
+
+drop trigger if exists customer_profiles_touch on public.customer_profiles;
+create trigger customer_profiles_touch
+  before update on public.customer_profiles
+  for each row execute function public.customer_profiles_touch();
+
+
+-- ------------------------------------------------------------
+--  3. A CUSTOMER READS THEIR OWN ORDERS — AND ONLY THOSE
+--
+--  `orders` has been admin-read-only since schema.sql, and the
+--  comment there ("a customer may place an order but may never
+--  read the order book") is still right. This does not loosen it.
+--  Postgres ORs multiple SELECT policies together, so this adds
+--  exactly one row-shaped hole per signed-in customer: the rows
+--  already stamped with their own id.
+--
+--  Note what is NOT here. There is no update policy and no delete
+--  policy for customers. Cancelling an order is a conversation
+--  with a person, not a button that rewrites a financial record.
+-- ------------------------------------------------------------
+drop policy if exists orders_own_read on public.orders;
+create policy orders_own_read on public.orders
+  for select using (user_id is not null and user_id = auth.uid());
+
+drop policy if exists requests_own_read on public.requests;
+create policy requests_own_read on public.requests
+  for select using (user_id is not null and user_id = auth.uid());
+
+
+-- ------------------------------------------------------------
+--  4. STAMPING THE OWNER ON THE WAY IN
+--
+--  A separate trigger rather than a few lines inside
+--  orders_sanitise(), because that function returns early for
+--  staff (`if public.my_role() is not null then return new`) and
+--  the stamp has to be decided for staff too — by NOT applying.
+--
+--  Why staff are excluded: a salesperson logging a walk-in sale
+--  is signed in as themselves. Stamping their uid would file the
+--  customer's bat under the salesperson's own order history and
+--  show it to them in the account area. The customer who actually
+--  bought it can still claim it later by phone, which is correct.
+--
+--  Postgres fires BEFORE ROW triggers in name order, so
+--  `orders_sanitise_ins` (016) runs before `orders_stamp_user`.
+--  That order does not matter today — the two touch different
+--  columns — but it is worth knowing before a third is added.
+--
+--  A forged user_id in the POST body is not a concern either way:
+--  orders_public_insert grants the whole row, but this trigger
+--  overwrites the column afterwards, so what the browser claimed
+--  never survives. The same reasoning as orders_sanitise itself.
+-- ------------------------------------------------------------
+create or replace function public.orders_stamp_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_role() is null then
+    new.user_id := auth.uid();          -- null for anonymous checkout
+  else
+    new.user_id := null;                -- staff-logged sale belongs to nobody yet
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists orders_stamp_user on public.orders;
+create trigger orders_stamp_user
+  before insert on public.orders
+  for each row execute function public.orders_stamp_user();
+
+create or replace function public.requests_stamp_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_role() is null then
+    new.user_id := auth.uid();
+  else
+    new.user_id := null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists requests_stamp_user on public.requests;
+create trigger requests_stamp_user
+  before insert on public.requests
+  for each row execute function public.requests_stamp_user();
+
+
+-- ------------------------------------------------------------
+--  5. CLAIMING WHAT CAME BEFORE
+--
+--  The customer types one order number and the phone it was
+--  placed with. If the pair matches a real order, every unclaimed
+--  order on that phone becomes theirs.
+--
+--  Why a whole phone rather than the single order named: someone
+--  with five past orders should not have to find five order
+--  numbers, and the pair is already the proof. The exposure is
+--  bounded by how hard the id is to produce — newOrderId() in
+--  js/app.js is 'TOSS-' + six base-36 digits of the millisecond
+--  clock + three random digits, so hitting one without having
+--  been sent it means guessing an exact millisecond and then one
+--  of 900. This is the same bar track_order() has enforced since
+--  011; it is not a new class of access, only a larger prize
+--  behind the same lock.
+--
+--  `and o.user_id is null` is the line that matters most. Without
+--  it, a second person knowing the same phone — a shared family
+--  number, a resold SIM — could pull orders out of an account
+--  that already holds them. Claiming is one-way and first-come.
+--
+--  SECURITY DEFINER because the caller cannot see the order book
+--  to check the pair for themselves; that is the entire point.
+--  Granted to `authenticated` only: there is no such thing as an
+--  anonymous claim, and anon already has track_order().
+-- ------------------------------------------------------------
+create or replace function public.claim_orders(p_id text, p_phone text)
+returns integer
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid    uuid    := auth.uid();
+  v_digits text    := right(regexp_replace(coalesce(p_phone, ''), '\D', '', 'g'), 10);
+  v_proven boolean;
+  v_orders integer := 0;
+  v_reqs   integer := 0;
+begin
+  if v_uid is null then
+    raise exception 'Sign in before claiming an order.' using errcode = '28000';
+  end if;
+
+  -- Ten digits, matched from the right, exactly as track_order does:
+  -- somebody who typed +91 98765 43210 at checkout will type
+  -- 9876543210 here and both have to land on the same order.
+  if length(v_digits) < 10 then
+    raise exception 'A 10-digit phone number is required.' using errcode = 'check_violation';
+  end if;
+
+  select exists (
+    select 1 from public.orders o
+     where lower(o.id) = lower(trim(coalesce(p_id, '')))
+       and right(regexp_replace(coalesce(o.customer->>'phone', ''), '\D', '', 'g'), 10) = v_digits
+  ) into v_proven;
+
+  -- Deliberately indistinguishable from "that pair is wrong": a
+  -- function that answered differently for a real order number
+  -- with the wrong phone would confirm the order number exists.
+  if not v_proven then
+    return 0;
+  end if;
+
+  update public.orders o
+     set user_id = v_uid
+   where o.user_id is null
+     and right(regexp_replace(coalesce(o.customer->>'phone', ''), '\D', '', 'g'), 10) = v_digits;
+  get diagnostics v_orders = row_count;
+
+  -- Service requests carry the same phone, and someone claiming
+  -- their orders means the Bat Doctor repair on the same number
+  -- too. Counted separately so the caller can say so.
+  update public.requests r
+     set user_id = v_uid
+   where r.user_id is null
+     and right(regexp_replace(coalesce(r.customer->>'phone', ''), '\D', '', 'g'), 10) = v_digits;
+  get diagnostics v_reqs = row_count;
+
+  return v_orders + v_reqs;
+end;
+$$;
+
+revoke all on function public.claim_orders(text, text) from public;
+grant execute on function public.claim_orders(text, text) to authenticated;
+
+
+-- ------------------------------------------------------------
+--  6. THE FREE HALF — LINKING BY VERIFIED EMAIL
+--
+--  `requests` has collected an email since 011, and the address
+--  in a Google token has been verified by Google. Those two facts
+--  together mean service requests need no claim step at all.
+--
+--  Orders now do the same. Checkout gained an OPTIONAL email
+--  field alongside this migration (js/app.js), for exactly this
+--  reason: an order that carries one attaches itself on sign-in,
+--  and only the orders placed before that — or by someone who
+--  left the field blank — need section 5's claim.
+--
+--  Matching on a Google-verified address is safe in a way that
+--  matching on a typed phone number would not be. The customer
+--  cannot type someone else's address into their own token; they
+--  can type anyone's phone into a form. That asymmetry is why
+--  this one is automatic and claiming is not.
+--
+--  Called on every sign-in. Cheap, idempotent, and it catches
+--  somebody who checks out and signs in a minute later.
+-- ------------------------------------------------------------
+drop function if exists public.link_my_requests();
+
+create or replace function public.link_my_history()
+returns integer
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_email  text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
+  v_orders integer := 0;
+  v_reqs   integer := 0;
+begin
+  if v_uid is null or v_email = '' then
+    return 0;
+  end if;
+
+  update public.orders o
+     set user_id = v_uid
+   where o.user_id is null
+     and lower(trim(coalesce(o.customer ->> 'email', ''))) = v_email;
+  get diagnostics v_orders = row_count;
+
+  update public.requests r
+     set user_id = v_uid
+   where r.user_id is null
+     and lower(trim(coalesce(r.customer ->> 'email', ''))) = v_email;
+  get diagnostics v_reqs = row_count;
+
+  return v_orders + v_reqs;
+end;
+$$;
+
+revoke all on function public.link_my_history() from public;
+grant execute on function public.link_my_history() to authenticated;
+
+-- Orders are matched by email on every sign-in, so the lookup gets
+-- an index rather than a sequential scan of the whole order book.
+-- Partial, because only unclaimed rows are ever searched.
+create index if not exists orders_email_idx
+  on public.orders (lower(customer ->> 'email')) where user_id is null;
+
+
+-- ============================================================
+--  VERIFY
+--
+--  As a signed-in CUSTOMER (not staff), all four must hold:
+--
+--    -- 1. sees only their own orders, never the book
+--    select count(*) from public.orders;
+--
+--    -- 2. cannot read anybody's profile but their own
+--    select count(*) from public.customer_profiles;
+--
+--    -- 3. is not staff and never became staff
+--    select public.my_role(), public.is_admin();   -- null, false
+--
+--    -- 4. cannot take an order that already has an owner
+--    select public.claim_orders('<someone-elses-id>', '<their phone>');
+--         -- 0 once that order is claimed, whatever the pair
+-- ============================================================
+
+-- ############################################################
+-- #  17. 019-corporate-and-warranty.sql
+-- #  Corporate requests, and the paid extended warranty
+-- ############################################################
+
+-- ============================================================
+--  TOSS SPORTS — CORPORATE ORDERS + EXTENDED WARRANTY
+--
+--  Two things the client asked for after 018:
+--
+--    1. Corporate and gifting enquiries, as a seventh service.
+--       `requests.kind` is constrained to a fixed list, so a new
+--       service is a migration and not just a form.
+--
+--    2. An extended warranty sold per bat at checkout — ₹100 for
+--       3 months, ₹200 for 6.
+--
+--  The warranty is the half that matters here. orders_sanitise()
+--  recomputes every anonymous order from the catalogue and IGNORES
+--  what the browser claimed the total was (see 016). A priced
+--  add-on the function does not know about is therefore an add-on
+--  the customer is never charged for: the line would be accepted,
+--  the warranty recorded, and the money silently dropped. So the
+--  function has to be taught the plan prices at the same time the
+--  checkout learns to sell them.
+--
+--  Prices live in `settings`, not in this file, so the owner can
+--  change them in the Maze Room without a developer — the same
+--  arrangement engraving_price already uses.
+--
+--  Safe to re-run.
+-- ============================================================
+
+
+-- ------------------------------------------------------------
+--  1. CORPORATE IS A VALID REQUEST KIND
+--
+--  Dropped and re-added rather than altered: a check constraint
+--  cannot be widened in place, and re-running the old definition
+--  after this file would silently narrow it again.
+-- ------------------------------------------------------------
+alter table public.requests drop constraint if exists requests_kind_ck;
+alter table public.requests add constraint requests_kind_ck
+  check (kind in ('bat_doctor','custom_bat','jersey','wholesale',
+                  'trade_in','video','corporate'));
+
+
+-- ------------------------------------------------------------
+--  2. WARRANTY PRICES
+--
+--  `on conflict do nothing` so re-running never resets a price the
+--  owner has since changed in the Maze Room. That is the whole
+--  reason these are rows rather than constants.
+-- ------------------------------------------------------------
+insert into public.settings (key, value) values
+  ('warranty_3_price', '100'::jsonb),
+  ('warranty_6_price', '200'::jsonb)
+on conflict (key) do nothing;
+
+
+-- ------------------------------------------------------------
+--  3. THE SERVER PRICES THE WARRANTY
+--
+--  A full redefinition of orders_sanitise() from 016, with the
+--  warranty added to the per-line price alongside engraving. Same
+--  return type, so create-or-replace is enough and no drop is
+--  needed.
+--
+--  Only two lines are genuinely new — the two lookups and the
+--  `if` inside the loop — but the function has to be restated in
+--  full because Postgres has no way to patch a body.
+--
+--  Anything other than '3' or '6' in the line adds nothing. An
+--  unknown plan is treated as no warranty rather than as an error:
+--  refusing the whole order because one line carried a bad string
+--  would cost a sale to protect a ₹100 add-on.
+-- ------------------------------------------------------------
+create or replace function public.orders_sanitise()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  it      jsonb;
+  v_sub   integer := 0;
+  v_qty   integer;
+  v_price integer;
+  v_eng   integer;
+  v_w3    integer;
+  v_w6    integer;
+  v_wadd  integer;
+  v_disc  integer := 0;
+  v_free  integer;
+  v_fee   integer;
+  v_cp    record;
+begin
+  -- Staff keep the numbers they typed. Only anonymous web orders are
+  -- recomputed, because only those were priced by a browser.
+  if public.my_role() is not null then
+    return new;
+  end if;
+
+  new.status     := 'new';
+  new.paid       := false;
+  new.channel    := 'web';
+  new.staff_id   := null;
+  new.payment_id := null;
+  new.created_at := now();
+
+  select coalesce((value #>> '{}')::int, 199) into v_eng
+    from public.settings where key = 'engraving_price';
+  v_eng := coalesce(v_eng, 199);
+
+  select coalesce((value #>> '{}')::int, 100) into v_w3
+    from public.settings where key = 'warranty_3_price';
+  v_w3 := coalesce(v_w3, 100);
+
+  select coalesce((value #>> '{}')::int, 200) into v_w6
+    from public.settings where key = 'warranty_6_price';
+  v_w6 := coalesce(v_w6, 200);
+
+  for it in select value from jsonb_array_elements(coalesce(new.items, '[]'::jsonb)) loop
+    select coalesce(p.price, 0) into v_price
+      from public.products p
+     where p.id = it->>'id' and p.active;
+
+    if not found then
+      raise exception 'Unknown or inactive product in order: %', it->>'id'
+        using errcode = 'check_violation';
+    end if;
+
+    v_qty := greatest(1, least(20, coalesce((it->>'qty')::int, 1)));
+
+    if coalesce(it->>'engrave', '') <> '' then
+      v_price := v_price + v_eng;
+    end if;
+
+    -- Per bat, exactly like engraving: two bats with cover cost two
+    -- covers. The browser sends only the plan id; the price comes from
+    -- settings here and nowhere else.
+    v_wadd := case coalesce(it->>'warranty', '')
+                when '3' then v_w3
+                when '6' then v_w6
+                else 0
+              end;
+    v_price := v_price + v_wadd;
+
+    v_sub := v_sub + v_price * v_qty;
+  end loop;
+
+  if new.coupon is not null then
+    select * into v_cp from public.validate_coupon(new.coupon, v_sub);
+    v_disc := case when v_cp.valid then coalesce(v_cp.discount, 0) else 0 end;
+    if v_disc = 0 then new.coupon := null; end if;
+  end if;
+
+  select coalesce((value #>> '{}')::int, 1500) into v_free
+    from public.settings where key = 'free_ship_over';
+  select coalesce((value #>> '{}')::int, 99) into v_fee
+    from public.settings where key = 'ship_fee';
+
+  new.subtotal := v_sub;
+  new.discount := least(v_disc, v_sub);
+  new.shipping := case
+                    when v_sub = 0 or v_sub >= coalesce(v_free, 1500) then 0
+                    else coalesce(v_fee, 99)
+                  end;
+  new.total    := greatest(0, new.subtotal - new.discount + new.shipping);
+  return new;
+end;
+$$;
+
+drop trigger if exists orders_sanitise_ins on public.orders;
+create trigger orders_sanitise_ins
+  before insert on public.orders
+  for each row execute function public.orders_sanitise();
+
+
+-- ============================================================
+--  VERIFY
+--
+--    -- corporate is now accepted
+--    insert into public.requests (kind, customer)
+--    values ('corporate', '{"name":"Test","phone":"9000000000"}'::jsonb);
+--
+--    -- and the warranty is actually charged. As an ANONYMOUS
+--    -- caller, insert one bat with a 6-month plan and read the
+--    -- total back: it must be the bat price + 200, whatever the
+--    -- browser claimed.
+--    select key, value from public.settings
+--     where key in ('warranty_3_price','warranty_6_price');
+-- ============================================================
+
+-- ############################################################
+-- #  18. 020-coupon-kinds.sql
+-- #  Game, loyalty, referral and offer codes
+-- ############################################################
+
+-- ============================================================
+--  TOSS SPORTS — WHAT A CODE IS FOR
+--
+--  `coupons` held game rewards and nothing else, so every code
+--  looked the same in the Maze Room: a value, a minimum spend and
+--  an "unlocks at" figure that only means anything if the code is
+--  earned by playing. Once the same table starts carrying loyalty
+--  and referral codes, "unlocks at 30 runs" against a referral
+--  code is noise, and there is no way to answer "how many referral
+--  codes are live".
+--
+--  So a code now says what it is. Four kinds:
+--
+--    game      earned in Gully Cricket; `unlock_runs` applies
+--    loyalty   handed to a returning customer
+--    referral  given out to be passed on
+--    offer     a campaign — festival, launch, anything timed
+--
+--  `referred_by` is the one extra column, and it is deliberately
+--  free text rather than a foreign key to a customer: most people
+--  handing out a referral code are not signed-in accounts, and a
+--  phone number written on a card is the real-world case. When
+--  proper referral tracking is built it can migrate from here.
+--
+--  Safe to re-run.
+-- ============================================================
+
+alter table public.coupons
+  add column if not exists kind text not null default 'game';
+
+alter table public.coupons
+  add column if not exists referred_by text;
+
+-- Existing rows are all game rewards, which is what the default
+-- already gave them; this only matters if the column existed with
+-- something else in it.
+update public.coupons set kind = 'game' where kind is null;
+
+alter table public.coupons drop constraint if exists coupons_kind_ck;
+alter table public.coupons add constraint coupons_kind_ck
+  check (kind in ('game','loyalty','referral','offer'));
+
+create index if not exists coupons_kind_idx on public.coupons (kind);
+
+
+-- ------------------------------------------------------------
+--  The storefront must not learn anything new.
+--
+--  validate_coupon() is what the checkout calls, and it stays
+--  exactly as it was: a code is valid because it exists, is
+--  active and clears its minimum spend. What KIND it is has no
+--  bearing on whether it works — that is a label for the people
+--  running the shop, not a rule for the customer.
+--
+--  Stated here because the obvious next step is to start
+--  filtering by kind in the validator, and that would break every
+--  game reward already in circulation.
+-- ------------------------------------------------------------
+
+
+-- ============================================================
+--  VERIFY
+--
+--    select kind, count(*) from public.coupons group by kind;
+--
+--    -- and the constraint holds
+--    insert into public.coupons (code, discount, kind)
+--    values ('BADKIND', 50, 'nonsense');   -- must fail
+-- ============================================================
+
+-- ############################################################
+-- #  19. 021-order-versioning.sql
+-- #  Row versions, so the Sheet sync cannot overwrite newer edits
+-- ############################################################
+
+-- ============================================================
+--  TOSS SPORTS — ORDER VERSIONING
+--
+--  Groundwork for the Google Sheet sync, which is allowed to
+--  write changes back to `orders`.
+--
+--  The danger with a two-way sync is not that a write fails — it
+--  is that one SUCCEEDS when it should not have. Somebody opens
+--  the Sheet at nine, a salesperson marks an order dispatched at
+--  ten, and the Sheet — still holding the nine o'clock value —
+--  pushes "new" back over it at eleven. The order silently
+--  un-ships. Nothing errors, nobody is told, and the bat does not
+--  go out.
+--
+--  `version` is what makes that impossible. Every update bumps
+--  it, the Sheet records the version it last read, and its
+--  write-back is filtered on that version:
+--
+--    PATCH /orders?id=eq.TOSS-X&version=eq.7
+--
+--  If anything changed in between, the row is at version 8, the
+--  filter matches nothing, and PostgREST updates ZERO rows. The
+--  sync sees the empty result and flags the row as a conflict
+--  instead of overwriting. That is optimistic concurrency, and it
+--  is the whole reason a write-back is safe to offer at all.
+--
+--  An integer rather than a timestamp on purpose: comparing
+--  timestamptz through a URL means agreeing on microsecond
+--  formatting between Postgres, PostgREST and Apps Script, and a
+--  guard that silently stops matching is worse than none.
+--
+--  `updated_at` comes along because it is genuinely useful in the
+--  Maze Room, but nothing depends on it for correctness.
+--
+--  Safe to re-run.
+-- ============================================================
+
+alter table public.orders
+  add column if not exists version    integer     not null default 1;
+
+alter table public.orders
+  add column if not exists updated_at timestamptz not null default now();
+
+
+-- ------------------------------------------------------------
+--  Bump on every update, from the database.
+--
+--  Not from application code: the Maze Room, the Sheet sync and
+--  any future caller all have to be covered, and the only place
+--  that sees all three is here. A caller that forgot would leave
+--  a stale version behind and quietly disarm the guard.
+--
+--  `is distinct from` rather than <> so a row whose columns are
+--  rewritten with identical values does not burn a version — the
+--  Sheet pushing an unchanged row should not invalidate somebody
+--  else's in-flight edit.
+-- ------------------------------------------------------------
+create or replace function public.orders_bump_version()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if to_jsonb(new) - 'version' - 'updated_at'
+     is distinct from
+     to_jsonb(old) - 'version' - 'updated_at' then
+    new.version    := coalesce(old.version, 1) + 1;
+    new.updated_at := now();
+  else
+    new.version    := old.version;
+    new.updated_at := old.updated_at;
+  end if;
+  return new;
+end;
+$$;
+
+-- 'orders_zz_bump_version' so it sorts LAST among BEFORE UPDATE
+-- triggers: it has to see the row exactly as it will be written,
+-- after anything else has finished changing it.
+drop trigger if exists orders_zz_bump_version on public.orders;
+create trigger orders_zz_bump_version
+  before update on public.orders
+  for each row execute function public.orders_bump_version();
+
+create index if not exists orders_updated_idx on public.orders (updated_at desc);
+
+
+-- ============================================================
+--  VERIFY
+--
+--    -- version climbs only on a real change
+--    update public.orders set status = status where id = '<an id>';
+--    select id, version from public.orders where id = '<an id>';  -- unchanged
+--
+--    update public.orders set status = 'packed' where id = '<an id>';
+--    select id, version from public.orders where id = '<an id>';  -- +1
+--
+--    -- and the guard refuses a stale write
+--    -- (as service_role, with the OLD version number)
+--    --   PATCH /orders?id=eq.<id>&version=eq.<old>   ->  []
+-- ============================================================
 
 
 -- ############################################################

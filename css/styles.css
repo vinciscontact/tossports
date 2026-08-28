@@ -74,11 +74,34 @@ input,select,textarea{font:inherit;color:inherit}
 
 /* ---------- dark band ---------- */
 .dark{background:var(--navy-900);color:#fff;position:relative;isolation:isolate}
+/* The lit frame.
+
+   Four layers, doing two jobs. The first two light the top and bottom
+   EDGES of the section, which is what gives the framed, glowing-border
+   look; the last two are the original corner blooms, turned up.
+
+   Percentages rather than pixels on the edge sweeps, so the glow tracks
+   the section instead of sitting at a fixed distance from the top — a
+   1400px flagship band and a 400px tile strip both get a proportional
+   edge rather than one being all glow and the other none.
+
+   Warm on top, cool underneath: the orange leads where the headline and
+   the buttons are, and the indigo carries the weight at the bottom where
+   one section hands over to the next.
+
+   All four stay dark enough to keep white text safe. At its brightest,
+   the top sweep blends navy toward about rgb(65,39,35) — white on that
+   is still roughly 14:1, so nothing here costs legibility.
+
+   Overridden wholesale by .gp.dark::before on the game page, which has
+   its own night-match lighting. */
 .dark::before{
   content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
   background:
-    radial-gradient(900px 460px at 78% 8%,rgba(255,138,30,.16),transparent 62%),
-    radial-gradient(760px 520px at 12% 92%,rgba(61,61,168,.34),transparent 66%);
+    radial-gradient(120% 52% at 50% -6%,  rgba(255,138,30,.26),transparent 60%),
+    radial-gradient(120% 54% at 50% 106%, rgba(61,61,168,.5), transparent 64%),
+    radial-gradient(900px 460px at 80% 6%, rgba(255,138,30,.2), transparent 62%),
+    radial-gradient(760px 520px at 10% 94%,rgba(61,61,168,.4), transparent 66%);
 }
 .dark .eyebrow{color:var(--orange)}
 
@@ -1416,6 +1439,25 @@ canvas.gp-cv{display:block;width:100%;height:auto;image-rendering:pixelated;
 
 /* ---------- sections ---------- */
 .sec{padding:64px 0}
+
+/* ------------------------------------------------------------
+   BANDS
+
+   A "band" is a section whose entire content is one card — the
+   community invite, the Find My Bat prompt. 64px above and below
+   a 125px card is the rhythm meant for a section with a heading,
+   a subhead and a grid under it; on a lone card it reads as a
+   hole in the page rather than as breathing room.
+
+   The adjacency rule is the important half. Two bands in a row
+   were contributing 64 + 64 = 128px of empty white between two
+   thin cards, which is what made the homepage look broken
+   between "Join the community" and "Not sure which bat?".
+   Collapsing the second one's top padding leaves a single
+   deliberate gap instead of two stacked ones.
+   ------------------------------------------------------------ */
+.sec--band{padding-top:38px;padding-bottom:38px}
+.sec--band + .sec--band{padding-top:0}
 .sec-head{margin-bottom:30px}
 .sec-head .d2,.sec-head .d3{margin-bottom:12px}
 .sec-head.row{display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
@@ -2117,8 +2159,12 @@ body.pdp-open .fab{bottom:82px}
 .svc-radio input{position:absolute;opacity:0;pointer-events:none}
 .svc-radio-b{display:grid;gap:3px;padding:13px 15px;border:1.5px solid var(--line);
   border-radius:12px;transition:.16s var(--ease);height:100%}
-.svc-radio-b b{font-size:.9rem}
-.svc-radio-b i{font-style:normal;font-size:.76rem;color:var(--ink-50)}
+.svc-radio-b b{font-size:.95rem}
+/* The price band under each option. It was --ink-50 at .76rem and read as
+   disabled text — which is the wrong signal on the one line that tells
+   somebody what a repair will cost. Darker and heavier: --ink-70 clears
+   7:1 on white, against 4.6 before. */
+.svc-radio-b i{font-style:normal;font-size:.82rem;font-weight:600;color:var(--ink-70)}
 .svc-radio:hover .svc-radio-b{border-color:var(--ink-30)}
 .svc-radio input:checked+.svc-radio-b{border-color:var(--orange);
   background:rgba(255,138,30,.07);box-shadow:0 0 0 2px rgba(255,138,30,.18)}
@@ -2284,115 +2330,6 @@ body.pdp-open .fab{bottom:82px}
    service. One rule set styles all six, and a seventh service is
    a colour in SVC_ID, not another block of CSS.
    ============================================================ */
-
-/* ---------- the card band ----------
-
-   Adapted from a Uiverse card by Javierrocadev: a colour banner
-   across the top, a circular badge straddling it, and on hover
-   the banner balloons into a circle while the text lifts.
-
-   THREE THINGS CHANGED to make it survive here.
-
-   1. The original morphs by animating WIDTH (350px -> 300px).
-      These cards are grid items, so animating width would either
-      do nothing or shove the neighbours around mid-hover. The
-      balloon is a transform on the wash instead, and the card
-      only changes border-radius. Nothing reflows.
-
-   2. The original paints one rainbow on every card. Each card
-      here inherits its own service colour through --svc, so the
-      colour still tells you which service you are looking at.
-
-   3. The original puts a <button> inside. This card is a single
-      <a>, so the pill is a span that only looks like one — the
-      whole card stays one tap target, which matters on a phone.
-
-   Contrast: on hover the wash covers the text, so the text turns
-   white. Every --svc clears 4.5:1 against white, and that holds
-   in both directions, so white on the accent is safe too.
-   ---------------------------------------------------------- */
-
-/* Fixed three-up rather than auto-fit. auto-fit gave four columns at wide
-   widths and stranded the last two in a half-empty row. Three divides six. */
-.svcband-grid{display:grid;gap:18px;grid-template-columns:repeat(3,1fr)}
-@media (max-width:900px){.svcband-grid{grid-template-columns:repeat(2,1fr)}}
-@media (max-width:560px){.svcband-grid{grid-template-columns:1fr}}
-
-.svcband-card{position:relative;display:flex;flex-direction:column;align-items:center;
-  text-align:center;gap:10px;min-height:310px;padding:0 22px 26px;
-  background:#fff;border:1px solid var(--line);border-radius:16px;
-  text-decoration:none;color:inherit;overflow:hidden;isolation:isolate;
-  transition:border-radius .5s var(--ease),box-shadow .35s var(--ease),
-             transform .35s var(--ease),color .35s var(--ease)}
-.svcband-card>*{position:relative;z-index:1}
-
-/* the banner, and the balloon it becomes */
-.svcband-wash{position:absolute;z-index:0;top:0;left:0;right:0;height:104px;
-  border-radius:15px 15px 0 0;border-bottom:3px solid #fff;
-  background:linear-gradient(40deg, var(--svc) 0%,
-    color-mix(in srgb, var(--svc) 74%, #fff) 55%,
-    color-mix(in srgb, var(--svc) 46%, var(--orange)) 100%);
-  transition:height .5s var(--ease),width .5s var(--ease),
-             border-radius .5s var(--ease),transform .5s var(--ease),
-             inset .5s var(--ease)}
-
-.svcband-card:hover,.svcband-card:focus-visible{transform:translateY(-4px);
-  border-radius:130px;box-shadow:0 22px 48px rgba(11,11,36,.18);color:#fff}
-.svcband-card:focus-visible{outline:3px solid var(--svc);outline-offset:3px}
-
-/* A square that fills the card and rounds to a circle. aspect-ratio keeps it
-   a true circle rather than the ellipse a percentage height would give on a
-   card that is taller than it is wide. */
-.svcband-card:hover .svcband-wash,
-.svcband-card:focus-visible .svcband-wash{
-  top:50%;left:50%;right:auto;width:126%;height:auto;aspect-ratio:1;
-  border-radius:50%;border-bottom:none;transform:translate(-50%,-50%) scale(.95)}
-
-/* the badge straddling the banner */
-.svcband-art{display:grid;place-items:center;width:92px;height:92px;flex:none;
-  margin-top:56px;border-radius:50%;background:#fff;color:var(--svc);
-  border:4px solid #fff;box-shadow:0 6px 18px rgba(11,11,36,.16);
-  transition:transform .5s var(--ease),box-shadow .35s var(--ease)}
-.svcband-art .svc-art-svg{width:48px;height:48px;display:block}
-.svcband-card:hover .svcband-art{transform:translateY(-6px) scale(1.04)}
-
-.svcband-info{display:flex;flex-direction:column;align-items:center;gap:7px;
-  transition:transform .5s var(--ease)}
-.svcband-card:hover .svcband-info{transform:translateY(-8%)}
-.svcband-card b{font-size:1.08rem;line-height:1.3}
-.svcband-card p{margin:0;font-size:.88rem;line-height:1.45;color:var(--ink-70);
-  transition:color .35s var(--ease)}
-.svcband-card:hover p{color:rgba(255,255,255,.88)}
-
-/* looks like a button, is part of the link */
-.svcband-btn{margin-top:auto;padding:9px 20px;border-radius:100px;font-size:.83rem;
-  font-weight:700;background:var(--svc);color:#fff;border:1px solid transparent;
-  transition:background .35s var(--ease),color .35s var(--ease),
-             transform .35s var(--ease),border-color .35s var(--ease)}
-.svcband-card:hover .svcband-btn{background:#fff;color:var(--svc);
-  border-color:#fff;transform:scale(1.06)}
-
-@media (max-width:560px){
-  .svcband-card{min-height:290px;padding:0 18px 22px}
-  .svcband-art{width:82px;height:82px;margin-top:48px}
-  .svcband-art .svc-art-svg{width:42px;height:42px}
-  .svcband-card:hover{border-radius:110px}
-}
-/* The morph is the whole point, so when motion is unwelcome it does not
-   happen at all — no half-animated middle state. */
-@media (prefers-reduced-motion:reduce){
-  .svcband-card,.svcband-wash,.svcband-art,.svcband-info,.svcband-btn,
-  .svcband-card p{transition:none}
-  .svcband-card:hover{transform:none;border-radius:16px;color:inherit}
-  .svcband-card:hover .svcband-wash{top:0;left:0;right:0;width:auto;height:104px;
-    aspect-ratio:auto;border-radius:15px 15px 0 0;transform:none;
-    border-bottom:3px solid #fff}
-  .svcband-card:hover .svcband-art,
-  .svcband-card:hover .svcband-info,
-  .svcband-card:hover .svcband-btn{transform:none}
-  .svcband-card:hover p{color:var(--ink-70)}
-  .svcband-card:hover .svcband-btn{background:var(--svc);color:#fff}
-}
 
 /* ---------- the form page header ---------- */
 
@@ -2563,50 +2500,66 @@ body.pdp-open .fab{bottom:82px}
   to{transform:translate3d(84.853px,-84.853px,0)}
 }
 
-/* the panel you actually read */
+/* the panel you actually read
+
+   White, on a section that stays navy. The card is the paper and the
+   section is the table it sits on — which is also what makes the moving
+   stripe edge read as a printed border rather than a glow. */
 .sty-inner{position:relative;z-index:1;display:flex;flex-direction:column;
   height:100%;padding:20px 18px 52px;border-radius:16px;
-  background:#141433;
+  background:#fff;
   transition:background .18s var(--ease)}
 
 /* ---------- what is inside ---------- */
+/* Solid orange tile with a NAVY glyph, not a white one. White on
+   #FF8A1E is about 2:1 and fails the 3:1 a meaningful graphic needs;
+   navy on the same orange is roughly 8:1. The hover arrow below has
+   used that pairing all along, so this is the existing answer rather
+   than a new one. */
 .sty-ico{display:grid;place-items:center;width:42px;height:42px;border-radius:11px;
-  background:rgba(255,138,30,.12);border:1px solid rgba(255,138,30,.22);
-  color:var(--orange);margin-bottom:16px;transition:background .18s var(--ease)}
+  background:var(--orange);border:1px solid var(--orange-600);
+  color:var(--navy-900);margin-bottom:16px;transition:background .18s var(--ease)}
 .sty-ico svg{width:22px;height:22px}
-.sty-card:hover .sty-ico{background:rgba(255,138,30,.22)}
+.sty-card:hover .sty-ico{background:var(--orange-600)}
 
 .sty-name{font-family:var(--f-display);font-size:1.42rem;line-height:1;
-  letter-spacing:.01em;text-transform:uppercase;color:#fff}
-.sty-tag{margin-top:8px;font-size:.86rem;line-height:1.42;color:rgba(255,255,255,.6)}
+  letter-spacing:.01em;text-transform:uppercase;color:var(--ink)}
+.sty-tag{margin-top:8px;font-size:.86rem;line-height:1.42;color:var(--ink-70)}
 
-/* what the style is built from — the shop's own words for the shapes */
+/* what the style is built from — the shop's own words for the shapes.
+   --ink-50 rather than a lighter grey: this is 0.72rem and bold, so it
+   is small text and has to clear 4.5:1 on white. It does, at 4.6. */
 .sty-spec{margin-top:14px;font-size:.72rem;letter-spacing:.05em;font-weight:700;
-  color:rgba(255,255,255,.44);text-transform:uppercase}
+  color:var(--ink-50);text-transform:uppercase}
 
+/* Lifts and keeps its colour. A card that changed background under the
+   cursor would swap every text colour with it, which reads as a flicker
+   when the pointer crosses a row of seven. */
 .sty-card:hover{transform:translateY(-4px);padding:4px;
   box-shadow:0 18px 44px rgba(0,0,0,.5)}
 .sty-card:hover .sty-edge{opacity:1;animation-duration:5s}
-.sty-card:hover .sty-inner{background:#191940}
 .sty-card:focus-visible{outline:2px solid var(--orange);outline-offset:3px}
 
 /* ---------- the weight scale ---------- */
 /* Segments, not a slider: the bat is cut to order, so this shows which
    band the model sits in, never a single number pretending to be exact. */
 .sty-scale{display:flex;gap:5px;margin-top:16px}
-.sty-scale i{flex:1;height:5px;border-radius:100px;background:rgba(255,255,255,.13);
+.sty-scale i{flex:1;height:5px;border-radius:100px;background:var(--line);
   transition:background .18s var(--ease)}
-.sty-scale i.on{background:var(--orange);box-shadow:0 0 12px rgba(255,138,30,.55)}
-.sty-row-w .sty-spec{margin-top:9px;color:rgba(255,255,255,.68);
+/* No glow on the filled band any more — a bloom that read as light on
+   navy just looks like a printing smudge on white. The colour alone
+   carries it against the grey track. */
+.sty-scale i.on{background:var(--orange)}
+.sty-row-w .sty-spec{margin-top:9px;color:var(--ink);
   font-family:var(--f-display);font-size:.98rem;letter-spacing:.02em}
 
 /* ---------- the arrow ---------- */
 /* positioned against .sty-inner, which is the padded box now */
 .sty-go{position:absolute;left:18px;bottom:16px;display:grid;place-items:center;
-  width:30px;height:30px;border-radius:100px;color:#fff;
-  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
+  width:30px;height:30px;border-radius:100px;color:var(--ink);
+  background:var(--paper-alt);border:1px solid var(--line);
   transition:background .18s var(--ease),transform .18s var(--ease),
-             border-color .18s var(--ease)}
+             border-color .18s var(--ease),color .18s var(--ease)}
 .sty-go svg{width:15px;height:15px}
 .sty-card:hover .sty-go{background:var(--orange);border-color:var(--orange);
   color:var(--navy-900);transform:translateX(4px)}
@@ -2771,3 +2724,443 @@ body.pdp-open .fab{bottom:82px}
 @media (prefers-reduced-motion:reduce){
   .svc-prog-track i{transition:none}
 }
+
+/* ============================================================
+   ACCOUNT
+
+   Built out of what the tracking page already established —
+   .trk-steps, .trk-courier, .svc-form — so an order looks the
+   same whether it was found by signing in or by typing an order
+   number. Only the pieces with no existing equivalent are new.
+   ============================================================ */
+
+/* The header control. `.on` is the signed-in state: a dot rather
+   than a different icon, so the button never changes shape and
+   never moves the two beside it. */
+.ico-btn.on{position:relative}
+.ico-btn.on::after{content:'';position:absolute;top:7px;right:7px;width:8px;height:8px;
+  border-radius:50%;background:var(--orange);border:2px solid var(--paper)}
+.hdr.onDark .ico-btn.on::after{border-color:var(--navy-900)}
+
+/* ---------- signed out ---------- */
+.acct-gate{max-width:520px}
+.btn-google{display:inline-flex;align-items:center;justify-content:center;gap:11px;
+  width:100%;padding:14px 20px;border-radius:12px;border:1.5px solid var(--line);
+  background:#fff;color:var(--ink);font-weight:800;font-size:.95rem;cursor:pointer;
+  transition:box-shadow .2s var(--ease),border-color .2s var(--ease)}
+.btn-google:hover{border-color:var(--ink-50);box-shadow:var(--sh-1)}
+.btn-google svg{flex:none}
+.acct-gate-note{margin:12px 0 0;font-size:.82rem;color:var(--ink-50)}
+.acct-gate-alt{margin-top:30px;padding-top:22px;border-top:1px solid var(--line)}
+.acct-gate-alt p{margin:0 0 6px;font-size:.9rem;color:var(--ink-70)}
+
+/* ---------- signed in ---------- */
+.acct-head{display:flex;justify-content:space-between;align-items:center;gap:16px;
+  flex-wrap:wrap;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.acct-who{font-size:1.05rem;word-break:break-all}
+
+.acct-tabs{display:flex;gap:6px;margin:18px 0 24px;overflow-x:auto;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none}
+.acct-tabs::-webkit-scrollbar{display:none}
+.acct-tab{flex:none;padding:9px 16px;border-radius:999px;border:1.5px solid var(--line);
+  background:#fff;font:inherit;font-weight:800;font-size:.85rem;color:var(--ink-70);
+  cursor:pointer;white-space:nowrap;transition:.2s var(--ease)}
+.acct-tab:hover{border-color:var(--ink-50)}
+.acct-tab.on{background:var(--ink);border-color:var(--ink);color:#fff}
+
+.acct-h3{margin:30px 0 6px;font-size:1.05rem}
+.acct-h3:first-child{margin-top:0}
+.acct-note{margin:6px 0 0;font-size:.82rem;color:var(--ink-50)}
+.acct-empty{border:1px dashed var(--line);border-radius:16px;padding:26px;text-align:center}
+.acct-empty p{margin:0 0 6px;font-size:.92rem;color:var(--ink-70)}
+
+/* ---------- an order ---------- */
+.acct-order,.acct-req{border:1px solid var(--line);border-radius:18px;padding:22px;
+  background:#fff;margin-bottom:16px}
+.acct-order-top{display:flex;justify-content:space-between;align-items:flex-start;
+  gap:16px;flex-wrap:wrap;margin-bottom:18px}
+
+/* The account lists whole orders, so each timeline is a summary rather
+   than the single focused one the tracking page shows. Tighter, and
+   without the per-step prose. */
+.trk-steps.compact .trk-step{padding-bottom:14px}
+.trk-steps.compact .trk-step:not(:last-child)::before{top:24px}
+.trk-steps.compact .trk-dot{width:22px;height:22px}
+.trk-steps.compact .trk-dot svg{width:11px;height:11px}
+.trk-steps.compact .trk-step:not(:last-child)::before{left:10px}
+.trk-steps.compact .trk-step b{font-size:.86rem}
+
+.acct-eng{font-style:normal;color:var(--ink-50);font-size:.82rem}
+.acct-order-foot{display:flex;justify-content:space-between;align-items:center;gap:14px;
+  flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.acct-method{font-size:.72rem;font-weight:800;letter-spacing:.12em;color:var(--ink-50)}
+
+.acct-claim{margin-top:30px;padding:22px;border:1px solid var(--line);border-radius:18px;
+  background:var(--paper-alt)}
+
+/* ---------- requests ---------- */
+.acct-pill{padding:5px 12px;border-radius:999px;font-size:.72rem;font-weight:800;
+  text-transform:uppercase;letter-spacing:.08em;background:var(--paper-alt);color:var(--ink-70)}
+.acct-pill--quoted{background:var(--orange-50);color:var(--orange-700)}
+.acct-pill--accepted,.acct-pill--done{background:var(--green-bg);color:var(--green)}
+.acct-pill--declined{background:#FDECEC;color:#c92a2e}
+.acct-quote{margin:0;font-size:.95rem}
+
+/* ---------- addresses ---------- */
+.acct-addrs{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:10px}
+.acct-addrs li{display:flex;justify-content:space-between;align-items:center;gap:14px;
+  padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.acct-addrs b{display:block;font-size:.9rem}
+.acct-addrs span{font-size:.82rem;color:var(--ink-50)}
+.acct-addr-new{margin-top:18px;padding-top:20px;border-top:1px solid var(--line)}
+
+/* A save that worked deserves to say so — .svc-stat only had a
+   failure colour, so success read as an ordinary grey line. */
+.svc-stat.good{color:var(--green)}
+
+@media (max-width:640px){
+  .acct-order,.acct-req,.acct-claim{padding:18px}
+  .acct-order-foot{flex-direction:column;align-items:stretch}
+  .acct-order-foot .btn{width:100%}
+}
+
+/* ============================================================
+   HERO — copy left, bats right
+
+   Replaces the full-bleed carousel. The headline and buttons are
+   static; only the artwork on the right cycles, so the text is
+   never moving while it is being read.
+
+   Colours are the site's own — navy ground, orange panel. The
+   layout is the borrowed part, not the palette.
+   ============================================================ */
+/* The header is fixed, so the hero has to start below it — the same
+   calc(var(--hdr) + n) every other top-of-page section uses. Without it
+   the eyebrow renders underneath the logo.
+
+   The padding is tuned so the SERVICE TILE ROW BELOW CLEARS THE FOLD on a
+   900px-tall laptop, which is the common case. At the previous values the
+   hero came to 796px, the row began at 830 and only 70 of its 123px were
+   visible — the fold cut straight through the labels, which reads as a
+   broken layout rather than as a hint that there is more below. Anything
+   changed here should be re-checked against that: the row has to finish
+   above the fold, or clear it entirely. */
+.nhero{padding:calc(var(--hdr) + clamp(20px,3vw,42px)) 0 clamp(20px,3.5vw,44px);
+  overflow:hidden;overflow:clip}
+.nhero-in{display:grid;gap:clamp(28px,5vw,56px);align-items:center;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+
+/* ---------- left ---------- */
+.nhero-copy{position:relative;z-index:2;min-width:0}
+/* The vertical rhythm here is deliberately tight. This column, not the
+   artwork, is what sets the hero's height — so these margins are the
+   lever that decides whether the service tiles below clear the fold. */
+.nhero-copy .d1{color:#fff;margin:10px 0 0;line-height:.94}
+.nhero-copy .hl-2{display:block;color:var(--orange)}
+.nhero-copy .lede{margin-top:16px;max-width:44ch}
+.nhero-cta{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:24px}
+
+/* Icon-only, circular, outlined — deliberately the quietest thing in the
+   row. They match .ico-btn in the header so a WhatsApp mark means the same
+   thing in both places. 44px clears the minimum touch target. */
+.nhero-soc{width:44px;height:44px;flex:none;border-radius:50%;display:grid;
+  place-items:center;color:#fff;background:rgba(255,255,255,.07);
+  border:1.5px solid rgba(255,255,255,.22);
+  transition:background .2s var(--ease),border-color .2s var(--ease),
+             transform .2s var(--ease)}
+.nhero-soc svg{width:20px;height:20px}
+.nhero-soc:hover{background:var(--orange);border-color:var(--orange);
+  color:var(--navy-900);transform:translateY(-2px)}
+.nhero-soc:focus-visible{outline:2px solid var(--orange);outline-offset:3px}
+
+/* The three hesitation-answers. Icon + label, wrapping to two rows on
+   a narrow phone rather than scrolling sideways. */
+.nhero-badges{list-style:none;display:flex;flex-wrap:wrap;gap:10px 22px;
+  margin:22px 0 0;padding:0}
+.nhero-badges li{display:flex;align-items:center;gap:9px;font-size:.82rem;
+  font-weight:700;color:rgba(255,255,255,.82)}
+.nhero-badges svg{width:19px;height:19px;color:var(--orange);flex:none}
+.nhero .hv-proof{margin-top:16px}
+
+/* ---------- right ---------- */
+.nhero-stage{position:relative;min-height:min(60vh,520px);display:grid;
+  place-items:center;min-width:0}
+
+/* The angled panel the bats sit on. A rotated rounded rectangle rather
+   than a clip-path, so the corner radius stays even on every edge. */
+.nhero-panel{position:absolute;inset:6% -4% 12% 2%;border-radius:36px;
+  background:linear-gradient(150deg,var(--orange) 0%,var(--orange-600) 55%,var(--orange-700) 100%);
+  transform:rotate(-4deg);box-shadow:0 30px 70px rgba(0,0,0,.42)}
+.nhero-panel::after{content:'';position:absolute;inset:0;border-radius:inherit;
+  background:radial-gradient(120% 80% at 20% 0%,rgba(255,255,255,.22),transparent 60%)}
+
+/* ---------- the fan of bats ---------- */
+/* All four sit on the panel together and overlap. The negative margin is
+   what makes it a fan rather than a row: a cutout is mostly empty space
+   either side of a narrow blade, so without the pull-in they read as four
+   separate pictures instead of one arrangement. */
+.nhero-shots{position:relative;z-index:1;display:flex;align-items:center;
+  justify-content:center;width:100%;height:100%;gap:clamp(4px,2.2vw,30px)}
+.nhero-shot{position:relative;flex:0 0 auto;display:grid;
+  place-items:center;
+  /* Alternating tilt, derived from the index, so the fan has rhythm
+     without four hand-written rules. */
+  transform:scale(.66) rotate(calc((var(--i) - 1.5) * 7deg)) translateY(4%);
+  opacity:.5;filter:brightness(.62) saturate(.8);
+  transition:transform .55s var(--ease),opacity .45s var(--ease),
+             filter .45s var(--ease);
+  will-change:transform}
+.nhero-shot.on{transform:scale(1) rotate(0deg);opacity:1;filter:none;z-index:4}
+.nhero-shot:hover{opacity:.85;filter:brightness(.85)}
+.nhero-shot.on:hover{opacity:1;filter:none}
+
+/* The featured bat deliberately overflows the panel. A bat is long and
+   thin, so keeping it inside the orange leaves the panel mostly empty;
+   breaking the edge is what makes it read as a product in front of the
+   panel rather than a photo pasted onto it. */
+.nhero-shot img{height:min(60vh,480px);width:auto;object-fit:contain;
+  filter:drop-shadow(0 22px 40px rgba(0,0,0,.5))}
+
+/* Name + promise. Anchored to the stage, not to the bat, so it stays put
+   while the bat behind it scales — a tag that grew with its bat would
+   jump around the panel on every rotation. */
+.nhero-tag{position:absolute;left:0;bottom:0;display:none;gap:1px;padding:10px 16px;
+  border-radius:12px;background:rgba(11,11,36,.86);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.14);white-space:nowrap;
+  transform:scale(1);transform-origin:left bottom}
+.nhero-shot.on .nhero-tag{display:grid}
+.nhero-tag b{font-size:.88rem;color:#fff;line-height:1.2}
+.nhero-tag i{font-style:normal;font-size:.73rem;color:rgba(255,255,255,.6)}
+
+/* ---------- the round badge ---------- */
+.nhero-medal{position:absolute;top:-2%;right:-1%;z-index:3;width:104px;height:104px;
+  border-radius:50%;display:grid;place-items:center;gap:2px;text-align:center;
+  background:var(--navy-900);border:2px solid var(--orange);color:#fff;
+  font-weight:900;font-size:.82rem;line-height:1.15;text-transform:uppercase;
+  letter-spacing:.04em;box-shadow:0 14px 34px rgba(0,0,0,.45);
+  transition:transform .25s var(--ease)}
+.nhero-medal:hover{transform:scale(1.06) rotate(-4deg)}
+.nhero-medal i{display:block;color:var(--orange)}
+.nhero-medal svg{width:16px;height:16px;transform:rotate(90deg)}
+
+/* ---------- arrows + dots ---------- */
+.nhero-nav{position:absolute;right:0;bottom:-6px;z-index:3;display:flex;
+  align-items:center;gap:10px}
+.nhero-arrow{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
+  border:1.5px solid rgba(255,255,255,.28);background:rgba(11,11,36,.6);color:#fff;
+  cursor:pointer;transition:.2s var(--ease)}
+.nhero-arrow:hover{background:var(--orange);border-color:var(--orange)}
+.nhero-arrow svg{width:17px;height:17px}
+.nhero-arrow:first-child svg{transform:rotate(180deg)}
+.nhero-dots{display:flex;gap:7px}
+.nhero-dots button{width:8px;height:8px;padding:0;border:0;border-radius:50%;
+  background:rgba(255,255,255,.3);cursor:pointer;transition:.25s var(--ease)}
+.nhero-dots button.on{background:var(--orange);width:24px;border-radius:99px}
+
+/* ---------- short desktop screens ----------
+
+   A 1366x768 laptop has 581px of usable height once the header and the
+   service row are accounted for, and the copy column alone wants 570 —
+   293px of which is the headline. So on short screens the headline is
+   what has to give; trimming padding alone cannot find 90px.
+
+   Scoped by HEIGHT, not width, because this is a vertical problem: a
+   1920x1080 monitor and a 1366x768 laptop are both "desktop" and only
+   one of them is short. Width is still gated at 901px so this never
+   fights the mobile layout below, which stacks and scrolls anyway.
+
+   890px is the threshold because that is where the FULL-SIZE hero stops
+   fitting — at 900px tall the row clears the fold by 11px, and any less
+   than about 889 it does not. Setting the breakpoint lower would leave a
+   band of screen heights getting the big headline AND a cut-off row,
+   which is the exact fault this rule exists to remove. */
+@media (min-width:901px) and (max-height:890px){
+  /* Everything here is in vh so it degrades CONTINUOUSLY. Flat values
+     were the first attempt and they produced a cliff: an 880px screen
+     needed about 20px trimmed and got 200, so it rendered a visibly
+     smaller hero than a 900px screen for no reason. Tying the sizes to
+     viewport height means each screen gives up only what it has to. */
+  .nhero{padding-top:calc(var(--hdr) + 2.4vh);padding-bottom:2.4vh}
+  .nhero-copy .d1{font-size:clamp(2.4rem,min(10.5vw,10.2vh),6.5rem)}
+  .nhero-copy .lede{margin-top:1.5vh}
+  .nhero-cta{margin-top:2.2vh}
+  .nhero-badges{margin-top:1.8vh}
+  .nhero .hv-proof{margin-top:1.4vh}
+  .nhero-stage{min-height:min(58vh,520px)}
+  .nhero-shot img{height:min(58vh,480px)}
+}
+
+@media (max-width:900px){
+  .nhero-in{grid-template-columns:1fr;gap:34px}
+  /* Artwork first would push the headline below the fold on a phone,
+     which is the one thing the old banner hero got wrong. */
+  .nhero-copy{order:1}
+  .nhero-stage{order:2;min-height:min(52vh,400px)}
+  .nhero-medal{width:82px;height:82px;font-size:.72rem;top:-4%;right:2%}
+  .nhero-nav{left:0;right:auto;bottom:-4px}
+  .nhero-shot img{height:min(40vh,320px)}
+  .nhero-shots{gap:clamp(2px,1.5vw,14px)}
+}
+@media (max-width:520px){
+  .nhero-tag{padding:8px 12px}
+  .nhero-tag b{font-size:.82rem}
+  .nhero-cta .btn{width:100%;justify-content:center}
+}
+@media (prefers-reduced-motion:reduce){
+  .nhero-shot{transition:none}
+  .nhero-medal{transition:none}
+}
+
+/* ============================================================
+   SERVICE TILES — the row under the hero
+
+   The same six services as the band further down, at navigation
+   density. Each keeps its own accent via --svc, set inline, so a
+   seventh service needs a colour and not a stylesheet — the same
+   arrangement .svcband-card already uses.
+   ============================================================ */
+/* Carries the hero's bottom glow down through this strip.
+
+   The hero is .dark, so its lit edge is brightest exactly at its bottom
+   boundary — and this strip sat on flat navy right underneath, which drew
+   a hard horizontal line across the page where the glow stopped dead.
+   Repeating the same indigo here and fading it out means the hero and its
+   tiles read as one lit block, which is also how they group visually.
+
+   Not by adding .dark: that would also apply the WARM top sweep, putting
+   an orange band directly under a cool one. Only the layer that needs to
+   continue is continued. */
+.svctiles{padding:0 0 clamp(20px,4vw,34px);
+  background:radial-gradient(130% 96% at 50% -22%,rgba(61,61,168,.44),transparent 72%),
+             var(--navy-900)}
+/* Seven tiles, so the column count is stated per breakpoint rather than
+   left to auto-fit. auto-fit picks whatever fits and would have stranded
+   the seventh alone on a second row at most widths; these counts always
+   divide into rows that look deliberate. */
+.svctiles-row{display:grid;gap:11px;grid-template-columns:repeat(7,minmax(0,1fr))}
+/* Raised from 5.5% to 11% white with a brighter edge. At the old value
+   these read as slightly-less-navy rectangles and the row disappeared
+   into the section behind it — which is fatal for a strip whose whole
+   job is to be spotted. A lighter panel on navy costs nothing and the
+   text contrast only improves. */
+/* align-items:center keeps the icon on the text's optical centre whatever
+   the label wraps to, and the grid's default stretch already gives every
+   tile in a row the same height — so a two-line tile and a one-line tile
+   sit in a straight row instead of stepping. */
+.svctile{display:flex;align-items:center;gap:11px;min-width:0;padding:12px;
+  border-radius:16px;background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.28);
+  box-shadow:0 2px 14px rgba(0,0,0,.32);transition:.22s var(--ease)}
+.svctile:hover{background:rgba(255,255,255,.23);border-color:var(--svc,var(--orange));
+  transform:translateY(-3px);box-shadow:0 10px 26px rgba(0,0,0,.45)}
+.svctile-art{flex:none;width:38px;height:38px;border-radius:11px;display:grid;
+  place-items:center;background:var(--svc,var(--orange));color:#fff}
+.svctile-art svg{width:21px;height:21px}
+/* Wraps between words, never inside them.
+
+   This was `overflow-wrap:anywhere`, which is a last resort for unbroken
+   strings like URLs — on ordinary labels it hyphenlessly split "knocking"
+   into "knockin / g" and "Corporate" into "Corpor / ate". Normal wrapping
+   plus short labels is the fix; if a label ever genuinely will not fit,
+   the answer is a shorter label, not a broken word. */
+.svctile-txt{display:grid;gap:2px;min-width:0}
+.svctile-txt b{font-size:.83rem;color:#fff;line-height:1.25;
+  overflow-wrap:normal;word-break:normal;hyphens:none}
+.svctile-txt i{font-style:normal;font-size:.71rem;color:rgba(255,255,255,.72);
+  line-height:1.3;overflow-wrap:normal;word-break:normal;hyphens:none}
+.svctile-go{flex:none;margin-left:auto;width:26px;height:26px;border-radius:50%;
+  display:grid;place-items:center;background:rgba(255,255,255,.1);color:#fff;
+  transition:.22s var(--ease)}
+.svctile:hover .svctile-go{background:var(--svc,var(--orange))}
+.svctile-go svg{width:14px;height:14px}
+
+/* The arrow is decoration — the whole tile is the link. It is the first
+   thing to go when the row gets tight, because the alternative is taking
+   the room from the label.
+
+   1500px, not 1240: with SEVEN tiles across a 1240px wrap each one is
+   162px, and the arrow plus its auto margin was leaving the text just
+   51px — which is what forced every label onto two cramped lines. The
+   arrow only earns its place once the tiles are wide enough not to
+   notice it. */
+@media (max-width:1500px){ .svctile-go{display:none} }
+@media (max-width:1180px){ .svctiles-row{grid-template-columns:repeat(4,minmax(0,1fr))} }
+@media (max-width:900px){  .svctiles-row{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:640px){
+  .svctiles-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .svctile{padding:12px}
+  .svctile-go{display:none}
+}
+
+/* ============================================================
+   EXTENDED WARRANTY — chosen per bat at checkout
+   ============================================================ */
+.wty{margin:-4px 0 14px;padding:12px 14px;border:1px solid var(--line);
+  border-radius:12px;background:var(--paper-alt)}
+.wty-h{display:block;font-size:.74rem;font-weight:800;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-70);margin-bottom:9px}
+/* The "already included" note. Lower-case and lighter than the label so it
+   reads as a fact about this bat rather than another heading. */
+.wty-h em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:700;
+  color:var(--green)}
+.wty-opts{display:flex;flex-wrap:wrap;gap:8px}
+.wty-opt{display:grid;gap:1px;padding:8px 13px;border-radius:10px;cursor:pointer;
+  border:1.5px solid var(--line);background:#fff;font:inherit;text-align:left;
+  color:var(--ink);transition:.16s var(--ease)}
+.wty-opt:hover{border-color:var(--ink-50)}
+.wty-opt b{font-size:.84rem;font-weight:800}
+.wty-opt i{font-style:normal;font-size:.72rem;font-weight:600;color:var(--ink-70)}
+.wty-opt.on{border-color:var(--orange);background:rgba(255,138,30,.09);
+  box-shadow:0 0 0 2px rgba(255,138,30,.18)}
+.wty-opt:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+
+/* ============================================================
+   JERSEY ROSTER
+
+   One row per jersey: name, size, number. Replaced a free-text
+   size breakdown and a separate names box that described the
+   same eleven people and could disagree.
+   ============================================================ */
+.svc-roster{display:grid;gap:9px}
+.svc-rows{display:grid;gap:8px}
+/* Name takes the room; size and number are fixed because a select and
+   a two-digit box do not get better with more of it. */
+.svc-row{display:grid;gap:8px;grid-template-columns:1fr 92px 74px auto;align-items:center}
+.svc-row input,.svc-row select{width:100%;padding:11px 12px;border:1.5px solid var(--line);
+  border-radius:11px;font:inherit;font-size:.93rem;background:#fff}
+.svc-row input:focus,.svc-row select:focus{outline:none;border-color:var(--orange);
+  box-shadow:0 0 0 3px rgba(255,138,30,.16)}
+.svc-row [data-r="num"]{text-align:center}
+.svc-row [data-delrow]{width:34px;height:34px;flex:none;border-radius:9px;cursor:pointer;
+  border:1.5px solid var(--line);background:#fff;color:var(--ink-50);
+  font-size:1.1rem;line-height:1;transition:.16s var(--ease)}
+.svc-row [data-delrow]:hover{border-color:#c92a2e;color:#c92a2e}
+.svc-addrow{justify-self:start;padding:9px 16px;border-radius:100px;cursor:pointer;
+  border:1.5px dashed var(--line);background:#fff;font:inherit;font-weight:800;
+  font-size:.84rem;color:var(--ink-70);transition:.16s var(--ease)}
+.svc-addrow:hover{border-color:var(--orange);color:var(--orange)}
+
+@media (max-width:560px){
+  /* Name on its own line, then size and number side by side with the
+     remove button — three inputs across a 340px phone is unusable. */
+  .svc-row{grid-template-columns:1fr 74px auto}
+  .svc-row [data-r="name"]{grid-column:1 / -1}
+}
+
+/* ---------- email + password on the account gate ---------- */
+/* A rule with the word sitting in it, so the two routes read as
+   alternatives rather than one being a footnote to the other. */
+.acct-or{display:flex;align-items:center;gap:14px;margin:20px 0;
+  font-size:.74rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-50)}
+.acct-or::before,.acct-or::after{content:'';flex:1;height:1px;background:var(--line)}
+.acct-form{display:grid;gap:14px}
+.acct-form .svc-f input{width:100%;padding:13px 14px;border:1.5px solid var(--line);
+  border-radius:11px;font:inherit;font-size:.95rem}
+.acct-form .svc-f input:focus{outline:none;border-color:var(--orange);
+  box-shadow:0 0 0 3px rgba(255,138,30,.16)}
+.btn-block{width:100%;justify-content:center}
+.acct-gate-links{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:14px}
+.acct-link{background:none;border:0;padding:0;cursor:pointer;font:inherit;
+  font-size:.84rem;font-weight:700;color:var(--orange);text-decoration:underline}
+.acct-link:hover{color:var(--orange-700)}
