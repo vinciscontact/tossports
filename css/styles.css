@@ -3146,7 +3146,80 @@ body.pdp-open .fab{bottom:82px}
    changed here should be re-checked against that: the row has to finish
    above the fold, or clear it entirely. */
 .nhero{padding:calc(var(--hdr) + clamp(20px,3vw,42px)) 0 clamp(20px,3.5vw,44px);
-  overflow:hidden;overflow:clip}
+  overflow:hidden;overflow:clip;
+  /* Near-black, warmed a touch. #0B0B24 is a BLUE black; this leans it
+     two points toward brown so the tungsten light sits on it naturally
+     instead of fighting it. */
+  background:#0A0912}
+
+/* ============================================================
+   THE HERO GROUND
+
+   What this replaces: an orange bloom on top, an indigo bloom
+   (rgba(61,61,168,.5)) underneath, both perfectly smooth. That
+   combination — purple-to-blue with a warm accent, no texture —
+   is the single most recognisable stock gradient on the web
+   right now. It reads as generated because it is what every
+   generator produces.
+
+   Three things make this one specific to a bat workshop.
+
+   1. THE LIGHT IS TUNGSTEN, NOT RGB. One warm bulb high and
+      right, over the product, and a cold SLATE fill on the copy
+      side — steel-blue, not indigo. Warm key against cold fill
+      is how a workbench is actually lit, and dropping the purple
+      is most of the fix on its own.
+
+   2. THE GROUND IS WILLOW. Vertical grain drawn with repeating
+      gradients at periods of 7, 13 and 23 pixels. Primes on
+      purpose: they only realign every 2093px, so the pattern
+      never visibly tiles the way an 8px repeat does. This is the
+      material the whole business is about, so it belongs
+      underneath everything else.
+
+   3. IT HAS GRAIN. A generated gradient is mathematically
+      smooth; a photograph and a print never are. A little
+      fractal noise is the strongest single signal that
+      something was made rather than computed, and it kills the
+      banding the old blooms showed on wide screens.
+
+   All of it is CSS and one inline SVG data URI — no image
+   request, no JavaScript, so NFR-4 still holds.
+   ============================================================ */
+.nhero.dark::before{
+  content:'';position:absolute;inset:0;z-index:-2;pointer-events:none;
+  background:
+    /* ---- the willow, on top of the light so it catches it ---- */
+    repeating-linear-gradient(90deg, rgba(255,238,214,.030) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(90deg, rgba(255,238,214,.020) 0 1px, transparent 1px 23px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.20)        0 2px, transparent 2px 13px),
+    /* ---- the light ---- */
+    /* the bulb, over the bats */
+    radial-gradient(72% 48% at 76% -6%, rgba(255,150,62,.30), transparent 66%),
+    /* cold fill on the copy side — slate, deliberately not indigo */
+    radial-gradient(66% 58% at 2% 22%, rgba(42,60,94,.46), transparent 72%),
+    /* bounce off the bench */
+    radial-gradient(130% 34% at 50% 106%, rgba(255,138,30,.09), transparent 72%);
+}
+
+/* SCREEN, not overlay.
+
+   Overlay was the obvious choice and the wrong one: below half
+   luminance it multiplies toward the backdrop, so on a #0A0912 ground
+   the grain computed to roughly nothing. Screen only ever lifts, which
+   is what film grain does on a dark frame anyway — it shows in the
+   shadows, not the highlights. */
+.nhero::after{
+  content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+  background-size:140px 140px;
+  mix-blend-mode:screen;opacity:.14}
+
+/* A texture nobody can see is just paint — but on a phone the hero is a
+   third of the width, so the same grain reads as noise ON the headline
+   rather than behind it. */
+@media (max-width:640px){ .nhero::after{opacity:.09} }
 .nhero-in{display:grid;gap:clamp(28px,5vw,56px);align-items:center;
   grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 
@@ -3242,8 +3315,11 @@ body.pdp-open .fab{bottom:82px}
    corner radius stays even on every edge.
    ------------------------------------------------------------ */
 .nhero-panel{position:absolute;inset:6% -4% 12% 2%;border-radius:36px;
+  /* Slate, matching the ground behind it. This was #3A3A72 -> #14143A,
+     which is the same indigo the section background just gave up — left
+     alone it read as a purple slab sitting on a warm-neutral bench. */
   background:radial-gradient(86% 58% at 50% 4%,rgba(255,150,45,.38),transparent 62%),
-             linear-gradient(158deg,#3A3A72 0%,#232352 48%,#14143A 100%);
+             linear-gradient(158deg,#33425F 0%,#212C42 50%,#141A28 100%);
   transform:rotate(-4deg);
   /* A visible edge all the way round. Without it the plate's lower half,
      which is close to the page colour by design, simply stopped existing. */
@@ -3410,9 +3486,12 @@ body.pdp-open .fab{bottom:82px}
    Not by adding .dark: that would also apply the WARM top sweep, putting
    an orange band directly under a cool one. Only the layer that needs to
    continue is continued. */
+/* Continues the hero's ground rather than the old indigo wash, so the two
+   sections read as one surface with the tiles sitting on it. Same slate,
+   same near-black base — the seam between them should be invisible. */
 .svctiles{padding:0 0 clamp(20px,4vw,34px);
-  background:radial-gradient(130% 96% at 50% -22%,rgba(61,61,168,.44),transparent 72%),
-             var(--navy-900)}
+  background:radial-gradient(130% 96% at 50% -22%,rgba(42,60,94,.52),transparent 74%),
+             #0A0912}
 /* Seven tiles, so the column count is stated per breakpoint rather than
    left to auto-fit. auto-fit picks whatever fits and would have stranded
    the seventh alone on a second row at most widths; these counts always
