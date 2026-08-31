@@ -2086,6 +2086,7 @@ function viewFinder() {
       .sort((a, b) => b.s - a.s).map(x => x.p);
     const win = ranked[0], backups = ranked.slice(1, 3);
     return `
+    <div class="sheet">
     <section class="quiz dark fdr">
       <span class="gr-light l"></span><span class="gr-light r"></span>
       <div class="wrap">
@@ -2112,7 +2113,8 @@ function viewFinder() {
           <div class="fdr-bkgrid">${backups.map(cardHTML).join('')}</div>
         </div>
       </div>
-    </section>`;
+    </section>
+  </div>`;
   }
 
   const q = QUIZ[quizStep];
@@ -2123,6 +2125,11 @@ function viewFinder() {
   const SPEC_LABEL = { ball: 'Ball', style: 'Style', weight: 'Weight', budget: 'Budget' };
 
   return `
+  <!-- Same drawing sheet as the home hero. The finder is where somebody
+       is being fitted for a bat, which is the most literally "workshop"
+       moment on the site, so it should not be the one page still lit
+       like a stadium. -->
+  <div class="sheet">
   <section class="quiz dark fdr ground">
     <span class="gr-light l"></span><span class="gr-light r"></span>
     <div class="wrap fdr-grid">
@@ -2175,7 +2182,8 @@ function viewFinder() {
       </div>
 
     </div>
-  </section>`;
+  </section>
+  </div><!-- /.sheet -->`;
 }
 
 /* ---------------- VIEW: GULLY CRICKET ---------------- */

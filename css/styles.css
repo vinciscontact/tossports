@@ -3229,13 +3229,24 @@ body.pdp-open .fab{bottom:82px}
   background-position:left top, left top, left top;
 }
 
-/* Both sections sit ON the sheet now, so neither paints its own ground.
+/* Everything on the sheet sits ON it, so nothing paints its own ground.
    content:none rather than a transparent background — .dark::before is
    the four-layer indigo glow this direction replaced, and it should not
    be computing at all. */
 .nhero{background:transparent}
 .nhero.dark::before{content:none}
 .svctiles{background:transparent}
+
+/* ---- the finder, on the same sheet ----
+   It had a floodlit-stadium ground of its own: a warm bloom overhead and
+   two blurred light blobs. That is a nice effect and the wrong one here —
+   the finder is where somebody is being fitted for a bat, which is the
+   most literally workshop moment on the site. The extra specificity is
+   needed because .quiz.ground carries its own background. */
+.sheet .quiz{background:transparent}
+.sheet .quiz.ground{background:transparent}
+.sheet .quiz.dark::before{content:none}
+.sheet .gr-light{display:none}
 /* The sheet is the stacking context; its children need to be above the
    paper drawn beneath them. */
 .sheet > *{position:relative;z-index:1}
