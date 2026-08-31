@@ -798,21 +798,41 @@ function viewHome() {
      on a Retina one — which is the softness and the stair-stepped edges,
      not a bad cutout. The alpha edge measures 2% soft pixels and 0.3%
      leftover backdrop; the artwork was never the problem. */
+  /* FACE-ON SHOTS, and that is the quality fix.
+
+     Three of these were the wrong frame from their own photo set. The
+     varnished bat and the leather-ball bat were EDGE-ON side views —
+     a bat photographed on its edge is a stick, so the cutout trimmed to
+     125px and 185px wide and there was nothing there to be sharp. The
+     leather-ball side view also carried a studio artifact: a pale
+     tapering spike beside the handle, joined to the blade low down so it
+     survived every cleanup, and rendered on the page as a white sliver
+     next to the bat.
+
+     The face-on frames were sitting in images/product/ the whole time:
+
+       varnished-bat-2  125px  side  ->  varnished-bat-3   248px  face
+       leather-ball-2   185px  side  ->  leather-ball-1    272px  face
+       power-x-v2       186px        ->  power-x-front     213px  face
+
+     That is roughly double the horizontal resolution on two of the four,
+     no re-shoot, and the two replacements are TOSS-branded where the
+     side views showed no branding at all. */
   const HERO_SHOTS = [
-    { img: 'power-x-v2',        href: '#/product/power-x',
-      w: [59, 145, 186],
+    { img: 'power-x-front',      href: '#/product/power-x',
+      w: [69, 167, 213],
       alt: 'Toss Power X — handmade Sri Lankan willow bat',
       label: 'Toss Power X',       note: '3 years of research' },
-    { img: 'sri-lankan-mri-2',  href: '#/shop?wood=srilankan',
+    { img: 'sri-lankan-mri-2',   href: '#/shop?wood=srilankan',
       w: [75, 184, 216],
       alt: 'Sri Lankan willow tennis-ball cricket bat',
       label: 'Sri Lankan willow',  note: 'Dense grain, big ping' },
-    { img: 'varnished-bat-2',   href: '#/product/varnished-bat',
-      w: [41, 103, 125],
+    { img: 'varnished-bat-3',    href: '#/product/varnished-bat',
+      w: [81, 206, 248],
       alt: 'Varnished tennis-ball cricket bat',
       label: 'Varnished Bat',      note: 'Best seller' },
-    { img: 'leather-ball-bat-2', href: '#/shop',
-      w: [72, 177, 185],
+    { img: 'leather-ball-bat-1', href: '#/shop',
+      w: [91, 231, 272],
       alt: 'Leather-ball cricket bat made by Toss',
       label: 'Leather-ball bats',  note: 'For the harder game' }
   ];

@@ -3343,12 +3343,15 @@ body.pdp-open .fab{bottom:82px}
    one of them is short. Width is still gated at 901px so this never
    fights the mobile layout below, which stacks and scrolls anyway.
 
-   890px is the threshold because that is where the FULL-SIZE hero stops
-   fitting — at 900px tall the row clears the fold by 11px, and any less
-   than about 889 it does not. Setting the breakpoint lower would leave a
+   930px is the threshold because that is where the FULL-SIZE hero stops
+   fitting. It used to be 890, measured when the copy column ended at the
+   proof line; the illustration note added a row and moved the number, so
+   a 900px screen was getting the big headline AND a clipped service row —
+   the exact fault this rule exists to remove. Re-measured, not nudged.
+   Setting the breakpoint lower would leave a
    band of screen heights getting the big headline AND a cut-off row,
    which is the exact fault this rule exists to remove. */
-@media (min-width:901px) and (max-height:890px){
+@media (min-width:901px) and (max-height:930px){
   /* Everything here is in vh so it degrades CONTINUOUSLY. Flat values
      were the first attempt and they produced a cliff: an 880px screen
      needed about 20px trimmed and got 200, so it rendered a visibly
