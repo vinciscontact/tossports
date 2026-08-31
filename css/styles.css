@@ -3186,40 +3186,82 @@ body.pdp-open .fab{bottom:82px}
    All of it is CSS and one inline SVG data URI — no image
    request, no JavaScript, so NFR-4 still holds.
    ============================================================ */
+/* ---------- the paper: a plotted grid, no gradient ----------
+   Two scales, because that is how drafting paper works — a fine 24px
+   division you measure against and a heavier 120px division you count
+   in. A single grid reads as graph paper; two reads as a drawing
+   board. */
 .nhero.dark::before{
   content:'';position:absolute;inset:0;z-index:-2;pointer-events:none;
   background:
-    /* ---- the willow, on top of the light so it catches it ---- */
-    repeating-linear-gradient(90deg, rgba(255,238,214,.030) 0 1px, transparent 1px 7px),
-    repeating-linear-gradient(90deg, rgba(255,238,214,.020) 0 1px, transparent 1px 23px),
-    repeating-linear-gradient(90deg, rgba(0,0,0,.20)        0 2px, transparent 2px 13px),
-    /* ---- the light ---- */
-    /* the bulb, over the bats */
-    radial-gradient(72% 48% at 76% -6%, rgba(255,150,62,.30), transparent 66%),
-    /* cold fill on the copy side — slate, deliberately not indigo */
-    radial-gradient(66% 58% at 2% 22%, rgba(42,60,94,.46), transparent 72%),
-    /* bounce off the bench */
-    radial-gradient(130% 34% at 50% 106%, rgba(255,138,30,.09), transparent 72%);
+    repeating-linear-gradient(0deg,  rgba(190,214,255,.085) 0 1px, transparent 1px 120px),
+    repeating-linear-gradient(90deg, rgba(190,214,255,.085) 0 1px, transparent 1px 120px),
+    repeating-linear-gradient(0deg,  rgba(190,214,255,.040) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(90deg, rgba(190,214,255,.040) 0 1px, transparent 1px 24px);
+  /* The sheet is lit from where the bulb was, so the grid fades out at
+     the far corners instead of running to the edges like wallpaper. A
+     drawing lies on a surface; wallpaper covers one. */
+  -webkit-mask-image:radial-gradient(120% 100% at 62% 34%, #000 30%, transparent 78%);
+          mask-image:radial-gradient(120% 100% at 62% 34%, #000 30%, transparent 78%);
 }
 
-/* SCREEN, not overlay.
+/* ---------- the drawing itself ----------
+   A bat profile with the annotation that makes it a plan rather than a
+   silhouette: a dashed centre line, a dimensioned overall length with
+   real arrowheads and witness lines, a blade-width dimension, and the
+   swept radius the toe is struck from.
 
-   Overlay was the obvious choice and the wrong one: below half
-   luminance it multiplies toward the backdrop, so on a #0A0912 ground
-   the grain computed to roughly nothing. Screen only ever lifts, which
-   is what film grain does on a dark frame anyway — it shows in the
-   shadows, not the highlights. */
+   Cropped by the hero's own overflow so it runs off the bottom edge —
+   a drawing pinned to a board, not a logo placed on a page. */
 .nhero::after{
   content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
-  background-size:140px 140px;
-  mix-blend-mode:screen;opacity:.14}
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 900' fill='none' stroke='%23FF8A1E' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M158 20 H192 V312 L246 360 V820 Q246 842 224 842 H126 Q104 842 104 820 V360 L158 312 Z' stroke-width='2.4' stroke-opacity='.5'/%3E%3Cpath d='M175 0 V900' stroke-width='1' stroke-dasharray='12 9' stroke-opacity='.3'/%3E%3Cpath d='M60 20 V842 M52 20 H68 M52 842 H68' stroke-width='1' stroke-opacity='.34'/%3E%3Cpath d='M60 20 l-5 13 M60 20 l5 13 M60 842 l-5 -13 M60 842 l5 -13' stroke-width='1' stroke-opacity='.34'/%3E%3Cpath d='M104 872 H246 M104 864 V880 M246 864 V880' stroke-width='1' stroke-opacity='.28'/%3E%3Cpath d='M175 470 m-62 0 a62 62 0 0 1 124 0' stroke-width='1' stroke-dasharray='7 7' stroke-opacity='.24'/%3E%3Cpath d='M246 360 H286 M104 360 H64' stroke-width='1' stroke-dasharray='6 6' stroke-opacity='.22'/%3E%3C/svg%3E"),
+    /* ---- the drafting scale, down the left margin ----
+       This is where the empty space actually is. The bat plan alone was
+       too polite to register: the bench covers its middle, so only a
+       band of it shows. A ruled edge is the one mark that says "sheet"
+       instantly, and the page margin is dead space anyway. Ticks every
+       24px to match the fine grid, long ticks every 120px to match the
+       coarse one, and a rule to hang them off. */
+    repeating-linear-gradient(0deg, rgba(255,138,30,.34) 0 1px, transparent 1px 120px),
+    repeating-linear-gradient(0deg, rgba(255,138,30,.20) 0 1px, transparent 1px 24px),
+    linear-gradient(90deg, rgba(255,138,30,.28) 0 1px, transparent 1px);
+  background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;
+  background-size:auto 172%, 21px 100%, 11px 100%, 22px 100%;
+  background-position:72% center, left top, left top, left top;
+  /* Centred on the STAGE, and taller than the hero on purpose.
 
-/* A texture nobody can see is just paint — but on a phone the hero is a
-   third of the width, so the same grain reads as noise ON the headline
-   rather than behind it. */
-@media (max-width:640px){ .nhero::after{opacity:.09} }
+     Behind the copy it was never going to work — a faint line drawing
+     under a 6rem headline reads as streaks, not a bat. Here the bench
+     covers its middle and the plan runs out top and bottom, so what you
+     see is the drawing the bat in front of it was made from. The real
+     object resting on its own plan is the whole idea; on the left it was
+     just a watermark. */
+}
+
+/* On a phone the copy column is the whole screen, so a drawing behind it
+   is competing with the headline rather than sitting under it. The grid
+   stays — it is texture — and the linework steps aside. */
+@media (max-width:900px){
+  /* The plan comes off entirely, rather than being moved or faded.
+
+     There is no "behind" on a phone — the copy column IS the screen, so
+     wherever the drawing goes it crosses the headline and the buttons,
+     and at any opacity high enough to read it is competing with them.
+     Nudging it to the right edge only put the centre line through the
+     CTA. The grid and the ruled margin still say "sheet"; the bat plan
+     is the part that needed room it does not have here. */
+  .nhero::after{
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,138,30,.30) 0 1px, transparent 1px 120px),
+      repeating-linear-gradient(0deg, rgba(255,138,30,.18) 0 1px, transparent 1px 24px),
+      linear-gradient(90deg, rgba(255,138,30,.24) 0 1px, transparent 1px);
+    background-size:21px 100%, 11px 100%, 22px 100%;
+    background-position:left top, left top, left top;
+    background-repeat:no-repeat,no-repeat,no-repeat;
+  }
+}
 .nhero-in{display:grid;gap:clamp(28px,5vw,56px);align-items:center;
   grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 
