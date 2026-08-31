@@ -58,6 +58,68 @@ function backdropMask(data, w, h, ch) {
   return seen;
 }
 
+/* ------------------------------------------------------------
+   Drop everything that is not the product.
+
+   The backdrop fill can only clear pixels it can WALK TO from the
+   frame edge through near-white. That rule is what protects a
+   highlight enclosed by the blade — but it also protects anything
+   the walk cannot cross. A soft sweep shadow sitting at rgb(199)
+   is darker than TOL, so the fill stops dead at it and the whole
+   shadow survives as a detached island of opaque pixels.
+
+   That is exactly what was happening to the leather-ball bat: a
+   grey strip about 20px wide floating clear of the blade, which
+   rendered in the hero as a white sliver next to the bat and read
+   as a printing error.
+
+   A bat is one connected object, so anything not joined to the
+   largest blob is not the bat. Components under 2% of the largest
+   are cleared; the threshold is not zero because a genuine second
+   object in frame — some of these shots have two bats — should
+   survive, and a shadow never comes close to 2%.
+
+   8-connectivity, so a diagonal seam in the anti-aliasing cannot
+   split the blade from its own handle.
+   ------------------------------------------------------------ */
+function dropIslands(mask, w, h) {
+  const label = new Int32Array(w * h).fill(-1);
+  const sizes = [];
+  const stack = [];
+
+  for (let start = 0; start < mask.length; start++) {
+    if (mask[start] || label[start] !== -1) continue;   // backdrop, or done
+    const id = sizes.length;
+    let n = 0;
+    stack.push(start); label[start] = id;
+    while (stack.length) {
+      const i = stack.pop(); n++;
+      const x = i % w, y = (i / w) | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const j = ny * w + nx;
+          if (mask[j] || label[j] !== -1) continue;
+          label[j] = id; stack.push(j);
+        }
+      }
+    }
+    sizes.push(n);
+  }
+
+  if (sizes.length < 2) return 0;                       // nothing detached
+  const biggest = Math.max(...sizes);
+  const floor = biggest * 0.02;
+  let removed = 0;
+  for (let i = 0; i < mask.length; i++) {
+    const id = label[i];
+    if (id >= 0 && sizes[id] < floor) { mask[i] = 1; removed++; }
+  }
+  return removed;
+}
+
 /* A hard mask leaves a stair-stepped edge that looks cheap at large
    sizes. Any pixel touching both states gets part alpha, which is
    enough to read as a clean cut. */
@@ -90,6 +152,11 @@ async function cut(file) {
      out would be wrong. Leave those alone rather than guess. */
   if (share < 0.15) return { file, skipped: 'not a white-sweep shot', share };
 
+  /* After the backdrop, before the feather: islands have to go while the
+     mask is still hard, or the feather would draw a soft edge around a
+     shadow we are about to delete. */
+  const islandPx = dropIslands(mask, w, h);
+
   const alpha = feather(mask, w, h);
   const out = Buffer.alloc(w * h * 4);
   for (let i = 0; i < w * h; i++) {
@@ -111,6 +178,7 @@ async function cut(file) {
   return {
     file, wrote: WRITE ? path.basename(dest) : '(dry run)',
     backdropRemoved: (share * 100).toFixed(0) + '%',
+    islands: islandPx ? islandPx + 'px' : '-',
     from: `${w}x${h}`, kb: after ? Math.round(after / 1024) + 'kB' : '-'
   };
 }
@@ -129,7 +197,10 @@ async function cut(file) {
   const skipped = done.filter(d => d.skipped);
   const failed  = done.filter(d => d.error);
 
-  made.forEach(d => console.log(`  cut  ${d.file}  (${d.backdropRemoved} backdrop)  ${d.kb}`));
+  /* The island count is worth printing: it is the number that tells you a
+     shadow or a reflection was being shipped as part of the product. */
+  made.forEach(d => console.log(`  cut  ${d.file}  (${d.backdropRemoved} backdrop)` +
+    (d.islands !== '-' ? `  islands ${d.islands}` : '') + `  ${d.kb}`));
   skipped.forEach(d => console.log(`  keep ${d.file}  — ${d.skipped}`));
   failed.forEach(d => console.log(`  FAIL ${d.file}  — ${d.error}`));
 

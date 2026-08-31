@@ -93,16 +93,25 @@ alter table public.customer_profiles enable row level security;
 -- WITH CHECK is what stops the obvious attack — sending someone
 -- else's user_id in the body of an insert or an update.
 drop policy if exists cp_own_read on public.customer_profiles;
+-- NOTE ON THE CASTS BELOW.
+-- Both sides are cast to text so these policies apply whether user_id is
+-- still uuid (this migration's own world) or already text (after 022 moved
+-- customer identity to Firebase). Without the casts, re-running this file
+-- against a converted database fails with
+--     operator does not exist: text = uuid
+-- which is exactly what it did, because a policy is compared with the `=`
+-- operator and Postgres has no text = uuid.
 create policy cp_own_read on public.customer_profiles
-  for select using (user_id = auth.uid());
+  for select using (user_id::text = auth.uid()::text);
 
 drop policy if exists cp_own_insert on public.customer_profiles;
 create policy cp_own_insert on public.customer_profiles
-  for insert with check (user_id = auth.uid());
+  for insert with check (user_id::text = auth.uid()::text);
 
 drop policy if exists cp_own_update on public.customer_profiles;
 create policy cp_own_update on public.customer_profiles
-  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+  for update using (user_id::text = auth.uid()::text)
+           with check (user_id::text = auth.uid()::text);
 
 -- Staff need to see a customer to help them on the phone, but
 -- nobody in the Maze Room has any business editing someone's
@@ -145,11 +154,11 @@ create trigger customer_profiles_touch
 -- ------------------------------------------------------------
 drop policy if exists orders_own_read on public.orders;
 create policy orders_own_read on public.orders
-  for select using (user_id is not null and user_id = auth.uid());
+  for select using (user_id is not null and user_id::text = auth.uid()::text);
 
 drop policy if exists requests_own_read on public.requests;
 create policy requests_own_read on public.requests
-  for select using (user_id is not null and user_id = auth.uid());
+  for select using (user_id is not null and user_id::text = auth.uid()::text);
 
 
 -- ------------------------------------------------------------

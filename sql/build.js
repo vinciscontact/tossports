@@ -39,7 +39,8 @@ const ORDER = [
   ['018-customer-accounts.sql','Customer sign-in, order history, claiming past orders'],
   ['019-corporate-and-warranty.sql','Corporate requests, and the paid extended warranty'],
   ['020-coupon-kinds.sql',        'Game, loyalty, referral and offer codes'],
-  ['021-order-versioning.sql',    'Row versions, so the Sheet sync cannot overwrite newer edits']
+  ['021-order-versioning.sql',    'Row versions, so the Sheet sync cannot overwrite newer edits'],
+  ['022-firebase-customer-auth.sql','Customer identity moves to Firebase; phone links history']
 ];
 
 const missing = ORDER.filter(([f]) => !fs.existsSync(path.join(DIR, f)));

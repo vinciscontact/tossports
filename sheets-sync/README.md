@@ -125,6 +125,93 @@ Runs take the script lock, so two overlapping triggers cannot both push.
 
 ---
 
+---
+
+## The mirror — a copy of the rest of the database
+
+`backupAll()` writes one read-only tab per table. Nothing on these tabs is
+ever pushed back; only the Orders tab is two-way.
+
+**Shared spreadsheet** (13 tabs): Requests, Questions, Game scores, Audit
+log, Products, Stock, Categories, Settings, Codes, Customers, Invoices,
+Expenses, Branches.
+
+**Private spreadsheet** (4 tabs): Staff, Payroll, Attendance, Targets.
+
+### Why payroll lives in a second file
+
+The PRD calls salary privacy a hard requirement, and the database enforces
+it — a manager sees their own payslip and nobody else's.
+
+**A spreadsheet cannot enforce that.** Everyone with the link sees every
+row. Put payslips in the same file as the order book and the day you share
+the order book, you have shared everybody's salary — quietly, with no way to
+take it back.
+
+So those four tables go to a separate spreadsheet named by a script
+property:
+
+| Property | Value |
+|---|---|
+| `PRIVATE_SHEET_ID` | the id from that spreadsheet's URL |
+
+**If it is not set, those tables are skipped**, and the Sync log says so.
+They never fall back to the shared sheet. Failing to copy something is
+recoverable; leaking it is not.
+
+### Not copied
+
+`tasks`, `sops`, `sop_acks`, `invoice_counters`, `stock_transfers`,
+`playstyle_groups`, `playstyles`, `product_playstyles` — internal or derived
+tables with little value in a spreadsheet. Say the word and they are one
+line each in `MIRROR_TABLES`.
+
+### Running it
+
+- **Toss → Back up everything**, or
+- a time-driven trigger on `syncEverything()`, which does the orders
+  write-back and then the full mirror.
+
+---
+
+## This is a mirror, not a backup
+
+It copies **rows**. It does not copy the schema, constraints, foreign keys,
+row-level policies or functions — so you cannot restore from it, only read
+it and retype.
+
+It is worth having for "what did we sell in March", and for surviving a
+deleted row. It is not disaster recovery.
+
+### A real backup
+
+Free, and it produces a file you can actually restore from. Supabase free
+projects have **no backups at all** and pause after a week of inactivity, so
+this is worth putting on a schedule.
+
+```bash
+export PGPASSWORD='your-db-password'
+pg_dump -Fc -f toss-backup.dump "postgresql://postgres.<project-ref>@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres"
+```
+
+On Windows use `set PGPASSWORD=your-db-password` instead.
+
+Restore into a fresh project with:
+
+```bash
+pg_restore -d "postgresql://postgres.<project-ref>@...pooler.supabase.com:5432/postgres" toss-backup.dump
+```
+
+The password goes in an environment variable, never on the command line — a
+shell history file is not a place for it, and it must never be committed.
+PRD **C6** already flags that this password was shared in plaintext during
+setup and needs rotating.
+
+> The paid alternative is Supabase Pro at $25/month: daily automated
+> backups, 7-day retention, and the project stops pausing when idle.
+
+---
+
 ## Limits, honestly
 
 - **5,000 orders.** Both directions are capped. Past that the pull needs
