@@ -868,6 +868,12 @@ function viewHome() {
     </a>`;
 
   return `
+  <!-- The hero and the service strip are ONE drawing sheet, so the grid
+       and the ruled margin are drawn once, here, across both. Two
+       sections each carrying their own grid cannot line up: each starts
+       its repeat at its own top edge, so the 120px majors would step at
+       the seam and announce exactly the join this is meant to hide. -->
+  <div class="sheet">
   <section class="nhero dark" id="nhero">
     <div class="wrap nhero-in">
 
@@ -962,6 +968,7 @@ function viewHome() {
   </section>
 
   ${serviceTilesHTML()}
+  </div><!-- /.sheet -->
 
   <!-- Risk reduction, not feature listing. Each line answers a reason to
        hesitate, and is loss-framed where the loss is the real worry. -->

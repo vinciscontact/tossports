@@ -3186,24 +3186,59 @@ body.pdp-open .fab{bottom:82px}
    All of it is CSS and one inline SVG data URI — no image
    request, no JavaScript, so NFR-4 still holds.
    ============================================================ */
-/* ---------- the paper: a plotted grid, no gradient ----------
-   Two scales, because that is how drafting paper works — a fine 24px
-   division you measure against and a heavier 120px division you count
-   in. A single grid reads as graph paper; two reads as a drawing
-   board. */
-.nhero.dark::before{
-  content:'';position:absolute;inset:0;z-index:-2;pointer-events:none;
+/* ============================================================
+   THE SHEET — hero + service strip, one surface
+
+   The strip used to carry its own slate wash while the hero
+   carried a grid, which put a visible join between them and made
+   the tiles look like they were sitting on a different table.
+   Both are now transparent and the paper is drawn once, here,
+   underneath both.
+
+   Two grid scales, because that is how drafting paper works — a
+   fine 24px division you measure against and a heavier 120px one
+   you count in. A single grid reads as graph paper; two reads as
+   a drawing board.
+   ============================================================ */
+.sheet{position:relative;isolation:isolate;background:#0A0912}
+
+.sheet::before{
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
   background:
     repeating-linear-gradient(0deg,  rgba(190,214,255,.085) 0 1px, transparent 1px 120px),
     repeating-linear-gradient(90deg, rgba(190,214,255,.085) 0 1px, transparent 1px 120px),
     repeating-linear-gradient(0deg,  rgba(190,214,255,.040) 0 1px, transparent 1px 24px),
     repeating-linear-gradient(90deg, rgba(190,214,255,.040) 0 1px, transparent 1px 24px);
-  /* The sheet is lit from where the bulb was, so the grid fades out at
-     the far corners instead of running to the edges like wallpaper. A
-     drawing lies on a surface; wallpaper covers one. */
-  -webkit-mask-image:radial-gradient(120% 100% at 62% 34%, #000 30%, transparent 78%);
-          mask-image:radial-gradient(120% 100% at 62% 34%, #000 30%, transparent 78%);
+  /* Fades at the far corners rather than running to the edges. A drawing
+     lies on a surface; wallpaper covers one. */
+  -webkit-mask-image:radial-gradient(112% 88% at 62% 30%, #000 34%, transparent 82%);
+          mask-image:radial-gradient(112% 88% at 62% 30%, #000 34%, transparent 82%);
 }
+
+/* The ruled margin runs the full height of the sheet, past the seam and
+   down the side of the tiles — which is the point: a ruler that stopped
+   where the hero stopped would draw the join instead of hiding it. */
+.sheet::after{
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,138,30,.34) 0 1px, transparent 1px 120px),
+    repeating-linear-gradient(0deg, rgba(255,138,30,.20) 0 1px, transparent 1px 24px),
+    linear-gradient(90deg, rgba(255,138,30,.28) 0 1px, transparent 1px);
+  background-repeat:no-repeat,no-repeat,no-repeat;
+  background-size:21px 100%, 11px 100%, 22px 100%;
+  background-position:left top, left top, left top;
+}
+
+/* Both sections sit ON the sheet now, so neither paints its own ground.
+   content:none rather than a transparent background — .dark::before is
+   the four-layer indigo glow this direction replaced, and it should not
+   be computing at all. */
+.nhero{background:transparent}
+.nhero.dark::before{content:none}
+.svctiles{background:transparent}
+/* The sheet is the stacking context; its children need to be above the
+   paper drawn beneath them. */
+.sheet > *{position:relative;z-index:1}
 
 /* ---------- the drawing itself ----------
    A bat profile with the annotation that makes it a plan rather than a
@@ -3216,20 +3251,10 @@ body.pdp-open .fab{bottom:82px}
 .nhero::after{
   content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 900' fill='none' stroke='%23FF8A1E' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M158 20 H192 V312 L246 360 V820 Q246 842 224 842 H126 Q104 842 104 820 V360 L158 312 Z' stroke-width='2.4' stroke-opacity='.5'/%3E%3Cpath d='M175 0 V900' stroke-width='1' stroke-dasharray='12 9' stroke-opacity='.3'/%3E%3Cpath d='M60 20 V842 M52 20 H68 M52 842 H68' stroke-width='1' stroke-opacity='.34'/%3E%3Cpath d='M60 20 l-5 13 M60 20 l5 13 M60 842 l-5 -13 M60 842 l5 -13' stroke-width='1' stroke-opacity='.34'/%3E%3Cpath d='M104 872 H246 M104 864 V880 M246 864 V880' stroke-width='1' stroke-opacity='.28'/%3E%3Cpath d='M175 470 m-62 0 a62 62 0 0 1 124 0' stroke-width='1' stroke-dasharray='7 7' stroke-opacity='.24'/%3E%3Cpath d='M246 360 H286 M104 360 H64' stroke-width='1' stroke-dasharray='6 6' stroke-opacity='.22'/%3E%3C/svg%3E"),
-    /* ---- the drafting scale, down the left margin ----
-       This is where the empty space actually is. The bat plan alone was
-       too polite to register: the bench covers its middle, so only a
-       band of it shows. A ruled edge is the one mark that says "sheet"
-       instantly, and the page margin is dead space anyway. Ticks every
-       24px to match the fine grid, long ticks every 120px to match the
-       coarse one, and a rule to hang them off. */
-    repeating-linear-gradient(0deg, rgba(255,138,30,.34) 0 1px, transparent 1px 120px),
-    repeating-linear-gradient(0deg, rgba(255,138,30,.20) 0 1px, transparent 1px 24px),
-    linear-gradient(90deg, rgba(255,138,30,.28) 0 1px, transparent 1px);
-  background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;
-  background-size:auto 172%, 21px 100%, 11px 100%, 22px 100%;
-  background-position:72% center, left top, left top, left top;
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 900' fill='none' stroke='%23FF8A1E' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M158 20 H192 V312 L246 360 V820 Q246 842 224 842 H126 Q104 842 104 820 V360 L158 312 Z' stroke-width='2.4' stroke-opacity='.5'/%3E%3Cpath d='M175 0 V900' stroke-width='1' stroke-dasharray='12 9' stroke-opacity='.3'/%3E%3Cpath d='M60 20 V842 M52 20 H68 M52 842 H68' stroke-width='1' stroke-opacity='.34'/%3E%3Cpath d='M60 20 l-5 13 M60 20 l5 13 M60 842 l-5 -13 M60 842 l5 -13' stroke-width='1' stroke-opacity='.34'/%3E%3Cpath d='M104 872 H246 M104 864 V880 M246 864 V880' stroke-width='1' stroke-opacity='.28'/%3E%3Cpath d='M175 470 m-62 0 a62 62 0 0 1 124 0' stroke-width='1' stroke-dasharray='7 7' stroke-opacity='.24'/%3E%3Cpath d='M246 360 H286 M104 360 H64' stroke-width='1' stroke-dasharray='6 6' stroke-opacity='.22'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-size:auto 172%;
+  background-position:72% center;
   /* Centred on the STAGE, and taller than the hero on purpose.
 
      Behind the copy it was never going to work — a faint line drawing
@@ -3252,15 +3277,7 @@ body.pdp-open .fab{bottom:82px}
      Nudging it to the right edge only put the centre line through the
      CTA. The grid and the ruled margin still say "sheet"; the bat plan
      is the part that needed room it does not have here. */
-  .nhero::after{
-    background-image:
-      repeating-linear-gradient(0deg, rgba(255,138,30,.30) 0 1px, transparent 1px 120px),
-      repeating-linear-gradient(0deg, rgba(255,138,30,.18) 0 1px, transparent 1px 24px),
-      linear-gradient(90deg, rgba(255,138,30,.24) 0 1px, transparent 1px);
-    background-size:21px 100%, 11px 100%, 22px 100%;
-    background-position:left top, left top, left top;
-    background-repeat:no-repeat,no-repeat,no-repeat;
-  }
+  .nhero::after{content:none}
 }
 .nhero-in{display:grid;gap:clamp(28px,5vw,56px);align-items:center;
   grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
@@ -3528,12 +3545,10 @@ body.pdp-open .fab{bottom:82px}
    Not by adding .dark: that would also apply the WARM top sweep, putting
    an orange band directly under a cool one. Only the layer that needs to
    continue is continued. */
-/* Continues the hero's ground rather than the old indigo wash, so the two
-   sections read as one surface with the tiles sitting on it. Same slate,
-   same near-black base — the seam between them should be invisible. */
-.svctiles{padding:0 0 clamp(20px,4vw,34px);
-  background:radial-gradient(130% 96% at 50% -22%,rgba(42,60,94,.52),transparent 74%),
-             #0A0912}
+/* No background at all — .sheet draws the paper under both this and the
+   hero, so the strip has nothing of its own to paint. Anything here
+   would sit on top of the grid and reinstate the seam. */
+.svctiles{padding:0 0 clamp(20px,4vw,34px)}
 /* Seven tiles, so the column count is stated per breakpoint rather than
    left to auto-fit. auto-fit picks whatever fits and would have stranded
    the seventh alone on a second row at most widths; these counts always
