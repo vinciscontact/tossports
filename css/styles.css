@@ -146,11 +146,18 @@ input,select,textarea{font:inherit;color:inherit}
 .brand img{width:34px;height:34px;object-fit:contain;display:block}
 .brand em{font-style:normal;color:var(--orange)}
 .nav{display:none;margin-left:18px;gap:4px}
-.nav a{padding:9px 14px;border-radius:100px;font-weight:600;font-size:.9rem;
-  color:var(--ink-70);transition:.18s}
-.nav a:hover,.nav a.on{color:var(--ink);background:var(--paper-alt)}
-.hdr.onDark .nav a{color:rgba(255,255,255,.72)}
-.hdr.onDark .nav a:hover,.hdr.onDark .nav a.on{color:#fff;background:rgba(255,255,255,.12)}
+.nav a{padding:9px 14px;border-radius:100px;font-weight:700;font-size:.9rem;
+  color:var(--ink);transition:.18s}
+.nav a:hover,.nav a.on{background:var(--paper-alt)}
+/* Full white, not the 72% tint these used to carry. The tint was costing
+   more legibility than the weight was: the header sits over a moving scene
+   with a lit gradient behind it, and a dimmed label competes with its own
+   background. */
+.hdr.onDark .nav a{color:#fff}
+/* With every link now full white, colour can no longer mark the current
+   page — the pill is the only signal left, so it is stronger than the .12
+   it was when it only had to support a change from 72% to 100%. */
+.hdr.onDark .nav a:hover,.hdr.onDark .nav a.on{background:rgba(255,255,255,.2)}
 .hdr-act{margin-left:auto;display:flex;align-items:center;gap:6px}
 .ico-btn{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;
   color:var(--ink);transition:.18s;position:relative}
@@ -704,8 +711,12 @@ body.has-annc .hdr{top:34px}
 .hv-copy .d1{color:#fff;margin:0;line-height:.95}
 .hero-live .hl-2{display:block;color:var(--orange)}
 .hv-copy .lede{margin-top:18px;max-width:46ch}
+/* 45% white on navy is 2.4:1 — under every contrast floor there is, and it
+   showed: the one line on the page carrying 36.9K followers and 4M reach
+   was the least readable thing in the hero. 68% clears 4.5:1, and the
+   separators are dropped back so the numbers lead. */
 .hv-proof{margin-top:22px;font-size:.72rem;font-weight:800;letter-spacing:.08em;
-  text-transform:uppercase;color:rgba(255,255,255,.45)}
+  text-transform:uppercase;color:rgba(255,255,255,.68)}
 
 /* entrance stagger */
 .hv-in{animation:hvUp .65s var(--ease) both}
@@ -1851,10 +1862,63 @@ body.has-annc .filter-bar{top:var(--hdr)}
 .quiz-nav{display:flex;gap:10px;margin-top:26px}
 
 /* ---------- CART DRAWER ---------- */
-.ci{display:flex;gap:13px;padding:15px 0;border-bottom:1px solid var(--line)}
-.ci-art{width:66px;height:78px;border-radius:12px;background:linear-gradient(160deg,var(--navy-800),var(--navy-900));
-  display:grid;place-items:center;flex:none;overflow:hidden}
-.ci-art .bat-art{height:88%;width:auto}
+.ci{display:flex;gap:14px;padding:16px 0;border-bottom:1px solid var(--line)}
+
+/* The tile is LIGHT, and that is the fix as much as the crop is.
+
+   It used to be a navy gradient, which suited the drawn bats it was built
+   for — pale wood on dark. Against a photograph it does the opposite: the
+   Power X is dark blue, so its edges dissolved into the tile and a bat
+   filling 94% of the box still read as a thin bright stripe down the
+   middle. On a light tile the same photo has an outline again.
+
+   It also matches the drawer it sits in, which is white. */
+.ci-art{position:relative;width:72px;height:84px;border-radius:14px;flex:none;
+  display:grid;place-items:center;overflow:hidden;
+  background:linear-gradient(158deg,#fff,var(--paper-alt));
+  box-shadow:inset 0 0 0 1px rgba(20,20,58,.09)}
+/* Grounds a cut-out so it does not look pasted on. */
+.ci-art::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(78% 42% at 50% 106%,rgba(20,20,58,.12),transparent 70%)}
+.ci-art img,.ci-art svg{position:relative;z-index:1;
+  transition:transform .35s var(--ease)}
+.ci-art:hover img,.ci-art:hover svg{transform:scale(1.06)}
+
+/* The drawn fallback has no crop problem — it is authored to fit. */
+.ci-art svg.bat-art{height:88%;width:auto}
+
+/* A photo fills the tile.
+
+   ABSOLUTE, not height:100%. The tile is a centring grid, so a percentage
+   height on a centred item resolves against a grid area that is itself
+   sized by that item — circular, so the browser falls back to auto. The
+   image laid out 72 × 497, object-fit:cover had a box the same shape as
+   the image and therefore nothing to crop, and overflow:hidden showed the
+   top 84px of it: the handle. Every attempt to aim the crop was landing on
+   a rule that was not running. inset:0 gives a real 72 × 84 box, which is
+   what makes cover mean anything — the same fix .card-art img.bat-photo
+   already uses.
+
+   The `img` also beats `.ci-art .bat-art`, which every photo carries too;
+   left to that rule it took width:auto and, before loading, width:0. */
+.ci-art img{position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;border-radius:0;
+  /* .bat-photo hangs a 30px drop-shadow off every bat for the hero. At
+     72px that is a black smear across the tile. */
+  filter:none}
+.ci-noimg{font-size:1.5rem;opacity:.45}
+
+/* ---- bats only ----
+   Cover on a 1:7 cutout centres the window on the HANDLE: a plain stick
+   with nothing on it to recognise. These photos are all shot upright with
+   the handle at the top and the blade from roughly a third of the way
+   down, so the window is pulled to the top of the FACE — the widest part,
+   and the part carrying the sticker.
+
+   42% is measured, not guessed. Sampling the alpha of the Power X cutout
+   row by row across the visible band: at 35% the narrowest row is 77% of
+   the tile (the shoulder taper is still in shot) and at 42% it is 94%. */
+.ci-art--bat img{object-position:50% 42%}
 .ci-b{flex:1;min-width:0}
 .ci-b h4{margin:0 0 3px;font-size:.9rem;font-weight:800;line-height:1.25}
 .ci-b .v{font-size:.74rem;color:var(--ink-50);margin-bottom:8px}
@@ -1866,6 +1930,56 @@ body.has-annc .filter-bar{top:var(--hdr)}
 .ci-price{margin-left:auto;font-weight:900;font-size:.95rem}
 .ci-rm{font-size:.74rem;color:var(--ink-50);text-decoration:underline;margin-top:6px}
 .ci-rm:hover{color:var(--red)}
+/* ---------- SEARCH PANEL ---------- */
+/* Grouped results, because a repair service and a bat in one flat list
+   read as the same kind of thing and they are not. */
+.sr-sec{padding-top:6px}
+.sr-sec + .sr-sec{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.sr-h{margin:0 0 8px;font-size:.7rem;font-weight:800;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink-50)}
+.sr-h i{font-style:normal;font-weight:700;letter-spacing:.04em;
+  text-transform:none;color:var(--ink-50);opacity:.75}
+
+.sr-row{text-decoration:none;color:inherit;align-items:center}
+.sr-row .ci-b{display:flex;flex-direction:column;gap:2px}
+.sr-t{font-size:.9rem;font-weight:800;line-height:1.25}
+.sr-p{margin:2px 0 0 !important;font-size:.88rem}
+.sr-row:hover .sr-t{color:var(--orange-700)}
+
+/* Services and help have no product photo, so they get their own mark
+   rather than an empty tile the size of one. */
+.sr-row--flat{align-items:center}
+.sr-ico{flex:none;display:grid;place-items:center;width:44px;height:44px;
+  border-radius:12px;background:var(--paper-alt);color:var(--ink-70);
+  border:1px solid var(--line)}
+.sr-ico svg{width:21px;height:21px}
+.sr-ico--service{background:var(--orange-50);color:var(--orange-700);
+  border-color:rgba(255,138,30,.28)}
+.sr-go{flex:none;color:var(--ink-50);display:grid;place-items:center}
+.sr-go svg{width:16px;height:16px}
+.sr-row--flat:hover .sr-go{color:var(--orange)}
+
+/* Chips do double duty: canned queries before you type, and a way out of
+   a dead end after. The query ones are buttons and fill the box; the
+   browse ones are links and leave. */
+.sr-chips{display:flex;flex-wrap:wrap;gap:7px}
+.sr-chip{display:inline-flex;align-items:center;padding:7px 13px;border-radius:100px;
+  border:1.5px solid var(--line);background:#fff;font:inherit;font-size:.82rem;
+  font-weight:700;color:var(--ink-70);cursor:pointer;text-decoration:none;
+  transition:.16s var(--ease)}
+.sr-chip:hover{border-color:var(--orange);color:var(--orange-700);
+  background:var(--orange-50)}
+
+.sr-none{padding:22px 0;display:grid;gap:8px;justify-items:start}
+.sr-none b{font-size:.95rem}
+.sr-none p{margin:0;font-size:.85rem;color:var(--ink-50)}
+.sr-none .sr-chips{margin-top:6px}
+
+.sr-all{display:inline-flex;align-items:center;gap:7px;margin-top:16px;
+  font-size:.85rem;font-weight:800;color:var(--orange-700)}
+.sr-all svg{width:15px;height:15px}
+.sr-all:hover{text-decoration:underline}
+
 .sum{display:flex;justify-content:space-between;font-size:.88rem;padding:5px 0}
 .sum.tot{font-weight:900;font-size:1.15rem;padding-top:13px;margin-top:8px;border-top:1px solid var(--line)}
 .sum .free{color:var(--green);font-weight:800}
@@ -2069,7 +2183,6 @@ body.pdp-open .fab{bottom:82px}
   transition:transform .35s var(--ease)}
 .card:hover .card-art.photo img{transform:scale(1.04)}
 .card-noimg{font-size:2.4rem;opacity:.4}
-.ci-art img{width:100%;height:100%;object-fit:cover;border-radius:8px}
 
 /* ---------- WIN SPLASH ---------- */
 /* Fires when an innings ends with a code unlocked. Confetti falls behind
@@ -2754,25 +2867,211 @@ body.pdp-open .fab{bottom:82px}
 .acct-gate-alt{margin-top:30px;padding-top:22px;border-top:1px solid var(--line)}
 .acct-gate-alt p{margin:0 0 6px;font-size:.9rem;color:var(--ink-70)}
 
-/* ---------- signed in ---------- */
-.acct-head{display:flex;justify-content:space-between;align-items:center;gap:16px;
-  flex-wrap:wrap;padding-bottom:18px;border-bottom:1px solid var(--line)}
-.acct-who{font-size:1.05rem;word-break:break-all}
-
-.acct-tabs{display:flex;gap:6px;margin:18px 0 24px;overflow-x:auto;
-  -webkit-overflow-scrolling:touch;scrollbar-width:none}
-.acct-tabs::-webkit-scrollbar{display:none}
-.acct-tab{flex:none;padding:9px 16px;border-radius:999px;border:1.5px solid var(--line);
-  background:#fff;font:inherit;font-weight:800;font-size:.85rem;color:var(--ink-70);
-  cursor:pointer;white-space:nowrap;transition:.2s var(--ease)}
-.acct-tab:hover{border-color:var(--ink-50)}
-.acct-tab.on{background:var(--ink);border-color:var(--ink);color:#fff}
-
 .acct-h3{margin:30px 0 6px;font-size:1.05rem}
 .acct-h3:first-child{margin-top:0}
 .acct-note{margin:6px 0 0;font-size:.82rem;color:var(--ink-50)}
-.acct-empty{border:1px dashed var(--line);border-radius:16px;padding:26px;text-align:center}
-.acct-empty p{margin:0 0 6px;font-size:.92rem;color:var(--ink-70)}
+
+/* ============================================================
+   SIGNED IN — THE DASHBOARD
+
+   The band is no longer a marketing header. It carries identity
+   and a row of counts, and the counts overlap the seam into the
+   white below so the fold reads as one object rather than a dark
+   slab followed by an unrelated page.
+
+   Everything is on a 1080px grid: a 220px rail of sections, and
+   the panel. The old layout put a 720px column in the middle of
+   the screen and left the other two thirds empty.
+   ============================================================ */
+.dash-top{padding:calc(var(--hdr) + 30px) 0 0}
+.dash-top .crumbs{margin-bottom:22px}
+/* .svc-top clips its own art; here the counts are MEANT to hang past the
+   bottom edge, and its ::before wash is inset:0 so nothing else spills. */
+.dash-top{overflow:visible}
+/* Same 1080 as .dash-grid below, so the identity, the counts and the rail
+   all sit on one left edge instead of the band being 160px wider. */
+.dash-top>.wrap{max-width:1080px}
+
+/* ---------- identity ---------- */
+.dash-id{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.dash-av{flex:none;display:grid;place-items:center;width:56px;height:56px;
+  border-radius:18px;background:linear-gradient(150deg,var(--orange),var(--orange-700));
+  color:var(--navy-900);font-family:var(--f-display);font-size:1.7rem;line-height:1;
+  padding-top:3px;box-shadow:0 8px 24px rgba(255,138,30,.28)}
+.dash-idm{min-width:0}
+.dash-idm .eyebrow{margin-bottom:5px}
+.dash-mail{display:block;font-size:1.15rem;line-height:1.25;color:#fff;
+  overflow-wrap:break-word}
+.dash-out{margin-left:auto;flex:none}
+/* The band is navy, so a ghost button styled for white paper is invisible. */
+.dash-top .dash-out{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.22);
+  color:#fff}
+.dash-top .dash-out:hover{background:rgba(255,255,255,.14);border-color:#fff}
+
+/* ---------- the counts, across the seam ---------- */
+/* translateY, not a negative margin: a negative bottom margin here collapses
+   through .wrap and simply drags the NEXT section up, leaving the strip
+   flush against the seam instead of across it. A transform moves the strip
+   itself, and half its own height lands it dead centre on the boundary
+   whatever the text inside does to its size. .dash-body's padding-top is
+   the clearance underneath. */
+.dash-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  margin:34px 0 0;transform:translateY(50%);
+  background:var(--line);border:1px solid var(--line);
+  border-radius:var(--r);overflow:hidden;box-shadow:var(--sh-2);position:relative;z-index:1}
+.dash-stat{background:#fff;padding:16px 18px;display:grid;gap:3px;min-width:0}
+.dash-stat b{font-family:var(--f-display);font-size:1.55rem;line-height:1;
+  color:var(--ink);letter-spacing:.01em}
+.dash-stat span{font-size:.74rem;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-50)}
+/* Only the first count is money-adjacent enough to earn orange — the rest
+   would turn the strip into a row of shouting and the rule is that orange
+   means clickable or money. */
+.dash-stat:first-child b{color:var(--orange-700)}
+
+/* ---------- the grid ---------- */
+.dash-body{padding-top:78px}
+.dash-grid{max-width:1080px;display:grid;gap:34px;grid-template-columns:1fr}
+@media (min-width:900px){
+  /* 240, not 220: at 220 "Repairs & requests" wrapped to two lines and left
+     its count badge stranded in the corner. */
+  .dash-grid{grid-template-columns:240px minmax(0,1fr);align-items:start}
+}
+
+/* ---------- the rail ---------- */
+.dash-rail{display:grid;gap:18px;min-width:0}
+@media (min-width:900px){
+  .dash-rail{position:sticky;top:calc(var(--hdr) + 20px)}
+}
+.dash-nav{display:grid;gap:4px;min-width:0}
+.dash-navb{display:flex;align-items:center;gap:11px;width:100%;padding:11px 13px;
+  border-radius:12px;border:1.5px solid transparent;background:none;font:inherit;
+  font-weight:800;font-size:.88rem;color:var(--ink-70);cursor:pointer;text-align:left;
+  transition:.18s var(--ease)}
+.dash-navb:hover{background:var(--paper-alt);color:var(--ink)}
+.dash-navb.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.dash-navi{flex:none;display:grid;place-items:center;width:19px;height:19px;opacity:.75}
+.dash-navi svg{width:19px;height:19px}
+.dash-navb.on .dash-navi{opacity:1;color:var(--orange)}
+.dash-navl{flex:1;min-width:0}
+.dash-navc{flex:none;padding:2px 8px;border-radius:999px;background:var(--paper-alt);
+  color:var(--ink-70);font-size:.72rem;font-weight:800}
+.dash-navb.on .dash-navc{background:rgba(255,255,255,.16);color:#fff}
+
+.dash-help{padding:18px;border-radius:var(--r);background:var(--paper-alt);
+  border:1px solid var(--line);display:grid;gap:10px}
+.dash-help .eyebrow{margin:0}
+.dash-help .link-arrow{font-size:.85rem;align-items:flex-start}
+/* .link-arrow is inline-flex, so in a 220px rail the arrow was the thing
+   that gave — squashed to 4px wide while the label kept its width. */
+.dash-help .link-arrow svg{flex:none;margin-top:2px}
+.dash-help-n{margin:2px 0 0;font-size:.76rem;line-height:1.5;color:var(--ink-50)}
+
+/* On a phone a sidebar is just a stack, so the rail becomes the pill row
+   it always was — scrolling sideways, with the help card dropped BELOW
+   the panel, where it is an afterthought rather than an obstacle between
+   somebody and the orders they opened the page for.
+
+   display:contents dissolves the <aside> so its two children become grid
+   items of .dash-grid directly, which is what makes order: reach across
+   them. It is only ever the one-column layout, so nothing is being
+   ordered around a column boundary. */
+@media (max-width:899px){
+  .dash-rail{display:contents}
+  .dash-nav{order:1;display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .dash-nav::-webkit-scrollbar{display:none}
+  .dash-navb{flex:none;width:auto;border-radius:999px;border-color:var(--line);
+    background:#fff;white-space:nowrap}
+  .dash-navl{flex:none}
+  .dash-main{order:2}
+  .dash-help{order:3}
+  .dash-grid{gap:22px}
+}
+
+/* ---------- the panel ---------- */
+.dash-main{min-width:0;display:grid;gap:18px;align-content:start}
+.dash-h{margin:0}
+.dash-h2{font-family:var(--f-display);font-weight:400;text-transform:uppercase;
+  font-size:1.75rem;line-height:1;letter-spacing:-.005em;margin:0}
+.dash-sub{margin:8px 0 0;font-size:.9rem;color:var(--ink-50);max-width:60ch}
+
+.dash-card{border:1px solid var(--line);border-radius:18px;background:#fff;padding:22px}
+/* The panel is a grid with its own gap, so the cards' own bottom margins
+   would double every gap between two orders. */
+.dash-main>.acct-order,.dash-main>.acct-req{margin-bottom:0}
+.dash-ch{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  flex-wrap:wrap;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.dash-ch h3{margin:0;font-size:1.02rem}
+.dash-cn{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-50);padding:4px 10px;border-radius:999px;background:var(--paper-alt)}
+/* A heading for a second block inside one card — quieter than an h3, so
+   the card still reads as one thing. */
+.dash-sh{margin:0;font-size:.78rem;font-weight:800;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-50);padding-top:20px;
+  border-top:1px solid var(--line)}
+.dash-card .acct-addrs{margin-top:0}
+.dash-card .acct-addr-new{margin-top:0;padding-top:0;border-top:0}
+
+/* The email, shown rather than offered for editing. */
+.dash-ro{display:flex;justify-content:space-between;align-items:center;gap:14px;
+  flex-wrap:wrap;padding:14px 16px;border-radius:12px;background:var(--paper-alt);
+  margin-bottom:20px}
+/* Scoped to the label column, not to every span in the row — .dash-ro span
+   also matched the tag beside it and out-specified it, which forced the
+   shield onto its own line above the words. */
+.dash-ro>div>span{display:block;font-size:.72rem;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-50);margin-bottom:3px}
+.dash-ro b{font-size:.95rem;overflow-wrap:break-word}
+.dash-ro-tag{display:inline-flex;align-items:center;gap:6px;flex:none;white-space:nowrap;
+  font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--green)}
+.dash-ro-tag svg{width:14px;height:14px}
+
+/* ---------- empty, and loading ---------- */
+.dash-empty{border:1px solid var(--line);border-radius:18px;background:var(--paper-alt);
+  padding:38px 26px;text-align:center;display:grid;gap:8px;justify-items:center}
+.dash-empty-i{display:grid;place-items:center;width:52px;height:52px;border-radius:16px;
+  background:#fff;border:1px solid var(--line);color:var(--ink-50);margin-bottom:4px}
+.dash-empty-i svg{width:23px;height:23px}
+.dash-empty b{font-size:1rem}
+.dash-empty p{margin:0;font-size:.9rem;color:var(--ink-50);max-width:46ch}
+.dash-empty .link-arrow{margin-top:6px}
+
+/* Skeleton rather than the word "Loading…", so the panel keeps its shape
+   and the page does not jump when the orders land. */
+.dash-load{display:grid;gap:14px}
+.dash-load span{display:block;height:88px;border-radius:18px;
+  background:linear-gradient(100deg,var(--paper-alt) 30%,#EEF0F7 50%,var(--paper-alt) 70%);
+  background-size:220% 100%;animation:dashPulse 1.25s var(--ease) infinite}
+.dash-load span:first-child{height:56px}
+.dash-load span:last-child{height:120px}
+@keyframes dashPulse{from{background-position:180% 0}to{background-position:-40% 0}}
+@media (prefers-reduced-motion:reduce){.dash-load span{animation:none}}
+
+@media (max-width:560px){
+  /* Two rows of counts is ~190px tall, and half of that hanging below the
+     seam is more than .dash-body's clearance — the strip landed on top of
+     the section pills. The straddle is a wide-screen flourish, so on a
+     phone the strip simply sits inside the band. */
+  .dash-stats{grid-template-columns:1fr 1fr;transform:none;margin-bottom:0}
+  .dash-top{padding-bottom:26px}
+  .dash-body{padding-top:34px}
+  .dash-stat{padding:13px 14px}
+  .dash-stat b{font-size:1.35rem}
+  /* Smaller and tighter so "Orders placed" stays on one line in a 137px cell. */
+  .dash-stat span{font-size:.68rem;letter-spacing:.04em}
+  .dash-av{width:48px;height:48px;border-radius:15px;font-size:1.45rem}
+  /* flex-basis 0, not auto: with auto the email's max-content width plus the
+     avatar exceeded the line and the avatar wrapped onto a row of its own,
+     spending 60px of a phone screen on one letter. */
+  .dash-idm{flex:1 1 0}
+  .dash-mail{font-size:.95rem}
+  /* Sign out drops to its own line rather than squeezing a long address. */
+  .dash-out{margin-left:0;width:100%}
+  .dash-card{padding:18px}
+  .dash-h2{font-size:1.5rem}
+}
 
 /* ---------- an order ---------- */
 .acct-order,.acct-req{border:1px solid var(--line);border-radius:18px;padding:22px;
@@ -2795,8 +3094,9 @@ body.pdp-open .fab{bottom:82px}
   flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .acct-method{font-size:.72rem;font-weight:800;letter-spacing:.12em;color:var(--ink-50)}
 
-.acct-claim{margin-top:30px;padding:22px;border:1px solid var(--line);border-radius:18px;
-  background:var(--paper-alt)}
+/* Tinted, and set a little apart: it is a one-off repair for history that
+   predates the account, not part of the running list above it. */
+.acct-claim{margin-top:12px;background:var(--paper-alt)}
 
 /* ---------- requests ---------- */
 .acct-pill{padding:5px 12px;border-radius:999px;font-size:.72rem;font-weight:800;
@@ -2873,26 +3173,96 @@ body.pdp-open .fab{bottom:82px}
   color:var(--navy-900);transform:translateY(-2px)}
 .nhero-soc:focus-visible{outline:2px solid var(--orange);outline-offset:3px}
 
+/* The credentials block. One hairline is doing the work here: above it the
+   column is a pitch, below it a set of reasons to believe the pitch. Without
+   the break, four consecutive rows of small text read as one grey mass and
+   the eye stops reading after the buttons. */
+.nhero-cred{margin-top:16px;padding-top:14px;
+  border-top:1px solid rgba(255,255,255,.13)}
+
 /* The three hesitation-answers. Icon + label, wrapping to two rows on
    a narrow phone rather than scrolling sideways. */
 .nhero-badges{list-style:none;display:flex;flex-wrap:wrap;gap:10px 22px;
-  margin:22px 0 0;padding:0}
+  margin:0;padding:0}
 .nhero-badges li{display:flex;align-items:center;gap:9px;font-size:.82rem;
   font-weight:700;color:rgba(255,255,255,.82)}
 .nhero-badges svg{width:19px;height:19px;color:var(--orange);flex:none}
-.nhero .hv-proof{margin-top:16px}
+
+/* The buttons sit with the number they refer to: "36.9K on Instagram" is
+   the reason to press the Instagram button, and next to each other they are
+   one statement instead of two loose rows. */
+/* The honesty note. Quiet enough not to compete with the product, readable
+   enough to actually be read — a disclaimer nobody can read is not a
+   disclaimer, so this is 58% white rather than the 45% the proof line used
+   to sit at. */
+/* No max-width. A 60ch cap sounds sensible and was wrong here: it forced a
+   92-character line to wrap at 336px inside a 570px column, and the second
+   line cost enough hero height to push the service strip off a 1366x768
+   laptop. The column is already the measure. */
+.nhero-note{margin:12px 0 0;font-size:.7rem;line-height:1.45;
+  color:rgba(255,255,255,.58)}
+
+.nhero-social{display:flex;align-items:center;gap:12px;margin-top:12px}
+/* flex-basis 0 so the text SHRINKS and wraps inside its own column rather
+   than pushing itself onto a line below the buttons. nowrap on the row for
+   the same reason: a wrapped flex line here costs a full row of hero height,
+   and hero height is what decides whether the service strip clears the fold
+   on a 1366x768 laptop. */
+.nhero-social{flex-wrap:nowrap}
+.nhero .nhero-social .hv-proof{margin:0;flex:1 1 0;min-width:0}
 
 /* ---------- right ---------- */
 .nhero-stage{position:relative;min-height:min(60vh,520px);display:grid;
   place-items:center;min-width:0}
 
-/* The angled panel the bats sit on. A rotated rounded rectangle rather
-   than a clip-path, so the corner radius stays even on every edge. */
+/* ------------------------------------------------------------
+   THE BENCH, NOT A COLOUR FIELD.
+
+   This was a full-saturation orange slab, and it was the single
+   biggest thing wrong with the page. Two reasons, both colour:
+
+   1. It broke the rule at the top of this file. Orange means
+      "clickable or money" — that is what makes Shop All Bats
+      impossible to miss. A 40%-of-viewport orange rectangle
+      spends that meaning on decoration, and the button has to
+      compete with its own accent colour for attention.
+
+   2. Wood on orange has almost no chroma separation. The bats are
+      warm ochre; the slab was warm orange. The product — the
+      thing being sold — was camouflaged against its own backdrop.
+
+   The plate is now a cool graphite-indigo lit from above, so the
+   warm wood sits against its complement and the BATS become the
+   warm mass in the composition. The lamp keeps the heat in the
+   frame without spending the accent, and the only place this
+   plate touches brand orange is a 3px rim where the light catches
+   its edge.
+
+   A rotated rounded rectangle rather than a clip-path, so the
+   corner radius stays even on every edge.
+   ------------------------------------------------------------ */
 .nhero-panel{position:absolute;inset:6% -4% 12% 2%;border-radius:36px;
-  background:linear-gradient(150deg,var(--orange) 0%,var(--orange-600) 55%,var(--orange-700) 100%);
-  transform:rotate(-4deg);box-shadow:0 30px 70px rgba(0,0,0,.42)}
+  background:radial-gradient(86% 58% at 50% 4%,rgba(255,150,45,.38),transparent 62%),
+             linear-gradient(158deg,#3A3A72 0%,#232352 48%,#14143A 100%);
+  transform:rotate(-4deg);
+  /* A visible edge all the way round. Without it the plate's lower half,
+     which is close to the page colour by design, simply stopped existing. */
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 44px 96px rgba(0,0,0,.6),
+             inset 0 1px 0 rgba(255,255,255,.14),
+             inset 0 -40px 60px rgba(0,0,0,.28)}
+
+/* The lamp above the bench. It spills past the plate's edge, which is what
+   stops a dark plate on a dark page reading as a hole cut in the section. */
+.nhero-panel::before{content:'';position:absolute;inset:-22% -14% 30% -14%;
+  border-radius:50%;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(255,145,40,.42),transparent 72%)}
+
 .nhero-panel::after{content:'';position:absolute;inset:0;border-radius:inherit;
-  background:radial-gradient(120% 80% at 20% 0%,rgba(255,255,255,.22),transparent 60%)}
+  pointer-events:none;
+  /* The rim-light: one bright line where the lamp catches the top edge. */
+  background:linear-gradient(180deg,rgba(255,170,80,.6),transparent 3px),
+             radial-gradient(120% 80% at 20% 0%,rgba(255,255,255,.09),transparent 60%)}
 
 /* ---------- the fan of bats ---------- */
 /* All four sit on the panel together and overlap. The negative margin is
@@ -2918,8 +3288,12 @@ body.pdp-open .fab{bottom:82px}
    thin, so keeping it inside the orange leaves the panel mostly empty;
    breaking the edge is what makes it read as a product in front of the
    panel rather than a photo pasted onto it. */
+/* Warm drop-shadow, not neutral black. The light source is now an orange
+   lamp, so a bat's shadow carries a trace of it — a grey shadow under a
+   warm light is the detail that makes composited art look pasted on. */
 .nhero-shot img{height:min(60vh,480px);width:auto;object-fit:contain;
-  filter:drop-shadow(0 22px 40px rgba(0,0,0,.5))}
+  filter:drop-shadow(0 26px 44px rgba(6,4,20,.62))
+         drop-shadow(0 2px 10px rgba(255,138,30,.14))}
 
 /* Name + promise. Anchored to the stage, not to the bat, so it stays put
    while the bat behind it scales — a tag that grew with its bat would
@@ -2980,12 +3354,15 @@ body.pdp-open .fab{bottom:82px}
      needed about 20px trimmed and got 200, so it rendered a visibly
      smaller hero than a 900px screen for no reason. Tying the sizes to
      viewport height means each screen gives up only what it has to. */
-  .nhero{padding-top:calc(var(--hdr) + 2.4vh);padding-bottom:2.4vh}
+  .nhero{padding-top:calc(var(--hdr) + 2.4vh);padding-bottom:2.0vh}
   .nhero-copy .d1{font-size:clamp(2.4rem,min(10.5vw,10.2vh),6.5rem)}
   .nhero-copy .lede{margin-top:1.5vh}
-  .nhero-cta{margin-top:2.2vh}
-  .nhero-badges{margin-top:1.8vh}
-  .nhero .hv-proof{margin-top:1.4vh}
+  .nhero-cta{margin-top:1.8vh}
+  .nhero-cred{margin-top:1.4vh;padding-top:1.4vh}
+  .nhero-social{margin-top:1.0vh}
+  /* The illustration note is the last thing added to this column and the
+     first thing that would push the strip off, so it gives up the most. */
+  .nhero-note{margin-top:1.0vh;font-size:.66rem}
   .nhero-stage{min-height:min(58vh,520px)}
   .nhero-shot img{height:min(58vh,480px)}
 }
@@ -3037,7 +3414,15 @@ body.pdp-open .fab{bottom:82px}
    left to auto-fit. auto-fit picks whatever fits and would have stranded
    the seventh alone on a second row at most widths; these counts always
    divide into rows that look deliberate. */
-.svctiles-row{display:grid;gap:11px;grid-template-columns:repeat(7,minmax(0,1fr))}
+.svctiles-row{position:relative;display:grid;gap:11px;
+  grid-template-columns:repeat(7,minmax(0,1fr))}
+
+/* The rack the tools hang from. One hairline behind all seven, fading out
+   at both ends so it reads as a bench edge rather than a table border. */
+.svctiles-rail{position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.22) 12%,
+             rgba(255,255,255,.22) 88%,transparent)}
 /* Raised from 5.5% to 11% white with a brighter edge. At the old value
    these read as slightly-less-navy rectangles and the row disappeared
    into the section behind it — which is fatal for a strip whose whole
@@ -3047,15 +3432,68 @@ body.pdp-open .fab{bottom:82px}
    the label wraps to, and the grid's default stretch already gives every
    tile in a row the same height — so a two-line tile and a one-line tile
    sit in a straight row instead of stepping. */
-.svctile{display:flex;align-items:center;gap:11px;min-width:0;padding:12px;
-  border-radius:16px;background:rgba(255,255,255,.16);
-  border:1px solid rgba(255,255,255,.28);
-  box-shadow:0 2px 14px rgba(0,0,0,.32);transition:.22s var(--ease)}
-.svctile:hover{background:rgba(255,255,255,.23);border-color:var(--svc,var(--orange));
-  transform:translateY(-3px);box-shadow:0 10px 26px rgba(0,0,0,.45)}
+/* ------------------------------------------------------------
+   A tool on the rack.
+
+   The old tile was a lifted glass panel with a SOLID colour block
+   inside it. Seven solid blocks in one row gave the eye seven
+   equally loud anchors and no path through them — and, worse,
+   broke this stylesheet's own first rule: if it is orange it is
+   clickable or it is money. Seven saturated competitors meant the
+   Shop All Bats button no longer owned the loudest colour on the
+   page.
+
+   Now the hue survives, but as identity rather than volume: a
+   stroked glyph and a 2px underline sitting on the rail. Held at
+   35% until hover, so at rest the row is one calm object and only
+   the CTA is fully saturated. Hover lights that one service to
+   full and lifts it off the rail.
+   ------------------------------------------------------------ */
+/* STACKED at seven-across, and that is a size decision, not a taste one.
+   The wrap is 1240px, so seven tiles are 168px whatever the viewport does.
+   Side by side, the icon and the arrow left the label about 69px and every
+   one of them broke across two lines — "Bat / Doctor", "Send a / video" —
+   which is most of what made this row look untidy. Stacked, the label gets
+   the full 142px and every one fits on a single line. */
+.svctile{position:relative;display:flex;flex-direction:column;
+  align-items:flex-start;gap:9px;min-width:0;
+  padding:14px 13px 16px;border-radius:14px 14px 0 0;
+  background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.03));
+  border:1px solid rgba(255,255,255,.12);border-bottom:0;
+  transition:transform .28s var(--ease),background .28s var(--ease),
+             border-color .28s var(--ease)}
+
+/* The hue, as a line on the rail rather than a block in the tile. */
+.svctile::after{content:'';position:absolute;left:12px;right:12px;bottom:-1px;
+  height:2px;border-radius:2px;background:var(--svc-lit,var(--orange));
+  opacity:.35;transition:opacity .28s var(--ease),left .28s var(--ease),
+             right .28s var(--ease),box-shadow .28s var(--ease)}
+
+.svctile:hover{transform:translateY(-4px);
+  background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.06));
+  border-color:rgba(255,255,255,.24)}
+.svctile:hover::after{opacity:1;left:0;right:0;
+  box-shadow:0 0 16px var(--svc-lit,var(--orange))}
+.svctile:focus-visible{outline:2px solid var(--svc-lit,var(--orange));outline-offset:3px}
+
+/* Stroked, not filled. The glyphs are line art in currentColor already, so
+   the hue can live in the stroke and the disc behind it only has to be a
+   whisper of the same hue to tie them together. */
 .svctile-art{flex:none;width:38px;height:38px;border-radius:11px;display:grid;
-  place-items:center;background:var(--svc,var(--orange));color:#fff}
+  place-items:center;color:var(--svc-lit,var(--orange));
+  background:color-mix(in srgb,var(--svc-lit,var(--orange)) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--svc-lit,var(--orange)) 26%,transparent);
+  transition:background .28s var(--ease),border-color .28s var(--ease)}
+.svctile:hover .svctile-art{
+  background:color-mix(in srgb,var(--svc-lit,var(--orange)) 24%,transparent);
+  border-color:color-mix(in srgb,var(--svc-lit,var(--orange)) 48%,transparent)}
 .svctile-art svg{width:21px;height:21px}
+
+/* color-mix is ~94% supported; anything older gets a flat translucent
+   white disc with the hue still carried by the glyph and the underline. */
+@supports not (background:color-mix(in srgb,red 10%,transparent)){
+  .svctile-art{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2)}
+}
 /* Wraps between words, never inside them.
 
    This was `overflow-wrap:anywhere`, which is a last resort for unbroken
@@ -3068,24 +3506,33 @@ body.pdp-open .fab{bottom:82px}
   overflow-wrap:normal;word-break:normal;hyphens:none}
 .svctile-txt i{font-style:normal;font-size:.71rem;color:rgba(255,255,255,.72);
   line-height:1.3;overflow-wrap:normal;word-break:normal;hyphens:none}
-.svctile-go{flex:none;margin-left:auto;width:26px;height:26px;border-radius:50%;
-  display:grid;place-items:center;background:rgba(255,255,255,.1);color:#fff;
-  transition:.22s var(--ease)}
-.svctile:hover .svctile-go{background:var(--svc,var(--orange))}
+/* At rest the arrow is barely there and does not move; on hover it slides
+   in the direction it points. Motion that says "this goes somewhere",
+   rather than motion for its own sake.
+
+   Hidden in the stacked seven-across layout: there is no row to sit at the
+   end of, and the lift plus the lighting underline already say the tile is
+   a link. It comes back at the wider breakpoints below. */
+.svctile-go{display:none;flex:none;margin-left:auto;width:26px;height:26px;
+  border-radius:50%;place-items:center;color:rgba(255,255,255,.45);
+  transition:color .28s var(--ease),transform .28s var(--ease)}
+.svctile:hover .svctile-go{color:var(--svc-lit,var(--orange));transform:translateX(3px)}
 .svctile-go svg{width:14px;height:14px}
 
-/* The arrow is decoration — the whole tile is the link. It is the first
-   thing to go when the row gets tight, because the alternative is taking
-   the room from the label.
-
-   1500px, not 1240: with SEVEN tiles across a 1240px wrap each one is
-   162px, and the arrow plus its auto margin was leaving the text just
-   51px — which is what forced every label onto two cramped lines. The
-   arrow only earns its place once the tiles are wide enough not to
-   notice it. */
-@media (max-width:1500px){ .svctile-go{display:none} }
-@media (max-width:1180px){ .svctiles-row{grid-template-columns:repeat(4,minmax(0,1fr))} }
+/* Below seven-across there are only four or three tiles on a row, so each
+   is 260px+ — wide enough for the icon, the label and the arrow side by
+   side, which is the more compact shape and keeps the strip short on the
+   sizes where vertical room is scarcest. */
+@media (max-width:1180px){
+  .svctiles-row{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .svctile{flex-direction:row;align-items:center;gap:11px;padding:12px 12px 14px}
+  .svctile-go{display:grid}
+}
 @media (max-width:900px){  .svctiles-row{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:620px){
+  .svctiles-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .svctile-go{display:none}
+}
 @media (max-width:640px){
   .svctiles-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .svctile{padding:12px}
@@ -3164,3 +3611,90 @@ body.pdp-open .fab{bottom:82px}
 .acct-link{background:none;border:0;padding:0;cursor:pointer;font:inherit;
   font-size:.84rem;font-weight:700;color:var(--orange);text-decoration:underline}
 .acct-link:hover{color:var(--orange-700)}
+
+/* ============================================================
+   AUTH SCREEN
+
+   The signed-out account page. Replaces a marketing header —
+   a 6.5rem SIGN IN over an empty dark band, with the form
+   floating in white space and the password box below the fold.
+
+   Two columns: why on the left, the form on the right. Both sit
+   on the navy, so the card reads as the one lit thing on the
+   page and the eye lands where the work is.
+   ============================================================ */
+.auth{background:var(--navy-900);color:#fff;position:relative;isolation:isolate;
+  min-height:100vh;display:grid;place-items:center;
+  /* Centre only while it fits. safe-center falls back to start when the
+     card is taller than the space, so a long form scrolls from the top
+     instead of overflowing upward behind the header. */
+  align-content:safe center;
+  /* 20px, not var(--pad) — that variable does not exist in this
+     stylesheet (.wrap uses a literal 20px), and an unresolved var
+     invalidates the whole shorthand, which is how this computed to
+     0 and let the card slide under the fixed header. */
+  padding:calc(var(--hdr) + 30px) 20px 48px}
+/* The same lit-edge treatment the dark sections use, so this page
+   belongs to the site rather than looking like a bolted-on login. */
+.auth::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(120% 52% at 50% -6%,  rgba(255,138,30,.26),transparent 60%),
+    radial-gradient(120% 54% at 50% 106%, rgba(61,61,168,.5), transparent 64%)}
+
+.auth-grid{width:100%;max-width:1000px;display:grid;gap:clamp(28px,5vw,64px);
+  grid-template-columns:1fr minmax(0,420px);align-items:center}
+
+/* ---------- left: why bother ---------- */
+.auth-side{min-width:0}
+.auth-back{display:inline-flex;align-items:center;gap:8px;margin-bottom:26px;
+  font-size:.84rem;font-weight:700;color:rgba(255,255,255,.6)}
+.auth-back:hover{color:#fff}
+.auth-back svg{width:15px;height:15px;transform:rotate(180deg)}
+.auth-side .d2{color:#fff;margin:12px 0 0;line-height:1.02}
+.auth-side .hl-2{display:block;color:var(--orange)}
+
+.auth-points{list-style:none;margin:28px 0 0;padding:0;display:grid;gap:16px}
+.auth-points li{display:flex;gap:13px;align-items:flex-start}
+.auth-points svg{width:21px;height:21px;flex:none;color:var(--orange);margin-top:2px}
+.auth-points b{display:block;font-size:.92rem;color:#fff}
+.auth-points span{font-size:.83rem;color:rgba(255,255,255,.6);line-height:1.45}
+.auth .hv-proof{margin-top:28px}
+
+/* ---------- right: the card ---------- */
+/* White on navy, and the only white on the page. An auth form should
+   be the brightest thing in front of you. */
+.auth-card{background:#fff;color:var(--ink);border-radius:20px;
+  padding:clamp(24px,3.4vw,34px);box-shadow:0 24px 60px rgba(0,0,0,.42)}
+.auth-h{font-family:var(--f-display);font-size:1.6rem;text-transform:uppercase;
+  letter-spacing:.01em;margin:0 0 20px;color:var(--ink)}
+
+.auth-card .acct-or{margin:22px 0 18px}
+.auth-card .acct-gate-note{margin-top:10px}
+.auth-card .acct-gate-alt{margin-top:24px;padding-top:20px}
+.auth-card .acct-gate-links{margin-top:16px}
+
+@media (max-width:900px){
+  /* Card first. Four hundred pixels of value proposition in front of the
+     thing somebody came here to do is an obstacle, so on a phone the
+     panel keeps only its heading and moves below. */
+  .auth{min-height:auto;padding-top:calc(var(--hdr) + 24px)}
+  .auth-grid{grid-template-columns:1fr;gap:26px}
+  /* Order on .auth-col, NOT .auth-card. The card is nested inside the
+     column now, so ordering it only sorted it against its own sibling —
+     which put the "track without an account" line above the form. */
+  .auth-side{order:2;text-align:center}
+  .auth-col{order:1}
+  .auth-points{display:none}
+  .auth-back{margin-bottom:0}
+  .auth .hv-proof{margin-top:18px}
+}
+
+/* The no-account route. Outside the card on purpose: it is an
+   alternative to the whole screen, not a footnote to the password
+   field, and inside it added ~120px to a card already too tall to
+   centre on a laptop. */
+.auth-col{display:grid;gap:14px;min-width:0}
+.auth-alt{margin:0;text-align:center;font-size:.85rem;color:rgba(255,255,255,.6)}
+.auth-alt a{color:var(--orange);font-weight:700;white-space:nowrap}
+.auth-alt a:hover{text-decoration:underline}
+.auth-alt svg{width:14px;height:14px;vertical-align:-2px}

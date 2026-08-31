@@ -16,6 +16,43 @@ const SUPA_URL = 'https://rbrokxstbzewdjdfhiwk.supabase.co';
 const SUPA_KEY = 'sb_publishable_RsGkbtn8GloAZxGFKWz-Ew_m6KGKyJn';
 
 /* ============================================================
+   FIREBASE — customer sign-in only
+
+   Staff keep using Supabase Auth. Customers sign in here, with a
+   phone OTP or an email and password, and Supabase is configured
+   to trust the resulting token (see sql/022).
+
+   These values are IDENTIFIERS, not credentials. Firebase web
+   config is designed to be public and appears in the page source
+   of every site that uses it; what protects the data is the
+   Supabase row policies, exactly as with SUPA_KEY above.
+
+   Fill these from Firebase Console → Project settings → General →
+   Your apps → Web app → SDK setup and configuration.
+
+   EMPTY IS SAFE. With apiKey blank the account page says sign-in
+   is not configured yet and offers order tracking instead, rather
+   than throwing — the same rule the empty TOSS_LINKS follow.
+   ============================================================ */
+const TOSS_FIREBASE = {
+  apiKey:     'AIzaSyBsqvLa_V_XCi189P3Qd61-zd4c4i_E0G8',
+  authDomain: 'toss-cb8c0.firebaseapp.com',
+  projectId:  'toss-cb8c0',                  // matches Supabase → Third-Party Auth
+  appId:      '1:844825622558:web:af838b8d0f707e351e160f'
+};
+
+/* Deliberately NOT carried over from the console snippet:
+     storageBucket     — Firebase Storage is unused; photos go to Supabase
+     messagingSenderId — push notifications are unused
+     measurementId     — Google Analytics. ANALYTICS above is the one
+                         switch for measurement on this site, and it is
+                         empty on purpose: nothing loads until somebody
+                         decides to have analytics. Initialising it here
+                         would quietly bypass that decision AND pull a
+                         second Google script onto the page.
+   None of the three are needed for Auth, which is all Firebase does. */
+
+/* ============================================================
    THINGS TOSS FILLS IN
 
    Everything below is a business decision, not a technical one,
@@ -276,12 +313,41 @@ function scheduleRefresh() {
   refreshTimer = setTimeout(refreshSession, Math.min(wait, 2147483000));
 }
 
+/* Every auth call is bounded.
+
+   supa() has had a timeout since it was written; this did not, and the
+   difference showed the day the Auth service stopped answering: the REST
+   API kept replying in 40ms while /auth/v1/ accepted connections and
+   never responded. A fetch with no abort waits as long as the OS allows,
+   so the sign-in button sat on "Signing you in…" indefinitely with
+   nothing to tell the customer.
+
+   A service that is down should look down within a few seconds. */
+const AUTH_TIMEOUT = 12000;
+
 async function authFetch(path, body) {
-  const r = await fetch(SUPA_URL + '/auth/v1/' + path, {
-    method: 'POST',
-    headers: { apikey: SUPA_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body || {})
-  });
+  const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ac ? setTimeout(() => ac.abort(), AUTH_TIMEOUT) : null;
+  let r;
+  try {
+    r = await fetch(SUPA_URL + '/auth/v1/' + path, {
+      method: 'POST',
+      headers: { apikey: SUPA_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+      signal: ac ? ac.signal : undefined
+    });
+  } catch (err) {
+    /* Aborted, or the network refused. Either way the caller needs a
+       sentence it can show, not a DOMException. */
+    const e = new Error(err && err.name === 'AbortError'
+      ? 'Sign-in is not responding. The account service may be down — try again shortly.'
+      : 'Could not reach the sign-in service. Check your connection.');
+    e.code = 'unreachable';
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     const e = new Error(j.error_description || j.msg || j.message || r.statusText);
@@ -530,18 +596,30 @@ async function checkToken() {
 function supaHeaders(extra) {
   return Object.assign({
     apikey: SUPA_KEY,
-    /* Falls back to the publishable key, which is what an anonymous
+    /* Three possible identities, in a deliberate order:
+         1. a Firebase ID token — a signed-in CUSTOMER on the shop
+         2. a Supabase session  — a signed-in STAFF member in the Maze Room
+         3. the publishable key — everybody else
+       Firebase first because only the storefront ever has one, and a
+       customer's own token is the narrower of the two. The Maze Room
+       never loads firebase-auth.js, so FB_TOKEN is undefined there and
+       this collapses to the old behaviour. */
+    Authorization: 'Bearer ' + (
+      (typeof FB_TOKEN !== 'undefined' && FB_TOKEN) ||
+      (SESSION && SESSION.access_token) ||
+      SUPA_KEY
+    ),
+    /* The publishable key is the floor, and it is what an anonymous
        visitor reads the catalogue with.
 
-       Customer accounts made this line load-bearing in a way it was not
-       when only the Maze Room could hold a session. A signed-in shopper
-       now sends their own token on EVERY storefront request, so a token
-       that has gone stale would 401 the catalogue and the leaderboard
-       too — public data that needs no token at all. checkToken() is
-       therefore run before anything else touches the network on the
-       storefront, and clears a rejected session so these fall back here.
-       See accountBootFinish() in js/account.js. */
-    Authorization: 'Bearer ' + ((SESSION && SESSION.access_token) || SUPA_KEY),
+       This line is load-bearing in a way it was not when only the Maze
+       Room could hold a session. A signed-in shopper sends their own
+       token on EVERY storefront request, so a token that has gone stale
+       — or one Supabase will not trust because Firebase was never
+       registered — would 401 the catalogue and the leaderboard too,
+       public data that needs no token at all. Both paths guard against
+       it before anything else touches the network: checkToken() for a
+       Supabase session, checkFirebaseWiring() for a Firebase one. */
     'Content-Type': 'application/json'
   }, extra || {});
 }

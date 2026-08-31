@@ -85,17 +85,32 @@ const SVC_ART = (() => {
   };
 })();
 
-/* colour + the one-line promise each card carries */
+/* ------------------------------------------------------------
+   colour + the one-line promise each card carries
+
+   `accent` is the dark, high-contrast version, for a service's own
+   page on WHITE paper. It is the wrong tool on navy: dark red on
+   dark blue has almost no luminance separation, which is why the
+   homepage strip had to fill a solid block behind a white glyph
+   just to be seen — seven solid blocks, seven directions for the
+   eye, and orange no longer the loudest thing on the page.
+
+   `lit` is the same HUE lifted to a common lightness (~L70) and a
+   common chroma, for use ON the dark bands. Holding L and C fixed
+   and varying only H is what turns seven arbitrary colours into a
+   family: they read as one set of labels rather than seven
+   competing signals, and none of them can outrank the orange CTA.
+   ------------------------------------------------------------ */
 const SVC_ID = {
-  bat_doctor: { accent: '#CC2C23', tint: '#FAEAE9', art: 'bat_doctor' },
-  custom_bat: { accent: '#3D3DA8', tint: '#ECECF6', art: 'custom_bat' },
-  trade_in:   { accent: '#007C41', tint: '#E6F2EC', art: 'trade_in'   },
-  wholesale:  { accent: '#9E5E00', tint: '#F5EFE6', art: 'wholesale'  },
-  jersey:     { accent: '#C0357A', tint: '#F9EBF2', art: 'jersey'     },
-  video:      { accent: '#6B3FC4', tint: '#F0ECF9', art: 'video'      },
+  bat_doctor: { accent: '#CC2C23', lit: '#FF7A70', tint: '#FAEAE9', art: 'bat_doctor' },
+  custom_bat: { accent: '#3D3DA8', lit: '#8C8CF0', tint: '#ECECF6', art: 'custom_bat' },
+  trade_in:   { accent: '#007C41', lit: '#4FD48A', tint: '#E6F2EC', art: 'trade_in'   },
+  wholesale:  { accent: '#9E5E00', lit: '#E8A63C', tint: '#F5EFE6', art: 'wholesale'  },
+  jersey:     { accent: '#C0357A', lit: '#F27BB0', tint: '#F9EBF2', art: 'jersey'     },
+  video:      { accent: '#6B3FC4', lit: '#B08CF5', tint: '#F0ECF9', art: 'video'      },
   /* Teal — the one hue left that clears 4.5:1 on white and on its own
      tint without colliding with the six above. Measured, not picked. */
-  corporate:  { accent: '#00666E', tint: '#E4F1F2', art: 'corporate'  }
+  corporate:  { accent: '#00666E', lit: '#4FC7D1', tint: '#E4F1F2', art: 'corporate'  }
 };
 
 const svcId = k => SVC_ID[k] || { accent: 'var(--orange-700)', tint: 'var(--paper-alt)', art: null };
@@ -1047,13 +1062,19 @@ function serviceTilesHTML() {
   ].filter(Boolean);
   if (!tiles.length) return '';
 
+  /* One rail behind all seven, drawn once rather than as a border on each
+     tile. It is what makes the row read as a single rack of tools instead
+     of seven loose chips — which is the whole psychological complaint the
+     coloured blocks caused. */
   return `
   <section class="svctiles">
     <div class="wrap svctiles-row">
+      <span class="svctiles-rail" aria-hidden="true"></span>
       ${tiles.map(c => {
         const id = svcId(c.k);
         return `
-        <a class="svctile" href="${c.href}" style="--svc:${id.accent};--svc-tint:${id.tint}">
+        <a class="svctile" href="${c.href}"
+           style="--svc:${id.accent};--svc-lit:${id.lit || id.accent};--svc-tint:${id.tint}">
           <span class="svctile-art" aria-hidden="true">${SVC_ART[id.art] || ICON.star}</span>
           <span class="svctile-txt"><b>${esc(c.t)}</b><i>${esc(c.short)}</i></span>
           <span class="svctile-go" aria-hidden="true">${ICON.arrow}</span>

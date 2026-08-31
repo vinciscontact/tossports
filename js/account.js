@@ -23,97 +23,95 @@
 const ACCOUNT = {
   orders: [], requests: [], profile: null,
   loaded: false, loading: false, tab: 'orders',
-  /* Which face the signed-out gate is showing: 'signin' | 'signup' | 'reset' */
+  /* Which face the signed-out gate is showing: 'signin' | 'signup' */
   mode: 'signin'
 };
 
-/** The signed-in user, or null. Read live — SESSION is replaced on refresh. */
-function acctUser() { return (SESSION && SESSION.user) || null; }
-
-/* ------------------------------------------------------------
-   Arriving back from Google.
-
-   Split in two, and the order matters.
-
-   Google sends the tokens back in the URL fragment — the same
-   place this app keeps its route. If route() ran first it would
-   read '#access_token=…' as a path and show a 404 on the way in
-   from a successful sign-in. So the synchronous half runs BEFORE
-   the first route(): it consumes the fragment, wipes it, and
-   restores the stored session, leaving a clean hash behind.
-
-   The half that needs the network runs after, and re-routes when
-   it lands. Nothing on the page waits for it — the shop renders
-   from bundled data exactly as it does for a signed-out visitor.
-   ------------------------------------------------------------ */
-function accountBootSync() {
-  const arrived = consumeAuthFragment();
-
-  if (arrived === 'error') {
-    /* The fragment carried a refusal rather than a token — a cancelled
-       consent screen, or a redirect URL the project does not allow. */
-    ACCOUNT.authError = lastAuthFragmentError || 'Sign-in did not complete.';
-    takeAuthReturn();
-    location.hash = '#/account';
-    return null;
-  }
-
-  loadSession();
-
-  /* A reset link carries type=recovery and a one-time token that
-     consumeAuthFragment() has just adopted as a session. The customer is
-     signed in at this point, but only so they can set a password — so
-     the gate is put into reset mode and the account page shown, rather
-     than dropping them into their orders with no idea what happened. */
-  if (arrived === 'recovery') {
-    ACCOUNT.mode = 'reset';
-    takeAuthReturn();
-    location.hash = '#/account';
-    return arrived;
-  }
-
-  /* Put them back where they started before the first paint, so the
-     account page is the first thing they see rather than a flash of
-     the home page followed by a jump. */
-  if (arrived) {
-    const back = takeAuthReturn();
-    if (back) location.hash = back;
-  }
-  return arrived;
+/**
+ * The signed-in CUSTOMER, or null.
+ *
+ * Firebase now, not Supabase — FB_USER is kept current by
+ * onIdTokenChanged in firebase-auth.js. Normalised to { id, email,
+ * phone } so nothing downstream has to know which provider signed
+ * them in, or that a Firebase uid is a 28-character string where a
+ * Supabase one was a uuid.
+ *
+ * `phone` stays in the shape even though only email sign-in is
+ * offered: it costs nothing, and it is what would populate if phone
+ * sign-in is ever switched back on.
+ */
+function acctUser() {
+  if (typeof FB_USER === 'undefined' || !FB_USER) return null;
+  return {
+    id:    FB_USER.uid,
+    email: FB_USER.email || '',
+    phone: FB_USER.phoneNumber || ''
+  };
 }
 
-async function accountBootFinish(arrived) {
-  if (!SESSION) return;
+/** What to call them on screen. Phone sign-ins have no email. */
+function acctWho(u) { return (u && (u.email || u.phone)) || 'your account'; }
+
+/* ------------------------------------------------------------
+   Arriving on the page.
+
+   Firebase keeps its own session in IndexedDB and restores it
+   itself, so there is no fragment to consume and no token to pull
+   out of a URL — the Supabase dance that used to live here is
+   simply gone.
+
+   Still split in two, for the same reason as before: the shop must
+   render from bundled data without waiting on anything. The sync
+   half runs before the first route() and does nothing but let the
+   router work; the network half runs after and repaints when it
+   lands.
+   ------------------------------------------------------------ */
+function accountBootSync() {
+  /* Nothing to do synchronously any more. Kept as the seam app.js
+     calls, so the boot order stays explicit and one day another
+     provider can hook in here without touching init(). */
+  return null;
+}
+
+async function accountBootFinish() {
+  if (!fbConfigured()) return;
+
+  let user = null;
+  try {
+    user = await fbReady();          // resolves once Firebase settles
+  } catch (e) {
+    /* The SDK could not load — offline, or blocked. The shop is
+       unaffected; only the account page needs it. */
+    return;
+  }
+  if (!user) { acctHeader(); return; }
 
   /* Before anything else on the page uses the network.
 
-     supaHeaders() sends whatever session exists on EVERY request, so a
-     token left in localStorage from last week would attach itself to the
-     catalogue sync and the leaderboard — public reads that need no token
-     — and 401 them. checkToken() asks the database what it makes of the
-     token we are holding and clears it if the answer is "nothing", which
-     drops those reads back to the publishable key.
-
-     Signed out this costs nothing: the guard above already returned. */
-  const state = await checkToken();
-  if (state === 'rejected' || !SESSION) {
+     supaHeaders() now attaches the Firebase token to EVERY request,
+     so a token Supabase will not trust would 401 the catalogue and
+     the leaderboard too — public reads that need no token at all.
+     checkFirebaseWiring() asks the database what it makes of the
+     token before the rest of the page depends on it. */
+  const state = await checkFirebaseWiring();
+  /* 'anon-role' and 'role-claim' are BOTH working states — see sql/023.
+     Only a genuine refusal stops us. */
+  if (state === 'not-trusted' || state === 'no-grant') {
+    /* Signed in, but the database will not treat them as signed in.
+       Saying so beats an empty order list that looks like they never
+       bought anything — which is exactly how this fails when the role
+       claim is missing, because those requests succeed and return
+       nothing. */
+    ACCOUNT.authError = fbWiringMessage(state);
+    await fbSignOut();
     acctHeader();
     if (currentPage() === 'account') route(true);
     return;
   }
 
-  /* The fragment gives a token but no user, and a stored session may be
-     stale, so confirm with the server rather than trusting either. */
-  if (!SESSION.user) await fetchUser();
-
-  if (arrived) {
-    /* Anything carrying our Google-verified address attaches itself —
-       service requests always, and orders where the customer filled in
-       checkout's optional email. Orders placed without one still need
-       the claim form, which is what it is there for. */
-    try { await supaRpc('link_my_history', {}); } catch (e) { /* not fatal */ }
-  }
-
+  /* No link_my_history() call here: checkFirebaseWiring() just made it
+     as its probe, which is what proved the token works. Calling it twice
+     would be a wasted round trip on every page load. */
   acctHeader();
   if (currentPage() === 'account') route(true);
 }
@@ -125,7 +123,7 @@ function currentPage() {
 
 /** Sign out, drop everything cached about them, and land somewhere sensible. */
 async function acctSignOut() {
-  await signOut();
+  await fbSignOut();
   ACCOUNT.orders = []; ACCOUNT.requests = [];
   ACCOUNT.profile = null; ACCOUNT.loaded = false;
   ACCOUNT.tab = 'orders';
@@ -150,29 +148,95 @@ function acctHeader() {
   btn.innerHTML = ICON.user;
   btn.classList.toggle('on', !!u);
   btn.setAttribute('aria-label', u ? 'Your account' : 'Sign in');
-  btn.title = u ? (u.email || 'Your account') : 'Sign in';
+  btn.title = u ? acctWho(u) : 'Sign in';
 }
 
 /* ============================================================
    THE PAGE
    ============================================================ */
 
+/* ------------------------------------------------------------
+   Signed out, this is an AUTH SCREEN and is laid out like one.
+
+   It used to reuse the service-page header: a 6.5rem display
+   headline reading SIGN IN over a near-empty dark band, with the
+   form floating in white space below it and the password box
+   pushed off the bottom of the screen. That is a marketing
+   layout, and an auth page has the opposite job — one card, one
+   decision, everything visible without scrolling.
+
+   Split in two on desktop. The left panel answers "why would I",
+   which is the only question a sign-in screen has to sell; the
+   right holds the form. On a phone the panel collapses to a
+   single line above the card, because 400px of value proposition
+   in front of the thing somebody came to do is an obstacle.
+
+   Signed IN it is a dashboard, and is laid out like one.
+
+   It used to reuse the marketing header too: YOUR ACCOUNT in
+   display caps over a near-empty navy band, then a 720px column
+   floating in the middle of a 1440px screen with unframed form
+   fields on bare white. Two thirds of the viewport carried
+   nothing, and the largest thing on the page was the customer's
+   own email address — which is the one fact they already know.
+
+   Now the band earns its height: identity on the left, and a row
+   of counts straddling the navy/white seam, so the first thing
+   read is the state of their orders rather than a headline. Below
+   it, a rail of sections on the left and the panel on the right —
+   the shape every account page worth using has, because it shows
+   where you are and what else there is at the same time.
+
+   On a phone the rail becomes the scrolling pill row it always
+   was, since a sidebar on a 375px screen is just a stack.
+   ------------------------------------------------------------ */
 function viewAccount() {
   const u = acctUser();
-  return `
-  <section class="svc-top dark">
+
+  if (u) return `
+  <section class="svc-top dark dash-top">
     <div class="wrap">
       <nav class="crumbs"><a href="#/">Home</a> / <span>Account</span></nav>
-      <p class="eyebrow">${u ? 'Signed in' : 'Your orders'}</p>
-      <h1 class="d1">${u ? 'Your account' : 'Sign in'}</h1>
-      <p class="lede">${u
-        ? 'Everything you have ordered, and the details that make the next one quicker.'
-        : 'Sign in to keep your orders, addresses and repairs in one place. You never needed an account to buy — and you still do not.'}</p>
+      <div class="dash-id">
+        <span class="dash-av" aria-hidden="true">${esc(acctInitial(u))}</span>
+        <div class="dash-idm">
+          <p class="eyebrow">Signed in as</p>
+          <b class="dash-mail">${esc(acctWho(u))}</b>
+        </div>
+        <button class="btn btn-ghost sm dash-out" id="acctOut" type="button">Sign out</button>
+      </div>
+      <div class="dash-stats" id="acctStats">${acctStatsHTML()}</div>
     </div>
   </section>
-  <section class="sec">
-    <div class="wrap svc-wrap" id="acctRoot">
-      ${u ? acctShellHTML(u) : acctGateHTML()}
+  <section class="sec dash-body">
+    <div class="wrap dash-grid" id="acctRoot">${acctShellHTML(u)}</div>
+  </section>`;
+
+  return `
+  <section class="auth">
+    <div class="auth-grid">
+
+      <aside class="auth-side">
+        <a class="auth-back" href="#/">${ICON.arrow} Back to the shop</a>
+        <p class="eyebrow">Your orders</p>
+        <h1 class="d2">Everything you have<span class="hl-2">bought, in one place.</span></h1>
+        <ul class="auth-points">
+          <li>${ICON.truck}<div><b>Track every order</b>
+            <span>Status, courier and tracking number as it moves</span></div></li>
+          <li>${ICON.cart}<div><b>Reorder in one tap</b>
+            <span>Your last bag, refilled from today's catalogue</span></div></li>
+          <li>${ICON.hammer}<div><b>Repairs and requests</b>
+            <span>Bat Doctor jobs and quotes, kept with your orders</span></div></li>
+        </ul>
+        <p class="hv-proof">36.9K on Instagram · 4M reel reach · played by 170-player clubs</p>
+      </aside>
+
+      <div class="auth-col">
+        <div class="auth-card" id="acctRoot">${acctGateHTML()}</div>
+        <p class="auth-alt">Just finding an order?
+          <a href="#/track">Track it without an account ${ICON.arrow}</a></p>
+      </div>
+
     </div>
   </section>`;
 }
@@ -183,40 +247,25 @@ function acctGateHTML() {
   const err = ACCOUNT.authError;
   ACCOUNT.authError = null;                     // shown once, not on every render
 
-  /* Arriving from a reset email. consumeAuthFragment() has already adopted
-     the one-time token as a session, so this screen only has to set the
-     new password — the customer is technically signed in the whole time,
-     which is why it is shown here rather than behind the sign-in form. */
-  if (ACCOUNT.mode === 'reset') return `
+  /* Nothing is configured yet — say so and offer the route that still
+     works, rather than showing a form whose buttons cannot do anything. */
+  if (!fbConfigured()) return `
     <div class="acct-gate">
-      <h2 class="acct-h3" style="margin-top:0">Choose a new password</h2>
-      <form class="acct-form" id="acctReset" novalidate>
-        <div class="svc-f">
-          <label for="rsPw">New password</label>
-          <input id="rsPw" type="password" autocomplete="new-password" minlength="8">
-        </div>
-        <div class="svc-f">
-          <label for="rsPw2">Again</label>
-          <input id="rsPw2" type="password" autocomplete="new-password" minlength="8">
-        </div>
-        <button class="btn btn-primary btn-block" type="submit">Save password</button>
-        <p class="svc-stat" id="rsStat" role="status"></p>
-      </form>
+      <p class="svc-stat bad">Sign-in is not switched on yet.</p>
+      <p class="acct-gate-note">Accounts are being set up. In the meantime you
+        do not need one to find an order.</p>
+      <div class="acct-gate-alt">
+        <a href="#/track" class="link-arrow">Track an order ${ICON.arrow}</a>
+      </div>
     </div>`;
 
   const signup = ACCOUNT.mode === 'signup';
+
   return `
   <div class="acct-gate">
+    <h2 class="auth-h">${signup ? 'Create your account' : 'Sign in'}</h2>
     ${err ? `<p class="svc-stat bad">${esc(err)}</p>` : ''}
 
-    <button class="btn btn-google" id="acctGoogle" type="button">
-      ${ICON.google} Continue with Google
-    </button>
-    <p class="acct-gate-note">
-      One tap, no password to remember. We only ever see your name and email.
-    </p>
-
-    <div class="acct-or"><span>or</span></div>
 
     <form class="acct-form" id="acctPw" novalidate>
       <div class="svc-f">
@@ -229,7 +278,7 @@ function acctGateHTML() {
                autocomplete="${signup ? 'new-password' : 'current-password'}"
                placeholder="${signup ? 'At least 8 characters' : ''}">
       </div>
-      <button class="btn btn-dark btn-block" type="submit">
+      <button class="btn btn-primary btn-block" type="submit">
         ${signup ? 'Create account' : 'Sign in'}
       </button>
       <p class="svc-stat" id="pwStat" role="status"></p>
@@ -243,45 +292,134 @@ function acctGateHTML() {
         Forgot your password?</button>`}
     </div>
 
-    <div class="acct-gate-alt">
-      <p><b>Just want to find an order?</b></p>
-      <p>You do not need an account for that — the order number and the phone
-         you ordered with is enough.</p>
-      <a href="#/track" class="link-arrow">Track an order ${ICON.arrow}</a>
-    </div>
   </div>`;
 }
 
 /* ---------------- signed in ---------------- */
 
-function acctShellHTML(u) {
-  const tabs = [
-    ['orders',   'Orders'],
-    ['requests', 'Repairs & requests'],
-    ['profile',  'Details']
+/** The letter in the avatar disc. Their email's first character, upper-cased. */
+function acctInitial(u) {
+  const s = String((u && (u.email || u.phone)) || '').trim();
+  const c = s.replace(/[^a-z0-9]/i, '').charAt(0);
+  return (c || '?').toUpperCase();
+}
+
+/**
+ * "With us since". Firebase records when the account was created and hands
+ * it over with the user, so this costs no request and no extra column.
+ */
+function acctSince() {
+  try {
+    const t = FB_USER && FB_USER.metadata && FB_USER.metadata.creationTime;
+    if (!t) return '';
+    const d = new Date(t);
+    return isNaN(d) ? '' : d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  } catch (e) { return ''; }
+}
+
+/* ------------------------------------------------------------
+   The counts across the seam of the navy band.
+
+   Only ever a summary of what has ALREADY been loaded — nothing
+   here makes a request of its own. Until the load lands they read
+   an em dash rather than a confident zero, because "0 orders" and
+   "not asked yet" are different things and only one of them is
+   worth telling somebody who has bought from us.
+   ------------------------------------------------------------ */
+const REQ_OPEN = s => ['done', 'declined', 'closed', 'cancelled'].indexOf(String(s)) < 0;
+const ORDER_MOVING = s => ['delivered', 'cancelled', 'refunded'].indexOf(String(s)) < 0;
+
+function acctStatsHTML() {
+  const ready = ACCOUNT.loaded && !ACCOUNT.loading;
+  const n = v => ready ? String(v) : '—';
+  const since = acctSince();
+
+  const stats = [
+    [n(ACCOUNT.orders.length),                                  'Orders placed'],
+    [n(ACCOUNT.orders.filter(o => ORDER_MOVING(o.status)).length), 'On the way'],
+    [n(ACCOUNT.requests.filter(r => REQ_OPEN(r.status)).length),   'Open requests'],
+    [since || '—',                                              'With us since']
   ];
-  /* Plain buttons with aria-pressed rather than role="tab". A real
-     tablist promises arrow-key navigation between the tabs, and
-     announcing a contract this does not implement is worse for a
-     screen-reader user than not claiming it. */
+
+  return stats.map(([val, label]) => `
+    <div class="dash-stat">
+      <b class="num">${esc(val)}</b>
+      <span>${label}</span>
+    </div>`).join('');
+}
+
+/* ------------------------------------------------------------
+   The rail.
+
+   Plain buttons with aria-pressed rather than role="tab". A real
+   tablist promises arrow-key navigation between the tabs, and
+   announcing a contract this does not implement is worse for a
+   screen-reader user than not claiming it.
+
+   Rendered on its own so the counts can be refreshed when the
+   load lands, without rebuilding the panel beside it.
+   ------------------------------------------------------------ */
+const ACCT_TABS = [
+  ['orders',   'Orders',             'cart',   () => ACCOUNT.orders.length],
+  ['requests', 'Repairs & requests', 'hammer', () => ACCOUNT.requests.length],
+  ['profile',  'Details',            'user',   () => 0]
+];
+
+function acctNavHTML() {
+  const ready = ACCOUNT.loaded && !ACCOUNT.loading;
+  return ACCT_TABS.map(([k, label, icon, count]) => {
+    const c = ready ? count() : 0;
+    return `
+      <button class="dash-navb${ACCOUNT.tab === k ? ' on' : ''}" type="button"
+              aria-pressed="${ACCOUNT.tab === k}" data-tab="${k}">
+        <span class="dash-navi">${ICON[icon] || ''}</span>
+        <span class="dash-navl">${label}</span>
+        ${c ? `<span class="dash-navc num">${c}</span>` : ''}
+      </button>`;
+  }).join('');
+}
+
+function acctShellHTML(u) {
+  const wa = String((typeof TOSS_LINKS !== 'undefined' && TOSS_LINKS.whatsapp) || '');
   return `
-  <div class="acct-head">
-    <div>
-      <p class="eyebrow">Signed in as</p>
-      <b class="acct-who">${esc(u.email || 'your account')}</b>
+  <aside class="dash-rail">
+    <nav class="dash-nav" id="acctNav" aria-label="Account sections">${acctNavHTML()}</nav>
+    <div class="dash-help">
+      <p class="eyebrow">Need a hand?</p>
+      <a class="link-arrow" href="#/track">Track an order ${ICON.arrow}</a>
+      ${wa ? `<a class="link-arrow" target="_blank" rel="noopener"
+        href="https://wa.me/${esc(wa)}">WhatsApp us ${ICON.arrow}</a>` : ''}
+      <p class="dash-help-n">Both work without signing in — the account just
+        keeps it all in one place.</p>
     </div>
-    <button class="btn btn-ghost sm" id="acctOut" type="button">Sign out</button>
-  </div>
-  <div class="acct-tabs">
-    ${tabs.map(([k, label]) => `
-      <button class="acct-tab${ACCOUNT.tab === k ? ' on' : ''}" type="button"
-              aria-pressed="${ACCOUNT.tab === k}" data-tab="${k}">${label}</button>`).join('')}
-  </div>
-  <div id="acctBody" aria-live="polite">${acctBodyHTML()}</div>`;
+  </aside>
+  <div class="dash-main" id="acctBody" aria-live="polite">${acctBodyHTML()}</div>`;
+}
+
+/** The heading every panel opens with, so the rail is never the only label. */
+function dashHead(title, sub) {
+  return `<header class="dash-h">
+    <h2 class="dash-h2">${title}</h2>
+    <p class="dash-sub">${sub}</p>
+  </header>`;
+}
+
+/**
+ * An empty state that looks deliberate rather than broken: the section's
+ * own icon, one sentence saying what will land here, and the one action
+ * worth taking instead.
+ */
+function dashEmpty(icon, title, body, cta) {
+  return `<div class="dash-empty">
+    <span class="dash-empty-i">${ICON[icon] || ''}</span>
+    <b>${title}</b>
+    <p>${body}</p>
+    ${cta || ''}
+  </div>`;
 }
 
 function acctBodyHTML() {
-  if (ACCOUNT.loading) return `<p class="svc-stat">Loading…</p>`;
+  if (ACCOUNT.loading) return `<div class="dash-load"><span></span><span></span><span></span></div>`;
   if (ACCOUNT.error)   return `<p class="svc-stat bad">${esc(ACCOUNT.error)}</p>`;
   if (ACCOUNT.tab === 'requests') return acctRequestsHTML();
   if (ACCOUNT.tab === 'profile')  return acctProfileHTML();
@@ -293,12 +431,13 @@ function acctBodyHTML() {
 function acctOrdersHTML() {
   const list = ACCOUNT.orders;
   return `
-  ${list.length ? list.map(acctOrderHTML).join('') : `
-    <div class="acct-empty">
-      <p><b>No orders on this account yet.</b></p>
-      <p>If you have ordered before — over WhatsApp, or without signing in —
-         claim it below and it will appear here.</p>
-    </div>`}
+  ${dashHead('Orders', list.length
+    ? 'Every bat, ball and jersey you have bought from us, newest first.'
+    : 'Everything you buy from us lands here, with its delivery.')}
+  ${list.length ? list.map(acctOrderHTML).join('') : dashEmpty(
+    'cart', 'No orders on this account yet.',
+    'If you have ordered before — over WhatsApp, or without signing in — claim ' +
+    'it below and it will appear here.')}
   ${acctClaimHTML()}`;
 }
 
@@ -366,26 +505,31 @@ function acctOrderHTML(o) {
    ------------------------------------------------------------ */
 function acctClaimHTML() {
   return `
-  <form class="svc-form acct-claim" id="acctClaim" novalidate>
-    <h3 class="acct-h3">Ordered before?</h3>
-    <p class="acct-note">Bought from us over WhatsApp, or without signing in?
-      Enter one order number and the phone you used, and every order on that
-      number joins this account.</p>
-    <div class="svc-grid">
-      <div class="svc-f">
-        <label for="clId">Order number</label>
-        <input id="clId" type="text" placeholder="TOSS-1234" autocomplete="off">
+  <section class="dash-card acct-claim">
+    <header class="dash-ch">
+      <h3>Ordered before?</h3>
+      <span class="dash-cn">One-time link</span>
+    </header>
+    <form class="svc-form" id="acctClaim" novalidate>
+      <p class="acct-note">Bought from us over WhatsApp, or without signing in?
+        Enter one order number and the phone you used, and every order on that
+        number joins this account.</p>
+      <div class="svc-grid">
+        <div class="svc-f">
+          <label for="clId">Order number</label>
+          <input id="clId" type="text" placeholder="TOSS-1234" autocomplete="off">
+        </div>
+        <div class="svc-f">
+          <label for="clPh">Phone used to order</label>
+          <input id="clPh" type="tel" inputmode="numeric" placeholder="10 digits">
+        </div>
       </div>
-      <div class="svc-f">
-        <label for="clPh">Phone used to order</label>
-        <input id="clPh" type="tel" inputmode="numeric" placeholder="10 digits">
+      <div class="svc-actions">
+        <button class="btn btn-primary" type="submit">Find my orders</button>
       </div>
-    </div>
-    <div class="svc-actions">
-      <button class="btn btn-primary" type="submit">Find my orders</button>
-    </div>
-    <p class="svc-stat" id="clStat" role="status"></p>
-  </form>`;
+      <p class="svc-stat" id="clStat" role="status"></p>
+    </form>
+  </section>`;
 }
 
 /* ---------------- requests ---------------- */
@@ -398,15 +542,16 @@ const REQ_KIND = {
 };
 
 function acctRequestsHTML() {
-  if (!ACCOUNT.requests.length) return `
-    <div class="acct-empty">
-      <p><b>Nothing here yet.</b></p>
-      <p>Repairs, custom bats, trade-ins and wholesale enquiries you send us
-         will show up here with whatever we have quoted.</p>
-      <a href="#/service/bat-doctor" class="link-arrow">See what we can do ${ICON.arrow}</a>
-    </div>`;
+  const head = dashHead('Repairs &amp; requests',
+    'Bat Doctor jobs, custom builds, trade-ins and enquiries — with what we quoted.');
 
-  return ACCOUNT.requests.map(r => `
+  if (!ACCOUNT.requests.length) return head + dashEmpty(
+    'hammer', 'Nothing here yet.',
+    'Repairs, custom bats, trade-ins and wholesale enquiries you send us will ' +
+    'show up here with whatever we have quoted.',
+    `<a href="#/service/bat-doctor" class="link-arrow">See what we can do ${ICON.arrow}</a>`);
+
+  return head + ACCOUNT.requests.map(r => `
     <article class="acct-req">
       <header class="acct-order-top">
         <div>
@@ -425,70 +570,95 @@ function acctRequestsHTML() {
 
 function acctProfileHTML() {
   const p = ACCOUNT.profile || {};
+  const u = acctUser() || {};
   const addrs = Array.isArray(p.addresses) ? p.addresses : [];
+
   return `
-  <form class="svc-form" id="acctProfile" novalidate>
-    <h3 class="acct-h3">Your details</h3>
-    <p class="acct-note">Filled in for you at checkout, so you type it once
-      rather than every time.</p>
-    <div class="svc-grid">
-      <div class="svc-f">
-        <label for="pfName">Name</label>
-        <input id="pfName" type="text" value="${esc(p.name || '')}" autocomplete="name">
-      </div>
-      <div class="svc-f">
-        <label for="pfPhone">Phone</label>
-        <input id="pfPhone" type="tel" inputmode="numeric" value="${esc(p.phone || '')}"
-               autocomplete="tel" placeholder="10 digits">
-      </div>
-    </div>
-    <div class="svc-actions">
-      <button class="btn btn-primary" type="submit">Save</button>
-    </div>
-    <p class="svc-stat" id="pfStat" role="status"></p>
-  </form>
+  ${dashHead('Details', 'Typed once here, filled in for you at every checkout.')}
 
-  <h3 class="acct-h3">Delivery addresses</h3>
-  ${addrs.length ? `<ul class="acct-addrs">${addrs.map((a, i) => `
-    <li>
+  <section class="dash-card">
+    <header class="dash-ch"><h3>Who you are</h3></header>
+
+    <!-- Read-only on purpose: the email IS the account. Changing it is a
+         Firebase re-authentication flow, not a text box, and offering a
+         box that silently does not move the account would be a lie. -->
+    <div class="dash-ro">
       <div>
-        <b>${esc(a.label || a.city || 'Address')}</b>
-        <span>${esc([a.address, a.city, a.state, a.pin].filter(Boolean).join(', '))}</span>
+        <span>Email</span>
+        <b>${esc(u.email || '—')}</b>
       </div>
-      <button class="btn btn-ghost sm" data-addr-del="${i}" type="button">Remove</button>
-    </li>`).join('')}</ul>`
-    : `<p class="acct-note">No saved addresses yet.</p>`}
+      <span class="dash-ro-tag">${ICON.shield} Verified sign-in</span>
+    </div>
 
-  <form class="svc-form acct-addr-new" id="acctAddr" novalidate>
-    <div class="svc-grid">
-      <div class="svc-f">
-        <label for="adLabel">Label</label>
-        <input id="adLabel" type="text" placeholder="Home, ground, office">
+    <form class="svc-form" id="acctProfile" novalidate>
+      <div class="svc-grid">
+        <div class="svc-f">
+          <label for="pfName">Name</label>
+          <input id="pfName" type="text" value="${esc(p.name || '')}" autocomplete="name"
+                 placeholder="As it should read on the parcel">
+        </div>
+        <div class="svc-f">
+          <label for="pfPhone">Phone</label>
+          <input id="pfPhone" type="tel" inputmode="numeric" value="${esc(p.phone || '')}"
+                 autocomplete="tel" placeholder="10 digits">
+        </div>
+      </div>
+      <div class="svc-actions">
+        <button class="btn btn-primary" type="submit">Save details</button>
+        <p class="svc-stat" id="pfStat" role="status"></p>
+      </div>
+    </form>
+  </section>
+
+  <section class="dash-card">
+    <header class="dash-ch">
+      <h3>Delivery addresses</h3>
+      ${addrs.length ? `<span class="dash-cn num">${addrs.length} saved</span>` : ''}
+    </header>
+
+    ${addrs.length ? `<ul class="acct-addrs">${addrs.map((a, i) => `
+      <li>
+        <div>
+          <b>${esc(a.label || a.city || 'Address')}</b>
+          <span>${esc([a.address, a.city, a.state, a.pin].filter(Boolean).join(', '))}</span>
+        </div>
+        <button class="btn btn-ghost sm" data-addr-del="${i}" type="button">Remove</button>
+      </li>`).join('')}</ul>`
+      : `<p class="acct-note">No saved addresses yet. Add one and checkout fills
+           itself in next time.</p>`}
+
+    <form class="svc-form acct-addr-new" id="acctAddr" novalidate>
+      <p class="dash-sh">Add an address</p>
+      <div class="svc-grid">
+        <div class="svc-f">
+          <label for="adLabel">Label</label>
+          <input id="adLabel" type="text" placeholder="Home, ground, office">
+        </div>
+        <div class="svc-f">
+          <label for="adPin">PIN code</label>
+          <input id="adPin" type="text" inputmode="numeric" placeholder="600001">
+        </div>
       </div>
       <div class="svc-f">
-        <label for="adPin">PIN code</label>
-        <input id="adPin" type="text" inputmode="numeric" placeholder="600001">
+        <label for="adAddr">Address</label>
+        <input id="adAddr" type="text" placeholder="Door number, street, area">
       </div>
-    </div>
-    <div class="svc-f">
-      <label for="adAddr">Address</label>
-      <input id="adAddr" type="text" placeholder="Door number, street, area">
-    </div>
-    <div class="svc-grid">
-      <div class="svc-f">
-        <label for="adCity">City</label>
-        <input id="adCity" type="text">
+      <div class="svc-grid">
+        <div class="svc-f">
+          <label for="adCity">City</label>
+          <input id="adCity" type="text" placeholder="Chennai">
+        </div>
+        <div class="svc-f">
+          <label for="adState">State</label>
+          <input id="adState" type="text" placeholder="Tamil Nadu">
+        </div>
       </div>
-      <div class="svc-f">
-        <label for="adState">State</label>
-        <input id="adState" type="text">
+      <div class="svc-actions">
+        <button class="btn btn-ghost" type="submit">Add address</button>
+        <p class="svc-stat" id="adStat" role="status"></p>
       </div>
-    </div>
-    <div class="svc-actions">
-      <button class="btn btn-ghost" type="submit">Add address</button>
-    </div>
-    <p class="svc-stat" id="adStat" role="status"></p>
-  </form>`;
+    </form>
+  </section>`;
 }
 
 /* ============================================================
@@ -499,40 +669,95 @@ function wireAccount() {
   const root = $('#acctRoot');
   if (!root) return;
 
-  const gBtn = $('#acctGoogle');
-  if (gBtn) gBtn.onclick = () => signInWithGoogle('#/account');
-
   wireGate();
 
   const out = $('#acctOut');
   if (out) out.onclick = acctSignOut;
 
-  /* Repaint just the panel rather than re-routing: the tabs are a view
-     of data already in hand, and a full route() would scroll the page. */
-  $$('.acct-tab').forEach(b => b.onclick = () => {
-    ACCOUNT.tab = b.dataset.tab;
-    $$('.acct-tab').forEach(x => {
-      const on = x.dataset.tab === ACCOUNT.tab;
-      x.classList.toggle('on', on);
-      x.setAttribute('aria-pressed', String(on));
-    });
-    paintAccountBody();
-  });
+  wireAccountNav();
 
   if (acctUser() && !ACCOUNT.loaded && !ACCOUNT.loading) loadAccount();
 
   wireAccountBody();
 }
 
+/* Re-run whenever the rail is rebuilt, because refreshing the counts
+   replaces the buttons these handlers were attached to. */
+function wireAccountNav() {
+  /* Repaint just the panel rather than re-routing: the sections are a view
+     of data already in hand, and a full route() would scroll the page. */
+  $$('.dash-navb').forEach(b => b.onclick = () => {
+    ACCOUNT.tab = b.dataset.tab;
+    $$('.dash-navb').forEach(x => {
+      const on = x.dataset.tab === ACCOUNT.tab;
+      x.classList.toggle('on', on);
+      x.setAttribute('aria-pressed', String(on));
+    });
+    paintAccountBody();
+  });
+}
+
 /* ------------------------------------------------------------
    Email and password.
 
-   Everything here leans on config.js, which already carried the
-   whole Supabase auth surface for the Maze Room — signIn, signUp,
-   requestPasswordReset, updatePassword. None of this is new
-   machinery; it simply was never offered to customers.
+   All of it goes through js/firebase-auth.js. Firebase sends its
+   own verification and reset mail, so unlike the Supabase version
+   this path needs no SMTP provider at all.
    ------------------------------------------------------------ */
 const looksLikeEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(s || ''));
+
+/* ------------------------------------------------------------
+   The step after any successful Firebase sign-in.
+
+   Firebase has proved who they are. Whether the DATABASE agrees
+   is a separate question, and the one this codebase has been
+   caught by before: if Supabase was never told to trust Firebase,
+   it rejects the token and answers 401 to everything, leaving a
+   signed-in screen where nothing loads and nothing saves.
+
+   So the wiring is checked before anything is promised. A failure
+   here is a setup problem, not a customer problem, and it says so
+   rather than showing an empty order list as though they had
+   never bought anything.
+   ------------------------------------------------------------ */
+/* Both of these are setup problems, not customer problems, and they look
+   identical from the outside — a signed-in screen with nothing in it. The
+   messages differ because the fix differs. */
+function fbWiringMessage(state) {
+  if (state === 'no-grant') {
+    return 'Signed in, but the database is refusing to read your orders. ' +
+           'sql/023-no-role-claim-needed.sql has not been run. ' +
+           'Nothing is wrong with your account.';
+  }
+  return 'Signed in, but this site cannot read your orders yet — Firebase is ' +
+         'not registered with the database. Nothing is wrong with your account.';
+}
+
+async function afterFirebaseSignIn() {
+  const state = await checkFirebaseWiring();
+
+  if (state === 'not-trusted' || state === 'no-grant') {
+    await fbSignOut();
+    ACCOUNT.authError = fbWiringMessage(state);
+    acctHeader(); route(true);
+    return false;
+  }
+  if (state === 'offline') {
+    ACCOUNT.authError = 'Signed in, but the connection dropped. Try again shortly.';
+    acctHeader(); route(true);
+    return false;
+  }
+
+  /* Verified phone and verified email both link history server-side —
+     for a phone sign-in that means every past order on that number is
+     simply there, with no claim form. See sql/022. */
+  try { await supaRpc('link_my_history', {}); } catch (e) { /* not fatal */ }
+
+  ACCOUNT.loaded = false;
+  acctHeader();
+  route(true);
+  return true;
+}
 
 function wireGate() {
   const toggle = $('#acctToggle');
@@ -553,7 +778,7 @@ function wireGate() {
     }
     stat.className = 'svc-stat';
     stat.textContent = 'Sending…';
-    await requestPasswordReset(email);
+    await fbResetEmail(email);
     /* The same answer whether or not that address has an account. Saying
        "no such user" would turn this box into a way of asking the site
        who its customers are. */
@@ -579,56 +804,21 @@ function wireGate() {
     stat.className = 'svc-stat';
     stat.textContent = ACCOUNT.mode === 'signup' ? 'Creating your account…' : 'Signing in…';
     try {
-      if (ACCOUNT.mode === 'signup') {
-        const r = await signUp(email, pass);
-        if (r.needsConfirm) {
-          stat.className = 'svc-stat good';
-          stat.textContent = 'Account created. Check your email for the confirmation link.';
-          return;
-        }
-      } else {
-        await signIn(email, pass);
-      }
+      /* Firebase, not Supabase. It sends its own verification and reset
+         mail, which is why this path needs no SMTP provider at all. */
+      if (ACCOUNT.mode === 'signup') await fbSignUpEmail(email, pass);
+      else                           await fbSignInEmail(email, pass);
       ACCOUNT.mode = 'signin';
-      await accountBootFinish(true);      // links any history, then repaints
-      acctHeader();
-      route(true);
+      await afterFirebaseSignIn();
     } catch (err) {
       stat.className = 'svc-stat bad';
-      /* Supabase answers "Invalid login credentials" for both a wrong
-         password and an address with no account — deliberately. This
-         keeps that property rather than helpfully leaking which it was. */
-      stat.textContent = /invalid login/i.test(err.message || '')
-        ? 'That email and password do not match an account.'
-        : (err.message || 'Could not sign you in just now.');
+      /* fbError() has already turned the code into a sentence, and keeps
+         wrong-password and no-such-account saying the same thing so the
+         form cannot be used to ask who has an account here. */
+      stat.textContent = err.message || 'Could not sign you in just now.';
     }
   };
 
-  const reset = $('#acctReset');
-  if (reset) reset.onsubmit = async e => {
-    e.preventDefault();
-    const stat = $('#rsStat');
-    const a = $('#rsPw').value || '', b = $('#rsPw2').value || '';
-    if (a.length < 8) {
-      stat.className = 'svc-stat bad';
-      stat.textContent = 'Passwords need at least 8 characters.'; return;
-    }
-    if (a !== b) {
-      stat.className = 'svc-stat bad'; stat.textContent = 'Those two do not match.'; return;
-    }
-    stat.className = 'svc-stat'; stat.textContent = 'Saving…';
-    try {
-      await updatePassword(a);
-      ACCOUNT.mode = 'signin';
-      toast('Password saved');
-      await accountBootFinish(true);
-      acctHeader();
-      route(true);
-    } catch (err) {
-      stat.className = 'svc-stat bad';
-      stat.textContent = err.message || 'Could not save that password.';
-    }
-  };
 }
 
 /* Re-run after every body repaint, because innerHTML replaces the
@@ -654,6 +844,23 @@ function paintAccountBody() {
   if (!body) return;
   body.innerHTML = acctBodyHTML();
   wireAccountBody();
+  paintAccountChrome();
+}
+
+/* ------------------------------------------------------------
+   The counts, everywhere they appear.
+
+   The stats strip sits in the navy band and the rail sits beside
+   the panel, so neither is inside #acctBody — without this they
+   would still read "—" and "no badge" after the orders had
+   arrived and were visible two inches away.
+   ------------------------------------------------------------ */
+function paintAccountChrome() {
+  const stats = $('#acctStats');
+  if (stats) stats.innerHTML = acctStatsHTML();
+
+  const nav = $('#acctNav');
+  if (nav) { nav.innerHTML = acctNavHTML(); wireAccountNav(); }
 }
 
 /* ------------------------------------------------------------
@@ -664,6 +871,20 @@ function paintAccountBody() {
    whole page. Someone whose profile row does not exist yet still
    gets their orders.
    ------------------------------------------------------------ */
+async function acctRead(uid) {
+  const [orders, reqs, prof] = await Promise.allSettled([
+    supa(`orders?user_id=eq.${uid}&order=created_at.desc&limit=100`),
+    supa(`requests?user_id=eq.${uid}&order=created_at.desc&limit=50`),
+    supa(`customer_profiles?user_id=eq.${uid}&limit=1`)
+  ]);
+  return {
+    orders:   orders.status === 'fulfilled' ? (orders.value || []) : [],
+    requests: reqs.status   === 'fulfilled' ? (reqs.value   || []) : [],
+    profile:  prof.status   === 'fulfilled' ? ((prof.value || [])[0] || null) : null,
+    dead:     orders.status === 'rejected' && reqs.status === 'rejected'
+  };
+}
+
 async function loadAccount() {
   const u = acctUser();
   if (!u) return;
@@ -672,17 +893,37 @@ async function loadAccount() {
   paintAccountBody();
 
   const uid = encodeURIComponent(u.id);
-  const [orders, reqs, prof] = await Promise.allSettled([
-    supa(`orders?user_id=eq.${uid}&order=created_at.desc&limit=100`),
-    supa(`requests?user_id=eq.${uid}&order=created_at.desc&limit=50`),
-    supa(`customer_profiles?user_id=eq.${uid}&limit=1`)
-  ]);
+  let r = await acctRead(uid);
 
-  ACCOUNT.orders   = orders.status === 'fulfilled' ? (orders.value || []) : [];
-  ACCOUNT.requests = reqs.status   === 'fulfilled' ? (reqs.value   || []) : [];
-  ACCOUNT.profile  = prof.status   === 'fulfilled' ? ((prof.value || [])[0] || null) : null;
+  /* ------------------------------------------------------------
+     Nothing came back. Before believing it, ask the database to
+     re-link.
 
-  if (orders.status === 'rejected' && reqs.status === 'rejected') {
+     An order is stamped with the buyer's uid by a trigger, which
+     only fires if they were signed in AT THE MOMENT of checkout.
+     Anything bought as a guest — the WhatsApp hand-off included —
+     lands with user_id null, and link_my_history() is what adopts
+     it afterwards by matching the verified email on the token
+     against the email on the order.
+
+     That runs at sign-in and at page load, so it misses exactly
+     the case somebody notices: order placed, Account opened, and
+     the order is not there. Running it once when the list comes
+     back empty costs one request in the only situation where it
+     could possibly help, and none at all for a customer who
+     already has orders.
+     ------------------------------------------------------------ */
+  if (!r.dead && !r.orders.length && !r.requests.length) {
+    let linked = 0;
+    try { linked = Number(await supaRpc('link_my_history', {})) || 0; }
+    catch (e) { /* the empty list stands */ }
+    if (linked > 0) r = await acctRead(uid);
+  }
+
+  ACCOUNT.orders   = r.orders;
+  ACCOUNT.requests = r.requests;
+  ACCOUNT.profile  = r.profile;
+  if (r.dead) {
     ACCOUNT.error = 'Could not reach your account just now. Try again in a moment.';
   }
 

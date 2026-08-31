@@ -24,7 +24,7 @@ try { cart = JSON.parse(localStorage.getItem('toss_cart') || '[]'); } catch (e) 
 const saveCart = () => localStorage.setItem('toss_cart', JSON.stringify(cart));
 
 let filters = { wood: [], profile: [], ball: [], tier: [], division: [],
-                style: [], weight: [], sort: 'pop', cat: 'bats' };
+                style: [], weight: [], sort: 'pop', cat: 'bats', q: '' };
 
 /* Who a bat is for, as tagged in the Maze Room. A bat carries several, so
    these read from the join the sync built rather than a field on the product. */
@@ -259,6 +259,33 @@ function division(p) {
 }
 
 function filtered() {
+  /* ------------------------------------------------------------
+     A text query from the search panel's "See all N products".
+
+     It runs ACROSS categories, because the query is what the person
+     asked for and the category tab is only a default — searching
+     "tennis ball" and being shown nothing because the Bats tab was
+     selected would be the search failing, not the filter working.
+
+     Scored by the same function the panel uses, so the order here
+     and the order there agree. Falls back to a plain substring if
+     search.js somehow is not loaded, rather than dropping the
+     query on the floor.
+     ------------------------------------------------------------ */
+  if (filters.q) {
+    const scored = typeof sScore === 'function' && typeof sWords === 'function';
+    if (scored) {
+      const tokens = sWords(filters.q);
+      return PRODUCTS
+        .map(p => ({ p, s: sScore(prodEntry(p), tokens) }))
+        .filter(x => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .map(x => x.p);
+    }
+    const needle = filters.q.toLowerCase();
+    return PRODUCTS.filter(p => String(p.name).toLowerCase().includes(needle));
+  }
+
   let list = PRODUCTS.filter(p => prodCat(p) === filters.cat);
   /* the spec filters describe bats — other categories are a plain grid */
   if (filters.cat === 'bats') list = list.filter(p =>
@@ -285,6 +312,11 @@ function filtered() {
 }
 function activeChips() {
   const out = [];
+  /* First, and labelled, because it is the strongest narrowing on the page
+     and the only one the person typed rather than clicked. Removing it has
+     to be as obvious as removing a filter chip, or a search lands on the
+     shop with no visible way back to the whole catalogue. */
+  if (filters.q) out.push({ g: 'q', v: filters.q, l: '“' + filters.q + '”' });
   filters.wood.forEach(v => out.push({ g: 'wood', v, l: WOOD[v].short }));
   filters.profile.forEach(v => out.push({ g: 'profile', v, l: PROFILE[v].label }));
   filters.ball.forEach(v => out.push({ g: 'ball', v, l: BALL_LABEL[v] }));
@@ -301,6 +333,7 @@ const FKEYS = ['wood', 'profile', 'ball', 'tier', 'division', 'style', 'weight']
 
 function shopURL() {
   const q = [];
+  if (filters.q) q.push('q=' + encodeURIComponent(filters.q));
   if (filters.cat !== 'bats') q.push('cat=' + filters.cat);
   FKEYS.forEach(k => { if (filters[k].length) q.push(k + '=' + filters[k].join(',')); });
   if (filters.sort !== 'pop') q.push('sort=' + filters.sort);
@@ -310,12 +343,16 @@ function applyShopQuery(q) {
   filters.cat = q.cat || 'bats';
   FKEYS.forEach(k => { filters[k] = q[k] ? q[k].split(',').filter(Boolean) : []; });
   filters.sort = q.sort || 'pop';
+  filters.q = q.q || '';
 }
 function pushFilters() {
   try { history.replaceState(null, '', shopURL()); } catch (e) { /* file:// fallback */ }
   route(true);
 }
 function toggleFilter(g, v) {
+  /* The query chip is a string, not one of a list — removing it clears it
+     rather than splicing it out of an array that does not exist. */
+  if (g === 'q') { filters.q = ''; pushFilters(); return; }
   const a = filters[g];
   const i = a.indexOf(v);
   if (i > -1) a.splice(i, 1); else a.push(v);
@@ -323,6 +360,7 @@ function toggleFilter(g, v) {
 }
 function clearFilters() {
   FKEYS.forEach(k => { filters[k] = []; });
+  filters.q = '';
   pushFilters();
 }
 
@@ -745,17 +783,36 @@ function viewHome() {
      Lazy-loading the thing the visitor is already looking at delays the
      one paint the score is measured on; loading all four eagerly costs
      three images nobody has asked for yet. */
+  /* `w` is the TRUE pixel width of each cut file, measured off disk.
+
+     These used to be written as a flat "sm 400w, md 800w" for every shot,
+     and none of it was true — the small Power X cutout is 59px wide, not
+     400. A knocked-out bat is mostly transparent margin that the trim
+     removes, so these files end up far narrower than a normal photo of the
+     same nominal size.
+
+     srcset descriptors are the browser's ONLY input for picking a file, so
+     five-to-seven-times-too-large numbers meant it confidently downloaded
+     the 59px file for a slot it had calculated at 216px. Rendered 480px
+     tall, that is an upscale even on an ordinary screen and roughly 2.2x
+     on a Retina one — which is the softness and the stair-stepped edges,
+     not a bad cutout. The alpha edge measures 2% soft pixels and 0.3%
+     leftover backdrop; the artwork was never the problem. */
   const HERO_SHOTS = [
     { img: 'power-x-v2',        href: '#/product/power-x',
+      w: [59, 145, 186],
       alt: 'Toss Power X — handmade Sri Lankan willow bat',
       label: 'Toss Power X',       note: '3 years of research' },
     { img: 'sri-lankan-mri-2',  href: '#/shop?wood=srilankan',
+      w: [75, 184, 216],
       alt: 'Sri Lankan willow tennis-ball cricket bat',
       label: 'Sri Lankan willow',  note: 'Dense grain, big ping' },
     { img: 'varnished-bat-2',   href: '#/product/varnished-bat',
+      w: [41, 103, 125],
       alt: 'Varnished tennis-ball cricket bat',
       label: 'Varnished Bat',      note: 'Best seller' },
     { img: 'leather-ball-bat-2', href: '#/shop',
+      w: [72, 177, 185],
       alt: 'Leather-ball cricket bat made by Toss',
       label: 'Leather-ball bats',  note: 'For the harder game' }
   ];
@@ -770,15 +827,21 @@ function viewHome() {
      focusable thing the eye cannot see — which is the trap a cross-fade
      would have set. Only four images load for the whole hero.
 
-     `sizes` is small because each bat occupies roughly a fifth of the
-     stage; asking for a 1400px file to paint 90px wastes the LCP. */
+     `sizes` states the real slot: every shot lays out at height
+     min(60vh,480px) with width:auto, and at that height the widest cutout
+     is about 66px. The old value said 15vw — 216px on a laptop — which,
+     combined with the inflated descriptors, is what talked the browser
+     into the smallest file. 70px is the honest number with a little
+     headroom, and the browser multiplies it by the screen's pixel ratio
+     itself, so a Retina display asks for 140px and gets the md file. */
   const heroShot = (s, i) => `
     <a class="nhero-shot${i === 0 ? ' on' : ''}" href="${s.href}"
        data-shot="${i}" style="--i:${i}" aria-label="${esc(s.label)} — ${esc(s.note)}">
-      <img src="images/product/${s.img}-sm-cut.webp"
-           srcset="images/product/${s.img}-sm-cut.webp 400w,
-                   images/product/${s.img}-md-cut.webp 800w"
-           sizes="(max-width:900px) 26vw, 15vw" alt="${esc(s.alt)}"
+      <img src="images/product/${s.img}-md-cut.webp"
+           srcset="images/product/${s.img}-sm-cut.webp ${s.w[0]}w,
+                   images/product/${s.img}-md-cut.webp ${s.w[1]}w,
+                   images/product/${s.img}-lg-cut.webp ${s.w[2]}w"
+           sizes="70px" alt="${esc(s.alt)}"
            ${i === 0 ? 'fetchpriority="high" decoding="async"'
                      : 'loading="lazy" decoding="async"'}>
       <span class="nhero-tag"><b>${esc(s.label)}</b><i>${esc(s.note)}</i></span>
@@ -793,30 +856,62 @@ function viewHome() {
         <h1 class="d1">Bats made by hand.<span class="hl-2">Never resold.</span></h1>
         <p class="lede">29 bats shaped in our own unit — Sri Lankan wood, Kashmir
           Willow and Poplar. From ₹950.</p>
+        <!-- Two buttons, one decision. The social icons used to sit in this
+             row and gave it three different shapes to parse — a filled pill,
+             an outlined pill and two bare circles — which is what made the
+             row feel unresolved. They now live with the follower count they
+             actually refer to. -->
         <div class="nhero-cta">
           <a href="#/shop" class="btn btn-primary">Shop All Bats ${ICON.arrow}</a>
           <a href="#/finder" class="btn btn-ghost">Find My Bat — 30s</a>
-
-          <!-- Secondary on purpose: icon-only and unfilled, so they read as
-               "also available" rather than competing with Shop All Bats.
-               Each is skipped if its link is blank, because a social button
-               that goes nowhere is worse than no social button. -->
-          ${WA_GROUP ? `
-            <a class="nhero-soc" href="${esc(WA_GROUP)}" target="_blank" rel="noopener"
-               aria-label="Join the Toss Brothers WhatsApp community"
-               title="Join the WhatsApp community">${ICON.whatsapp}</a>` : ''}
-          ${IG_PROFILE ? `
-            <a class="nhero-soc" href="${esc(IG_PROFILE)}" target="_blank" rel="noopener"
-               aria-label="Toss Sports on Instagram"
-               title="Follow on Instagram">${ICON.insta}</a>` : ''}
         </div>
-        <!-- The three reasons someone hesitates, answered before they scroll. -->
-        <ul class="nhero-badges">
-          <li>${ICON.hammer}<span>Made in our unit</span></li>
-          <li>${ICON.truck}<span>Free over ₹1,500</span></li>
-          <li>${ICON.shield}<span>3-month warranty</span></li>
-        </ul>
-        <p class="hv-proof">36.9K on Instagram · 4M reel reach · played by 170-player clubs</p>
+
+        <!-- Everything below the rule is CREDENTIALS, and it is separated
+             because it answers a different question from everything above
+             it. The pitch reads hook → offer → action; then one hairline;
+             then the reasons to believe it. Previously these were two
+             near-identical rows of small text stacked directly on the
+             buttons, which read as one grey mush rather than two facts. -->
+        <div class="nhero-cred">
+          <!-- The three reasons someone hesitates, answered before they scroll. -->
+          <ul class="nhero-badges">
+            <li>${ICON.hammer}<span>Made in our unit</span></li>
+            <li>${ICON.truck}<span>Free over ₹1,500</span></li>
+            <li>${ICON.shield}<span>3-month warranty</span></li>
+          </ul>
+
+          <!-- Icon-only and unfilled on purpose, so they read as "also
+               available" rather than competing with Shop All Bats. Each is
+               skipped if its link is blank, because a social button that
+               goes nowhere is worse than no social button. Sitting next to
+               "36.9K on Instagram" is what gives them a reason to be here. -->
+          <div class="nhero-social">
+            ${WA_GROUP ? `
+              <a class="nhero-soc" href="${esc(WA_GROUP)}" target="_blank" rel="noopener"
+                 aria-label="Join the Toss Brothers WhatsApp community"
+                 title="Join the WhatsApp community">${ICON.whatsapp}</a>` : ''}
+            ${IG_PROFILE ? `
+              <a class="nhero-soc" href="${esc(IG_PROFILE)}" target="_blank" rel="noopener"
+                 aria-label="Toss Sports on Instagram"
+                 title="Follow on Instagram">${ICON.insta}</a>` : ''}
+            <!-- Shortened from "36.9K on Instagram · 4M reel reach · played by
+                 170-player clubs". At 62 characters it could not share a line
+                 with the two buttons and wrapped underneath them, which cost a
+                 whole row of height and pushed the service strip off a 768px
+                 laptop. "on Instagram" is redundant next to an Instagram
+                 button anyway. -->
+            <p class="hv-proof">36.9K followers · 4M reel reach · 170-player clubs</p>
+          </div>
+
+          <!-- Kept to ONE line on purpose. It lived at the bottom-left of the
+               stage first, which looked like free space until you notice the
+               featured bat sits left of centre and its name tag is already
+               there. Here it is unambiguous, and one line costs the hero
+               ~16px — paid for by the spacing trimmed around it, so the
+               service strip still clears the fold on a 1366x768 laptop. -->
+          <p class="nhero-note">Photos are for illustration — every bat is
+            hand-shaped from real willow, so grain and finish vary.</p>
+        </div>
       </div>
 
       <div class="nhero-stage" id="nheroStage">
@@ -1207,6 +1302,14 @@ const SHOP_GROUPS = [
 ];
 
 function groupedIndex(list) {
+  /* A text search is already ordered by how well each product answers the
+     query. Dropping that list into the tier groups throws the ranking away
+     and re-sorts by price bracket — searching "tennis" put the tennis ball
+     eighth, behind seven bats that merely mention tennis in their usage
+     line. When there is a query, the best answer goes first and the shape
+     of the page follows the search, not the catalogue. */
+  if (filters.q) return `<div class="grid">${list.map(cardHTML).join('')}</div>`;
+
   const out = SHOP_GROUPS.map(g => {
     const rows = list.filter(p => p.tier === g.tier);
     if (!rows.length) return '';
@@ -1287,18 +1390,24 @@ function viewShop() {
               <option value="light"${filters.sort==='light'?' selected':''}>Lightest first</option>
               <option value="rate"${filters.sort==='rate'?' selected':''}>Top rated</option>
             </select>
-            <span class="count num">${list.length} bat${list.length === 1 ? '' : 's'}</span>
+            <!-- A text search spans every category, so "bats" would be a lie
+                 the moment somebody searches for a ball. -->
+            <span class="count num">${list.length} ${filters.q
+              ? 'result' + (list.length === 1 ? '' : 's')
+              : 'bat' + (list.length === 1 ? '' : 's')}</span>
           </div>
 
           ${chips.length ? `<div class="pills">
             ${chips.map(c => `<span class="pill">${esc(c.l)}
-              <button data-chip="${c.g}:${c.v}" aria-label="Remove">${ICON.close}</button></span>`).join('')}
+              <button data-chip="${esc(c.g + ':' + c.v)}" aria-label="Remove">${ICON.close}</button></span>`).join('')}
             <button class="pill clear" id="clearAll">Clear all</button>
           </div>` : ''}
 
           ${list.length
             ? groupedIndex(list)
-            : `<div class="empty"><b>No bats match that</b>
+            : `<div class="empty"><b>${filters.q
+                 ? 'Nothing matched ' + esc('“' + filters.q + '”')
+                 : 'No bats match that'}</b>
                  <p>Try loosening a filter — or let us pick for you.</p>
                  <a href="#/finder" class="btn btn-primary btn-sm" style="margin-top:14px">Find My Bat</a></div>`}
         </div>
@@ -2510,6 +2619,25 @@ function viewNotFound() {
   </div></div></section>`;
 }
 
+/* ------------------------------------------------------------
+   One product thumbnail, for every list that shows a small one —
+   the bag and the search panel. Shared so the two cannot drift:
+   the bat crop, the non-bat photo and the placeholder are decided
+   once, in a single place.
+   ------------------------------------------------------------ */
+function prodTile(p) {
+  const isBat = prodCat(p) === 'bats';
+  const photo = (p.images || []).filter(Boolean)[0];
+  return {
+    cls: 'ci-art' + (isBat ? ' ci-art--bat' : ''),
+    art: isBat
+      ? batArt(p, { glow: false })
+      : (photo
+          ? `<img src="${esc(photo)}" alt="${esc(p.name)}" loading="lazy" decoding="async">`
+          : `<span class="ci-noimg" aria-hidden="true">📦</span>`)
+  };
+}
+
 /* ---------------- cart drawer render ---------------- */
 function renderCart() {
   const body = $('#cartBody'), foot = $('#cartFoot');
@@ -2522,8 +2650,20 @@ function renderCart() {
   }
   body.innerHTML = cart.map(i => {
     const p = byId(i.id), v = variantName(p, i.variant);
+    /* A bat cutout is about 1:7 — 191×1319 for the Power X. Fitted whole
+       into a 72px tile it renders TEN PIXELS wide, a blue splinter with
+       nine tenths of the tile empty around it. So a bat thumbnail crops to
+       the blade instead of shrinking the whole bat; every other category
+       is roughly square already and is left alone.
+
+       Only a BAT goes through batArt(). Its fallback, when the knocked-out
+       cutout is missing, is a drawn bat — right for a bat, and nonsense for
+       anything else: a tennis ball has no -cut file, so the cart was
+       answering "tennis ball" with a picture of a bat. Everything else
+       shows its own photo, exactly as the shop cards do. */
+    const t = prodTile(p);
     return `<div class="ci">
-      <a class="ci-art" href="#/product/${p.id}" data-close>${batArt(p, { glow: false })}</a>
+      <a class="${t.cls}" href="#/product/${p.id}" data-close>${t.art}</a>
       <div class="ci-b">
         <h4><a href="#/product/${p.id}" data-close>${esc(p.name)}</a></h4>
         ${v ? `<div class="v">${esc(v)}</div>` : ''}
@@ -2564,30 +2704,9 @@ function closeDrawers() {
   document.body.classList.remove('no-scroll');
 }
 
-/* ---------------- search ---------------- */
-function runSearch(q) {
-  const box = $('#sResults');
-  q = q.trim().toLowerCase();
-  if (q.length < 2) { box.innerHTML = `<p style="color:var(--ink-50);font-size:.85rem">Type at least 2 letters.</p>`; return; }
-  const hay = p => [p.name, p.tagline, WOOD[p.wood] && WOOD[p.wood].label,
-    PROFILE[p.profile] && PROFILE[p.profile].label, p.finish, p.handle, p.description,
-    (p.features || []).join(' ')].filter(Boolean).join(' ').toLowerCase();
-  const hits = PRODUCTS.filter(p => hay(p).includes(q)).slice(0, 8);
-  const art = p => prodCat(p) === 'bats'
-    ? batArt(p, { glow: false })
-    : ((p.images || [])[0] ? `<img src="${esc(p.images[0])}" alt="" loading="lazy">` : '📦');
-  box.innerHTML = hits.length
-    ? hits.map(p => `<a class="ci" href="#/product/${p.id}" data-close style="text-decoration:none">
-        <div class="ci-art">${art(p)}</div>
-        <div class="ci-b"><h4>${esc(p.name)}</h4>
-          <div class="v">${prodCat(p) === 'bats'
-            ? `${WOOD[p.wood].short} · ${PROFILE[p.profile].label}`
-            : esc((typeof CATEGORIES !== 'undefined' &&
-                (CATEGORIES.find(c => c.id === prodCat(p)) || {}).name) || '')}</div>
-          <span class="ci-price num" style="margin:0">${hasPrice(p) ? fmt(p.price) : 'On request'}</span>
-        </div></a>`).join('')
-    : `<p style="color:var(--ink-50);font-size:.85rem">Nothing matched “${esc(q)}”. Try “scoop” or “kashmir”.</p>`;
-}
+/* ---------------- search ----------------
+   runSearch() now lives in js/search.js, along with the scoring,
+   the fuzzy matching and the service and help entries. */
 
 /* ---------------- checkout logic ---------------- */
 let payMethod = 'wa';
@@ -2646,6 +2765,15 @@ function completeOrder(method, info) {
   };
   /* fire and forget — a network problem must not cost the customer their order */
   if (typeof pushOrder === 'function') pushOrder(lastOrder);
+
+  /* The account holds its orders in memory and only fetches them once
+     (ACCOUNT.loaded), and acctWarm() has usually filled that in long before
+     checkout. Without this, a customer who orders and then opens Account in
+     the same visit is shown the list as it was BEFORE they ordered — an
+     empty one — and no amount of clicking refreshes it, because nothing
+     told it the world had changed. */
+  if (typeof ACCOUNT !== 'undefined') ACCOUNT.loaded = false;
+
   cart = []; saveCart(); syncCart();
   coupon = null; saveCoupon();          /* a code is single-use */
   route();
@@ -2919,7 +3047,11 @@ function mount(page, parts) {
     const ca = $('#clearAll'); if (ca) ca.onclick = clearFilters;
 
     $$('[data-chip]').forEach(b => b.onclick = () => {
-      const [g, v] = b.dataset.chip.split(':'); toggleFilter(g, v);
+      /* Split on the FIRST colon only. Every group key is colon-free, but
+         the value can be a typed query and "kashmir: big edge" would
+         otherwise arrive as the group "kashmir". */
+      const s = b.dataset.chip, i = s.indexOf(':');
+      toggleFilter(s.slice(0, i), s.slice(i + 1));
     });
   }
 
