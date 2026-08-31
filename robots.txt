@@ -1,0 +1,19 @@
+# Toss Sports
+User-agent: *
+Allow: /
+Disallow: /maze.html
+Disallow: /dist/
+
+# AI crawlers are welcome — the guides exist to be quoted
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://tossports.in/sitemap.xml
