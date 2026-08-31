@@ -184,9 +184,60 @@ function syncCart() {
   });
 }
 function variantName(p, vid) {
-  if (!p.variants || !vid) return null;
+  /* `!p` is the guard that was missing. byId() returns undefined for a bat
+     that has left the catalogue, and this was the first thing to touch it —
+     so a stale bag threw here and took the cart drawer, the checkout page
+     and the WhatsApp message down with it. pruneCart() below stops the bad
+     line ever reaching this function; this stays as the floor under it. */
+  if (!p || !p.variants || !vid) return null;
   const v = p.variants.find(x => x.id === vid);
   return v ? v.name : null;
+}
+
+/* ------------------------------------------------------------
+   THE BAG IS UNTRUSTED INPUT.
+
+   It is restored from localStorage at boot with nothing but a
+   JSON.parse, and the catalogue it refers to is fetched from
+   Supabase afterwards — so by the time anything renders, a line
+   can point at a bat that no longer exists. That is not a
+   hypothetical: the sync asks for `active=eq.true`, so switching
+   a bat off in the Maze Room removes it from PRODUCTS, and every
+   customer with it in their bag had a dead cart and no way to
+   check out short of clearing their site data.
+
+   Three classes of bad line, all handled here:
+
+     · the product is gone         → drop it
+     · the product lost its price  → drop it; a "price on request"
+                                     line contributed 0 to the
+                                     subtotal, and a bag holding
+                                     only those totalled ₹0
+     · the quantity is not a sane  → clamp. qty:-3 produced a
+       positive integer              subtotal of −2850 and a
+                                     NEGATIVE order total
+
+   Returns how many lines were removed so the caller can say so.
+   Silently emptying somebody's bag is its own bug.
+   ------------------------------------------------------------ */
+const CART_MAX_QTY = 99;
+
+function pruneCart() {
+  const before = cart.length;
+  let clamped = 0;
+
+  cart = cart.filter(i => {
+    const p = byId(i && i.id);
+    if (!p || !hasPrice(p)) return false;
+    const q = Math.floor(Number(i.qty));
+    const safe = Math.min(CART_MAX_QTY, Math.max(1, isFinite(q) ? q : 1));
+    if (safe !== i.qty) { i.qty = safe; clamped++; }
+    return true;
+  });
+
+  const dropped = before - cart.length;
+  if (dropped || clamped) { saveCart(); syncCart(); }
+  return dropped;
 }
 
 /* ---------------- WhatsApp ---------------- */
@@ -202,6 +253,9 @@ function enquire(p) {
   ), '_blank');
 }
 function cartWaText(info) {
+  /* This text becomes the customer's order. A line pointing at a bat that
+     no longer exists must never reach it — it threw here too. */
+  pruneCart();
   let t = 'Hi Toss Sports 👋\n\nI want to place this order:\n\n';
   cart.forEach((i, n) => {
     const p = byId(i.id);
@@ -2163,7 +2217,9 @@ function viewFinder() {
       <div class="quiz-ask">
         <div class="quiz-bar"><i style="width:${pct}%"></i></div>
         <p class="quiz-step">Delivery ${quizStep + 1} of ${QUIZ.length}</p>
-        <h2 class="d2 q-head">${q.q}</h2>
+        <!-- h1, not h2. This is the page's only heading and it had no h1
+             above it, so anyone navigating by heading landed on nothing. -->
+        <h1 class="d2 q-head">${q.q}</h1>
         <p class="lede">${q.sub}</p>
 
         <div class="q-opts n${q.opts.length}">
@@ -2472,9 +2528,12 @@ function viewGame() {
 /* ---------------- VIEW: CHECKOUT ---------------- */
 function viewCheckout() {
   if (lastOrder) return viewDone();
+  /* Before the empty-bag check, so a bag holding only retired lines is
+     correctly treated as empty rather than rendering a zero-total order. */
+  pruneCart();
   if (!cart.length) return `
     <section class="co"><div class="wrap"><div class="empty">
-      <b>Your bag is empty</b>
+      <h1>Your bag is empty</h1>
       <p>Add a bat and come back.</p>
       <a href="#/shop" class="btn btn-primary btn-sm" style="margin-top:16px">Shop Bats</a>
     </div></div></section>`;
@@ -2649,7 +2708,7 @@ function viewDone() {
 
 function viewNotFound() {
   return `<section class="co"><div class="wrap"><div class="empty">
-    <b>Page not found</b><p>That bat may have moved.</p>
+    <h1>Page not found</h1><p>That bat may have moved.</p>
     <a href="#/shop" class="btn btn-primary btn-sm" style="margin-top:16px">Shop all bats</a>
   </div></div></section>`;
 }
@@ -2675,6 +2734,10 @@ function prodTile(p) {
 
 /* ---------------- cart drawer render ---------------- */
 function renderCart() {
+  /* Also here, not only after the sync: the catalogue can be replaced by a
+     later sync, and this is the first thing a customer sees. Cheap — it is
+     a filter over at most a handful of lines. */
+  pruneCart();
   const body = $('#cartBody'), foot = $('#cartFoot');
   if (!cart.length) {
     body.innerHTML = `<div class="empty" style="padding:60px 0">
@@ -3405,6 +3468,16 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
     try {
       if (typeof syncStore === 'function') {
         const live = await syncStore();
+        /* The moment the real catalogue lands is the moment a bag saved
+           against the old one can be checked. Before this, byId() answers
+           from the bundled fallback and a line that only the live
+           catalogue has retired still looks fine. */
+        if (live && live.products) {
+          const dropped = pruneCart();
+          if (dropped) toast(dropped === 1
+            ? 'An item in your bag is no longer available'
+            : dropped + ' items in your bag are no longer available');
+        }
         if (live && (live.products || live.settings || live.categories)) route(true);
       }
     } catch (e) { console.warn('catalogue sync skipped:', e.message); }

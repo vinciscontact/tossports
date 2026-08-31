@@ -1699,8 +1699,12 @@ body.has-annc .filter-bar{top:var(--hdr)}
 .pill.clear{background:transparent;color:var(--orange-700);padding:7px 12px;border:1.4px dashed var(--line)}
 
 .empty{text-align:center;padding:70px 20px;color:var(--ink-50)}
-.empty b{display:block;font-family:var(--f-display);font-size:1.5rem;color:var(--ink);
-  text-transform:uppercase;margin-bottom:8px}
+/* h1 alongside b: the empty-bag and not-found headings became real h1s so
+   those views have a heading at all, and they must not suddenly render at
+   the browser's 2em default. Same treatment, whichever tag carries it. */
+.empty b,.empty h1{display:block;font-family:var(--f-display);font-weight:400;
+  font-size:1.5rem;line-height:1.1;color:var(--ink);
+  text-transform:uppercase;margin:0 0 8px}
 
 /* filter drawer (mobile) */
 .drawer{position:fixed;inset:0;z-index:300;visibility:hidden}
