@@ -59,6 +59,113 @@ function toast(msg, bad) {
   toastT = setTimeout(() => el.className = 'toast', 2600);
 }
 
+/* ---------------- order buzzer ----------------
+   The counter device keeps the Maze Room open all day; this is the shop
+   bell. A tiny poll over the same REST channel everything else uses —
+   no realtime publication to configure in Supabase, nothing that breaks
+   when project settings change. New orders ring a buzzer, drop an alert
+   card, fold into the loaded order book and refresh the open tab. */
+const BUZZ = {
+  timer: null, mark: '', ctx: null,
+  muted: localStorage.getItem('mz_buzz_off') === '1'
+};
+
+function buzzInit() {
+  if (BUZZ.timer) clearInterval(BUZZ.timer);
+  BUZZ.mark = (DB.orders[0] && DB.orders[0].created_at) || new Date().toISOString();
+  BUZZ.timer = setInterval(buzzPoll, 15000);
+}
+function buzzStop() {
+  if (BUZZ.timer) { clearInterval(BUZZ.timer); BUZZ.timer = null; }
+}
+
+async function buzzPoll() {
+  if (!SESSION) return;
+  let rows;
+  try {
+    rows = await supa('orders?select=*&created_at=gt.' + encodeURIComponent(BUZZ.mark) +
+      '&order=created_at.asc&limit=10');
+  } catch (e) { return; }                       /* offline — try again next tick */
+  if (!rows || !rows.length) return;
+  BUZZ.mark = rows[rows.length - 1].created_at;
+
+  const fresh = rows.filter(o => o.status !== 'cancelled' && !DB.orders.some(x => x.id === o.id));
+  if (!fresh.length) return;
+
+  /* newest first, same order the book is kept in */
+  fresh.slice().reverse().forEach(o => DB.orders.unshift(o));
+
+  if (!BUZZ.muted) buzzSound();
+  buzzAlert(fresh);
+  /* refresh only the tabs that display orders — never mid-edit forms */
+  if (['dash', 'sales', 'fulfil', 'finance', 'billing'].includes(TAB)) render();
+}
+
+/* Three short square-wave bursts — a shop bell, generated in the browser
+   so there is no audio file to host or fail to load. */
+function buzzSound() {
+  try {
+    BUZZ.ctx = BUZZ.ctx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = BUZZ.ctx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const t0 = ctx.currentTime + 0.02;
+    for (let i = 0; i < 3; i++) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(660, t0);
+      const t = t0 + i * 0.3;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      o.connect(g).connect(ctx.destination);
+      o.start(t); o.stop(t + 0.25);
+    }
+  } catch (e) { /* no audio device — the visual alert still shows */ }
+}
+
+/* Browsers keep audio locked until the page sees a user gesture; any click
+   after sign-in (including the sign-in itself) unlocks the bell. */
+document.addEventListener('click', () => {
+  try {
+    BUZZ.ctx = BUZZ.ctx || new (window.AudioContext || window.webkitAudioContext)();
+    if (BUZZ.ctx.state === 'suspended') BUZZ.ctx.resume();
+  } catch (e) {}
+});
+
+function buzzAlert(orders) {
+  let box = $('#buzzBox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'buzzBox';
+    document.body.appendChild(box);
+  }
+  orders.forEach(o => {
+    const c = o.customer || {};
+    const el = document.createElement('div');
+    el.className = 'buzz-card';
+    el.innerHTML = `
+      <b>🛎 New order ${esc(o.id || '')}</b>
+      <span>${esc(c.name || 'Customer')}${c.city ? ' · ' + esc(c.city) : ''}
+        — ${money(o.total)} · ${esc(o.channel || 'web')}</span>
+      <div class="buzz-act">
+        <button class="btn primary sm" data-view>Open sales</button>
+        <button class="btn ghost sm" data-x>Dismiss</button>
+        <button class="btn ghost sm" data-mute title="Applies to every future order alert">
+          ${BUZZ.muted ? '🔇' : '🔊'}</button>
+      </div>`;
+    el.querySelector('[data-view]').onclick = () => { el.remove(); goTab('sales'); };
+    el.querySelector('[data-x]').onclick = () => el.remove();
+    el.querySelector('[data-mute]').onclick = e => {
+      BUZZ.muted = !BUZZ.muted;
+      localStorage.setItem('mz_buzz_off', BUZZ.muted ? '1' : '0');
+      e.target.textContent = BUZZ.muted ? '🔇' : '🔊';
+    };
+    box.appendChild(el);
+    /* a missed alert should not sit forever on an unattended screen */
+    setTimeout(() => el.remove(), 180000);
+  });
+}
+
 /* ---------------- auth ----------------
 
    Supabase Auth, directly. No Firebase SDK, no third-party token
@@ -108,6 +215,7 @@ $('#logout').onclick = async () => { await signOut(); showGate(); };
 
 function showGate() {
   USER = null; ME = null; AUTH = 'anon';
+  buzzStop();
   gateCard('login');
   const p = $('#password'); if (p) p.value = '';
 }
@@ -147,6 +255,7 @@ async function enterPanel() {
   $('#who').textContent = (USER && USER.email) || '';
   await loadAll();
   render();
+  buzzInit();
 }
 
 /* ============================================================
@@ -851,8 +960,8 @@ function viewInsights() {
       <span class="muted">Run <code>sql/010-analytics.sql</code> in the Supabase SQL editor,
       then reload.</span></div>`;
 
-  const tabs = { profit: 'What makes money', dead: 'Stock not moving',
-                 loyal: 'Repeat customers', health: 'Health check' };
+  const tabs = { profit: 'What makes money', channels: 'Where sales come from',
+                 dead: 'Stock not moving', loyal: 'Repeat customers', health: 'Health check' };
   return `
     <div class="head"><h2>Insights</h2>
       <span class="muted">${BRANCH ? esc(branchName(BRANCH)) : 'all branches'}</span>
@@ -861,6 +970,7 @@ function viewInsights() {
     <div class="subtabs">${Object.entries(tabs).map(([k, v]) =>
       `<button data-ins="${k}" class="${insTab === k ? 'on' : ''}">${v}</button>`).join('')}</div>
     ${insTab === 'profit' ? insProfit()
+      : insTab === 'channels' ? insChannels()
       : insTab === 'dead' ? insDead()
       : insTab === 'loyal' ? insLoyal() : insHealth()}`;
 }
@@ -878,6 +988,13 @@ function insProfit() {
       set a cost in <b>Products → Edit</b> to make this real.</div>` : ''}
     <p class="muted" style="margin-bottom:14px">Ranked by <b>profit earned</b>, not units sold.
       A ₹950 bat selling twenty times can earn less than a ₹2,999 bat selling five.</p>
+    <div class="panel" style="margin-bottom:16px"><h3>Top earners</h3>
+      <div class="hbars">${rows.slice(0, 6).map(r => `
+        <div class="hbar">
+          <span class="hbar-name" title="${esc(r.name)}">${esc(r.name)}</span>
+          <div class="hbar-track"><i style="width:${Math.max(2, Number(r.profit) / best * 100).toFixed(1)}%"></i></div>
+          <span class="hbar-val">${money(r.profit)} · ${r.units} sold</span>
+        </div>`).join('')}</div></div>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Product</th><th class="num">Units</th><th class="num">Revenue</th>
         <th class="num">Profit</th><th class="num">Per unit</th><th>Share of profit</th></tr></thead>
@@ -891,6 +1008,27 @@ function insProfit() {
           <i style="width:${Math.max(0, Number(r.profit) / best * 100)}%"></i></div></td>
       </tr>`).join('')}</tbody>
     </table></div>`;
+}
+
+/* Where the money enters, month by month. The all-time split lives on the
+   finance page; this one shows whether a channel is growing or dying. */
+function insChannels() {
+  const { months, series } = channelsByMonth();
+  const live = series.filter(s => s.values.some(v => v));
+  if (!months.length || !live.length) return '<div class="empty">No sales recorded yet.</div>';
+
+  const tot = live.map((s, i) => ({ k: s.k, i, v: s.values.reduce((a, b) => a + b, 0) }));
+  const all = tot.reduce((s, t) => s + t.v, 0) || 1;
+
+  return `
+    <div class="cards tight">
+      ${tot.slice(0, 4).map(t => `<div class="card"><b>${Math.round(t.v / all * 100)}%</b>
+        <span><i class="key-dot" style="background:${chanColor(t.k, t.i)}"></i>${esc(t.k)}</span></div>`).join('')}
+    </div>
+    <p class="muted" style="margin-bottom:14px">Revenue per month, split by where the order
+      came from. A channel growing month on month deserves more of your time; one shrinking
+      is telling you something too.</p>
+    <div class="panel">${stackedChart(months, live, chanColor)}</div>`;
 }
 
 function insDead() {
@@ -939,6 +1077,14 @@ function insLoyal() {
     </div>
     <p class="muted" style="margin-bottom:14px">A bat lasts a season, so a repeat purchase is
       a strong signal the product and service landed. Team orders count once per phone number.</p>
+    ${(() => {
+      const nv = newVsReturnByMonth();
+      if (!nv.months.length || !nv.series.some(s => s.values.some(v => v))) return '';
+      return `<div class="panel" style="margin-bottom:16px"><h3>New vs returning revenue</h3>
+        <p class="muted" style="margin:-4px 0 12px">A customer's first month counts as new;
+          anything after that is returning — the revenue that costs nothing to win.</p>
+        ${stackedChart(nv.months, nv.series, (k, i) => i === 0 ? '#ffb020' : '#28c76f')}</div>`;
+    })()}
     <div class="tbl-wrap"><table>
       <thead><tr><th class="num">#</th><th>Customer</th><th class="num">Orders</th>
         <th class="num">Spend</th><th class="num">Days between</th><th>First</th><th>Last</th></tr></thead>
@@ -2140,6 +2286,17 @@ function viewSettings() {
       <h3>Account</h3>
       <p class="muted">Signed in as <b>${esc(USER && USER.email)}</b><br>
         Supabase user <code>${esc(USER && USER.id)}</code></p>
+    </div>
+
+    <div class="panel danger">
+      <h3>Danger zone</h3>
+      <p class="muted" style="max-width:64ch">One-time pre-launch reset. Wipes every test
+        <b>order, invoice, expense, payroll run, attendance record, target, customer,
+        request, game score</b>, the activity log and stock-transfer history — and restarts
+        invoice numbering at 1. Bats, categories, branches, stock counts, staff, tasks,
+        SOPs, coupons and settings are kept. Everything wiped is snapshotted inside the
+        database first, so a mistake can be restored.</p>
+      <button class="btn danger" id="resetData">Reset test data…</button>
     </div>`;
 }
 
@@ -2162,10 +2319,43 @@ function wireSettings() {
     } catch (e) { toast(writeError(e), true); }
     finally { btn.disabled = false; btn.textContent = 'Save settings'; }
   };
+
+  /* The reset asks twice on purpose: the button says what it does, and the
+     modal makes the founder type RESET. The wipe itself runs server-side
+     (sql/020-reset-button.sql) where it also re-checks the caller's role
+     and snapshots every table before deleting. */
+  const rd = $('#resetData');
+  if (rd) rd.onclick = () => openModal('Reset test data — are you sure?', `
+      <p><b>This clears the whole trading history.</b> Orders, invoices, expenses,
+        payroll, attendance, targets, customers, requests, game scores, the activity
+        log and stock-transfer history are wiped, and invoice numbers restart at 1.</p>
+      <p class="muted">Kept: bats &amp; product details, categories, branches, current
+        stock counts, staff, tasks, SOPs, coupons, settings.</p>
+      <p class="muted">A snapshot of everything wiped is stored in the database first
+        (<code>reset_backup</code> schema), so it can be restored if this was a mistake.</p>
+      <div class="row"><label>Type <b>RESET</b> in capitals to confirm</label>
+        <input id="resetConfirm" autocomplete="off" placeholder="RESET"></div>`,
+    async () => {
+      const v = ($('#resetConfirm').value || '').trim();
+      if (v !== 'RESET') { toast('Type RESET (all capitals) to confirm', true); return false; }
+      try {
+        const out = await supaRpc('reset_test_data', { p_confirm: v });
+        const counts = (out && out.wiped) || {};
+        const total = Object.values(counts).reduce((s, n) => s + Number(n || 0), 0);
+        toast('Reset done — ' + total + ' test rows cleared (backup kept)');
+        await loadAll();
+        render();
+      } catch (e) {
+        toast(/not.*found|404|does not exist/i.test(e.message || '')
+          ? 'Run sql/020-reset-button.sql in the Supabase SQL editor first.'
+          : (e.message || 'Reset failed'), true);
+        return false;
+      }
+    }, 'Wipe test data');
 }
 
 /* ---------------- modal ---------------- */
-function openModal(title, body, onSave) {
+function openModal(title, body, onSave, saveLabel) {
   const wrap = document.createElement('div');
   wrap.className = 'modal';
   wrap.innerHTML = `
@@ -2174,7 +2364,7 @@ function openModal(title, body, onSave) {
       <div class="modal-body">${body}</div>
       <div class="modal-foot">
         <button class="btn ghost" data-close>Cancel</button>
-        <button class="btn primary" data-save>Save changes</button>
+        <button class="btn primary" data-save>${saveLabel || 'Save changes'}</button>
       </div>
     </div>`;
   document.body.appendChild(wrap);
@@ -2189,7 +2379,7 @@ function openModal(title, body, onSave) {
     const btn = $('[data-save]', wrap);
     btn.disabled = true; btn.textContent = 'Saving…';
     const res = await onSave();
-    btn.disabled = false; btn.textContent = 'Save changes';
+    btn.disabled = false; btn.textContent = saveLabel || 'Save changes';
     if (res !== false) close();
   };
 }
