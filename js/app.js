@@ -885,10 +885,13 @@ function viewHome() {
       w: [81, 206, 248],
       alt: 'Varnished tennis-ball cricket bat',
       label: 'Varnished Bat',      note: 'Best seller' },
-    { img: 'leather-ball-bat-1', href: '#/shop',
-      w: [91, 231, 272],
-      alt: 'Leather-ball cricket bat made by Toss',
-      label: 'Leather-ball bats',  note: 'For the harder game' }
+    /* The camo graphic bat earns the fourth slot over the leather-ball
+       shot for one reason: its grip is the site's own orange, so the
+       featured bat ties into the panel instead of sitting on it. */
+    { img: 'graphic-bats-hard-tennis-cricket-bat-2-studio-v2-1', href: '#/shop',
+      w: [52, 132, 230],
+      alt: 'Camo graphic hard tennis-ball cricket bat with orange grip',
+      label: 'Graphic bats',       note: 'Loud looks, hard hits' }
   ];
 
   /* All four bats are on stage at once, fanned across the panel — a single
@@ -1159,9 +1162,90 @@ function viewHome() {
     </div>
   </section>
 
+  ${storyTeaserHTML()}
   ${trustBand()}
   `;
 }
+
+/* The brand story, one paragraph, pointing at about-us/.
+
+   A real crawlable URL rather than a hash route, for the reason written on
+   the footer nav below it: Google discards everything after the #, so a
+   story living at #/about would be a page nothing could link to. The full
+   version at /about-us/ carries its own Person schema for both founders. */
+function storyTeaserHTML() {
+  return `
+  <section class="sec story-x">
+    <div class="wrap story-x-in">
+      <div class="story-x-copy rv">
+        <p class="story-x-eyebrow">Our story</p>
+        <h2 class="story-x-h">Two brothers.<br><span class="g">One crazy</span> <span class="o">idea.</span></h2>
+        <p class="story-x-p">Cricket didn't start in stadiums. It started with a tennis ball,
+          a bat that was probably too heavy, and someone shouting
+          &ldquo;Match podalama?&rdquo; — which is exactly why Iniyavan and
+          Imayavarman started Toss.</p>
+        <p class="story-x-cta"><a class="btn btn-primary" href="about-us/">Read our story ${ICON.arrow}</a></p>
+      </div>
+
+      <!-- The two posters, pinned up at angles, and each one is the way
+           into that brother's spread. Tapping one carries the poster
+           itself onto the story page, where it lands as the plate at the
+           head of his section; the button above still opens the story at
+           its cover, so the opening spread is only ever skipped on
+           purpose.
+
+           They were decorative and hidden from screen readers while they
+           were just a picture of the page next door. They are navigation
+           now, so they are named and reachable instead. -->
+      <div class="story-x-art">
+        <a class="story-x-plate story-x-p2" href="about-us/#cofounder">
+          <picture>
+            <source type="image/webp" srcset="images/founders/cofounder-imayavarman-440.webp">
+            <img src="images/founders/cofounder-imayavarman-440.jpg"
+                 alt="Imayavarman, co-founder — read his story"
+                 width="440" height="782" loading="lazy" decoding="async">
+          </picture>
+        </a>
+        <a class="story-x-plate story-x-p1" href="about-us/#founder">
+          <picture>
+            <source type="image/webp" srcset="images/founders/founder-iniyavan-440.webp">
+            <img src="images/founders/founder-iniyavan-440.jpg"
+                 alt="Iniyavan, founder — read his story"
+                 width="440" height="660" loading="lazy" decoding="async">
+          </picture>
+        </a>
+      </div>
+    </div>
+  </section>`;
+}
+
+/* ============================================================
+   THE PLATE MORPH — the homepage half
+
+   A cross-document view transition pairs an element on the way out with
+   the element carrying the same name on the way in. Both posters are on
+   screen, but only one of them is being navigated to, so the name goes
+   on that one here, at the moment of the navigation.
+
+   Which one is read off the destination's hash rather than from a click
+   handler, so a keyboard activation, a tapped poster and a restored
+   session all take the identical path — there is no click to miss.
+
+   The other half of this lives in the head of about-us/index.html, and
+   the tuning in css/view-transition.css. A browser that has never heard
+   of pageswap never fires it and simply follows the link. */
+window.addEventListener('pageswap', function (e) {
+  if (!e.viewTransition || !e.activation) return;
+
+  var to = new URL(e.activation.entry.url);
+  if (!/\/about-us\/$/.test(to.pathname)) return;
+
+  var plate = to.hash === '#founder'   ? document.querySelector('.story-x-p1')
+            : to.hash === '#cofounder' ? document.querySelector('.story-x-p2')
+            : null;
+
+  if (plate) plate.style.viewTransitionName = 'plate';
+});
 
 /* Testimonials sit directly under the stats band rather than at the foot of
    the page. Numbers and quotes together make one evidence block, placed where
@@ -2682,6 +2766,8 @@ function viewDone() {
             : 'Payment received. We\'re packing your bat now.'}
         </p>
         <div class="oid">${o.id}</div>
+        ${o.payment_id ? `<p style="font-size:.8rem;color:var(--ink-50);margin-top:6px">
+          Payment reference <b style="color:var(--ink)">${esc(o.payment_id)}</b> — also on your Razorpay receipt</p>` : ''}
         <div style="text-align:left;border-top:1px solid var(--line);padding-top:18px;margin-top:6px">
           ${o.items.map(i => {
             const p = byId(i.id), v = variantName(p, i.variant);
@@ -2853,9 +2939,13 @@ function newOrderId() {
   return 'TOSS-' + Date.now().toString(36).toUpperCase().slice(-6) +
          '-' + Math.floor(Math.random() * 900 + 100);
 }
-function completeOrder(method, info) {
+function completeOrder(method, info, extra) {
+  extra = extra || {};
   lastOrder = {
-    id: newOrderId(), method, info,
+    id: extra.id || newOrderId(), method, info,
+    /* the Razorpay payment id — the thread that ties this order to the
+       payment in their dashboard; without it reconciliation is manual */
+    payment_id: extra.payment_id || null,
     items: cart.slice(),
     subtotal: cartSubtotal(), shipping: shipFee(),
     total: grandTotal(),
@@ -2879,9 +2969,18 @@ function completeOrder(method, info) {
 }
 function payOnline(info) {
   const amount = grandTotal() * 100;
-  if (RAZORPAY_KEY.includes('REPLACE')) {
+  /* The order id exists BEFORE the payment so it can ride along in the
+     Razorpay notes — then either side of a dispute can find the other:
+     the dashboard shows the order id, the order shows the payment id. */
+  const oid = newOrderId();
+  if (!RAZORPAY_KEY || RAZORPAY_KEY.includes('REPLACE')) {
     toast('Demo mode — add your Razorpay key to go live');
-    setTimeout(() => completeOrder('online', info), 900);
+    setTimeout(() => completeOrder('online', info, { id: oid }), 900);
+    return;
+  }
+  if (!window.Razorpay) {
+    loadRazorpay();
+    toast('Payment is still loading — try again in a second');
     return;
   }
   const rzp = new window.Razorpay({
@@ -2889,11 +2988,17 @@ function payOnline(info) {
     amount, currency: 'INR',
     name: 'Toss Sports',
     description: cart.map(i => byId(i.id).name).join(', ').slice(0, 200),
-    prefill: { name: info.name, contact: info.phone },
-    notes: { address: info.address + ', ' + info.city + ' ' + info.pin },
+    prefill: { name: info.name, contact: info.phone, email: info.email || undefined },
+    notes: { order_id: oid, address: info.address + ', ' + info.city + ' ' + info.pin },
     theme: { color: '#FF8A1E' },
-    handler: () => completeOrder('online', info)
+    handler: r => completeOrder('online', info, { id: oid, payment_id: r.razorpay_payment_id }),
+    /* Closing the sheet is not an error — the bag is untouched and the
+       button still says Pay. Say so, or the customer assumes the worst. */
+    modal: { ondismiss: () => toast('Payment not completed — your bag is safe. Pay when ready, or order on WhatsApp.') }
   });
+  rzp.on('payment.failed', r => toast(
+    ((r.error && r.error.description) || 'Payment failed') +
+    ' — nothing was charged. Try again or order on WhatsApp.'));
   rzp.open();
 }
 function loadRazorpay() {
