@@ -127,7 +127,8 @@ async function pushOrder(order) {
         coupon: order.coupon || null,
         method: order.method === 'wa' ? 'whatsapp' : order.method,
         channel: 'web',
-        paid: order.method === 'online'
+        paid: order.method === 'online',
+        payment_id: order.payment_id || null
       }
     });
     return true;
