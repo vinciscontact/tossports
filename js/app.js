@@ -2902,6 +2902,22 @@ function viewDone() {
         <div class="oid">${o.id}</div>
         ${o.payment_id ? `<p style="font-size:.8rem;color:var(--ink-50);margin-top:6px">
           Payment reference <b style="color:var(--ink)">${esc(o.payment_id)}</b> — also on your Razorpay receipt</p>` : ''}
+
+        <!-- The honest line. The order did not reach us, and saying nothing
+             would leave the customer holding a number that means nothing at
+             this end. The WhatsApp step below is already compulsory, so the
+             way out is the one they were about to take anyway — this only
+             explains why it matters this time. -->
+        ${o.recorded === false ? `
+        <div style="margin-top:16px;padding:14px 16px;text-align:left;border-radius:12px;
+             border:1px solid rgba(255,176,32,.45);background:rgba(255,176,32,.1)">
+          <b style="display:block;margin-bottom:4px">This order has not reached us yet.</b>
+          <span style="font-size:.84rem;color:var(--ink-70);line-height:1.5">
+            ${o.method === 'online'
+              ? 'Your payment went through and nothing is lost — but the order itself did not save, so please send it on WhatsApp below and we will match it to your payment.'
+              : 'Nothing is lost — but we do not have the order yet, so please send it on WhatsApp below and we will pick it up from there.'}
+          </span>
+        </div>` : ''}
         <div style="text-align:left;border-top:1px solid var(--line);padding-top:18px;margin-top:6px">
           ${o.items.map(i => {
             const p = byId(i.id), v = variantName(p, i.variant);
@@ -3105,8 +3121,30 @@ function completeOrder(method, info, extra) {
     total: grandTotal(),
     coupon: couponOff() > 0 ? couponCode() : null, off: couponOff()
   };
-  /* fire and forget — a network problem must not cost the customer their order */
-  if (typeof pushOrder === 'function') pushOrder(lastOrder);
+  /* Recording must never block the customer: the confirmation screen and the
+     WhatsApp hand-off happen whatever the database says. But "never block"
+     had quietly become "never mention". The insert can be refused outright —
+     no stock is the ordinary case — and the screen still said Order placed
+     while the shop received nothing and the customer was left holding an
+     order number that nobody here would recognise.
+
+     So it is still fire-and-forget in the sense that matters: nothing waits
+     on it. The difference is that the answer, when it comes, is allowed to
+     reach the screen. `recorded` is null while in flight, true once the
+     database has it, false when it refused — and viewDone() says so. */
+  lastOrder.recorded = null;
+  if (typeof pushOrder === 'function') {
+    const mine = lastOrder;
+    pushOrder(mine).then(function (ok) {
+      mine.recorded = !!ok;
+      /* Only redraw if this is still the order on screen. A customer who has
+         already moved on should not have the page pulled out from under
+         them by an answer to a question they stopped asking. */
+      if (lastOrder === mine && /^#\/checkout/.test(location.hash)) route(true);
+    });
+  } else {
+    lastOrder.recorded = true;      /* no database configured; nothing to tell */
+  }
 
   /* The account holds its orders in memory and only fetches them once
      (ACCOUNT.loaded), and acctWarm() has usually filled that in long before
