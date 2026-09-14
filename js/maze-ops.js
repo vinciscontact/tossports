@@ -669,8 +669,7 @@ function wireSales() {
     const id = sel.dataset.status;
     try {
       await saveRow('orders', { id, status: sel.value });
-      const o = DB.orders.find(x => x.id === id); if (o) o.status = sel.value;
-      ordersChanged();
+      ordersChanged(id, { status: sel.value });
       OPS.customers = await supa('customer_stats?select=*&order=spend.desc&limit=100').catch(() => OPS.customers);
       toast('Order marked ' + sel.value);
     } catch (e) { toast(writeError(e), true); }
@@ -2031,9 +2030,29 @@ let FUL = { rows: [], loaded: false, only: 'waiting' };
    forgets are the ones nobody goes looking for.
 
    Everything that creates an order or moves its status calls this. The cost
-   is one reload the next time Fulfilment is opened. */
-function ordersChanged() {
+   is one reload the next time Fulfilment is opened.
+
+   There are two copies of an order in this panel and they answer different
+   screens: DB.orders behind Sales, the dashboard and the figures, and
+   FUL.rows behind the queue. Fulfilment wrote its changes straight to the
+   database and refreshed only its own, so adding a tracking number moved an
+   order to "shipped" in the queue while Sales went on calling it "new" —
+   two screens, same order, different answers, and no way to tell from
+   either which one was lying.
+
+   Called bare, this only says "reload the queue next time". Called with an
+   id and the fields that changed, it also writes them into both copies, so
+   whatever the database was just told is what every screen says. */
+function ordersChanged(id, patch) {
   FUL.loaded = false;
+  if (!id || !patch) return;
+
+  const inQueue = FUL.rows.find(o => o.id === id);
+  if (inQueue) Object.assign(inQueue, patch);
+
+  const inTable = (typeof DB !== 'undefined' && DB.orders)
+    ? DB.orders.find(o => o.id === id) : null;
+  if (inTable) Object.assign(inTable, patch);
 }
 
 async function loadFulfil() {
@@ -2159,13 +2178,18 @@ function wireFulfil() {
           which is what the customer sees on the tracking page.</div></div>
     `, async () => {
       const no = $('#s_no').value.trim();
+      /* Named, because the same fields have to reach the database and then
+         both of the panel's copies of this order. A tracking number moves a
+         bat to shipped, and Sales has to hear about that too. */
+      const patch = {
+        courier: $('#s_cour').value || null,
+        tracking_no: no || null,
+        tracking_url: $('#s_url').value.trim() || null,
+        status: no && ['new','making','packed'].includes(o.status) ? 'shipped' : o.status
+      };
       try {
-        await supa('orders?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: {
-          courier: $('#s_cour').value || null,
-          tracking_no: no || null,
-          tracking_url: $('#s_url').value.trim() || null,
-          status: no && ['new','making','packed'].includes(o.status) ? 'shipped' : o.status
-        }});
+        await supa('orders?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: patch });
+        ordersChanged(id, patch);
         await loadFulfil(); render(); toast('Tracking saved');
       } catch (e) { toast(e.message, true); return false; }
     });
@@ -2173,11 +2197,10 @@ function wireFulfil() {
 }
 
 async function markTold(id, quiet) {
+  const patch = { notified_at: new Date().toISOString() };
   try {
-    await supa('orders?id=eq.' + encodeURIComponent(id), { method: 'PATCH',
-      body: { notified_at: new Date().toISOString() } });
-    const row = FUL.rows.find(o => o.id === id);
-    if (row) row.notified_at = new Date().toISOString();
+    await supa('orders?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: patch });
+    ordersChanged(id, patch);
     if (!quiet) { toast('Marked as told'); render(); }
   } catch (e) { toast(e.message, true); }
 }
