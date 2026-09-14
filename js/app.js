@@ -288,6 +288,53 @@ function cartWaText(info) {
   return t;
 }
 
+/* The finished order, written out as the message the customer sends us.
+
+   Built from the order rather than the cart, because completeOrder() has
+   already emptied the cart by the time the confirmation screen renders —
+   cartWaText() would hand them a message with nothing in it.
+
+   It also has to carry what the cart never knew: the order number, and for
+   an online payment the Razorpay reference. Those two are what turn this
+   from a shopping list into something either side can look up later. */
+function orderWaText(o) {
+  const paid = o.method === 'online';
+  let t = 'Hi Toss Sports 👋\n\n';
+  t += paid ? 'I have just paid for this order:\n\n' : 'I want to place this order:\n\n';
+  t += `*Order ${o.id}*\n`;
+  if (o.payment_id) t += `Payment reference: ${o.payment_id}\n`;
+  t += '\n';
+
+  (o.items || []).forEach((i, n) => {
+    const p = byId(i.id) || { name: i.id, price: 0 };
+    const v = variantName(p, i.variant);
+    t += `${n + 1}. *${p.name}*${v ? ' — ' + v : ''}\n`;
+    if (i.engrave) t += `   Engraved: "${i.engrave}"\n`;
+    if (i.warranty) {
+      const w = WARRANTY().find(x => x.id === String(i.warranty));
+      if (w) t += `   Warranty: ${w.months} months\n`;
+    }
+    const unit = (p.price || 0) + (i.engrave ? SERVICES.engraving.price : 0) + warrantyPrice(i);
+    t += `   Qty ${i.qty}`;
+    t += hasPrice(p) ? ` × ${fmt(unit)} = ${fmt(unit * i.qty)}\n` : '  (price on request)\n';
+  });
+
+  t += `\nSubtotal: ${fmt(o.subtotal)}`;
+  t += `\nShipping: ${o.shipping === 0 ? 'FREE' : fmt(o.shipping)}`;
+  if (o.off > 0) t += `\nDiscount (${o.coupon}): −${fmt(o.off)}`;
+  t += `\n*Total: ${fmt(o.total)}*\n`;
+  if (paid) t += 'Paid online ✅\n';
+
+  const info = o.info;
+  if (info) {
+    t += `\n— Delivery details —\n${info.name}\n${info.phone}\n${info.address}\n${info.city} — ${info.pin}\n${info.state}`;
+    if (info.email) t += `\n${info.email}`;
+    if (info.notes) t += `\nNote: ${info.notes}`;
+  }
+  t += '\n\nPlease confirm and share tracking.';
+  return t;
+}
+
 /* ---------------- filtering ---------------- */
 const prodCat = p => p.category || 'bats';
 
@@ -2610,6 +2657,65 @@ function viewGame() {
 }
 
 /* ---------------- VIEW: CHECKOUT ---------------- */
+/* ------------------------------------------------------------
+   THE ACCOUNT GATE
+
+   An order has to belong to somebody, so checkout asks who you are.
+   Browsing and the bag stay open on purpose: the gate stands at the
+   last possible moment, which is also the first moment the Firebase
+   SDK is worth downloading. Up to here the storefront still carries
+   no external JavaScript, which is the rule it was written under.
+
+   Two states are NOT "signed out" and must not be treated as it:
+
+     · settling — the SDK has not reported yet. Showing the gate on a
+       maybe would bounce an already-signed-in customer into a sign-in
+       form every time they opened checkout.
+     · unavailable — Firebase is unconfigured, or its CDN is blocked.
+       The shop sells anyway. Closing the till because Google is having
+       a bad day is the worse failure of the two, and this gate was
+       never the thing deciding who owns an order — the database is.
+   ------------------------------------------------------------ */
+let AUTH_STATE = 'idle';          /* idle | settling | ready | unavailable */
+
+function authGateStatus() {
+  if (AUTH_STATE === 'ready' || AUTH_STATE === 'unavailable') return AUTH_STATE;
+
+  if (typeof fbReady !== 'function' ||
+      (typeof fbConfigured === 'function' && !fbConfigured())) {
+    AUTH_STATE = 'unavailable';
+    return AUTH_STATE;
+  }
+
+  if (AUTH_STATE === 'idle') {
+    AUTH_STATE = 'settling';
+    fbReady().then(
+      () => { AUTH_STATE = 'ready';       route(true); },
+      () => { AUTH_STATE = 'unavailable'; route(true); }
+    );
+  }
+  return AUTH_STATE;
+}
+
+function viewCheckoutGate() {
+  const n = cartCount();
+  return `
+  <section class="co"><div class="wrap">
+    <div class="panel" style="max-width:520px;margin:0 auto">
+      <h1 class="d2">Sign in to place your order</h1>
+      <p class="lede" style="margin:12px 0 0">
+        Your bag is saved — ${n} item${n === 1 ? '' : 's'}, ${fmt(grandTotal())}.
+        An account is how you track this order, reorder it later and claim the
+        warranty on it.
+      </p>
+      <div class="buy-row" style="margin-top:22px">
+        <a href="#/account" class="btn btn-primary btn-block" id="gateSignIn">Sign in or create an account</a>
+        <a href="#/shop" class="btn btn-ghost btn-block">Keep shopping</a>
+      </div>
+    </div>
+  </div></section>`;
+}
+
 function viewCheckout() {
   if (lastOrder) return viewDone();
   /* Before the empty-bag check, so a bag holding only retired lines is
@@ -2621,6 +2727,18 @@ function viewCheckout() {
       <p>Add a bat and come back.</p>
       <a href="#/shop" class="btn btn-primary btn-sm" style="margin-top:16px">Shop Bats</a>
     </div></div></section>`;
+
+  /* Who is buying. Asked after the bag is known to be real, so an empty bag
+     never sends anyone to a sign-in form for an order that does not exist. */
+  const gate = authGateStatus();
+  if (gate === 'settling') return `
+    <section class="co"><div class="wrap">
+      <div class="panel" style="max-width:520px;margin:0 auto;text-align:center">
+        <p class="lede" style="margin:0">Checking your account…</p>
+      </div>
+    </div></section>`;
+  if (gate === 'ready' && typeof acctUser === 'function' && !acctUser())
+    return viewCheckoutGate();
 
   const sub = cartSubtotal(), sh = shipFee(), off = couponOff(), tot = sub + sh - off;
   return `
@@ -2782,10 +2900,30 @@ function viewDone() {
              <span class="off num">− ${fmt(o.off)}</span></div>` : ''}
           <div class="sum tot"><span>Total</span><span class="num">${fmt(o.total)}</span></div>
         </div>
-        <div class="buy-row" style="margin-top:24px">
+        <!-- The hand-off, and the only thing on this screen until it is done.
+
+             Every order is finished on WhatsApp — stock, weight and delivery
+             are confirmed there, not here. When this was one of two equal
+             buttons sitting beside "Keep shopping", orders arrived with
+             nobody on the other end of them. It leads now, and the way on
+             appears once they have opened it.
+
+             It is a real link the customer taps, not a window.open on a
+             timer: a tab opened without a gesture behind it is what popup
+             blockers exist to stop. -->
+        <div class="done-wa" style="margin-top:24px;text-align:left;
+             border:1px solid var(--line);border-radius:14px;padding:18px">
+          <b style="display:block;margin-bottom:6px">One last step — send us this order on WhatsApp</b>
+          <p style="font-size:.82rem;color:var(--ink-50);margin:0 0 14px">
+            It opens already written, with your order number and details in it. This is the
+            thread we use to confirm ${o.method === 'online' ? 'weight and delivery' : 'stock, weight and delivery'}.
+          </p>
+          <a href="${waLink(orderWaText(o))}" target="_blank" rel="noopener"
+             id="waDone" class="btn btn-wa btn-block">${ICON.whatsapp} Send my order on WhatsApp</a>
+        </div>
+        <div class="buy-row${o.waSent ? '' : ' hide'}" id="doneNext" style="margin-top:14px">
           <a href="#/shop" class="btn btn-ghost btn-block">Keep shopping</a>
-          <a href="${waLink('Hi Toss Sports, checking on my order ' + o.id)}" target="_blank"
-             rel="noopener" class="btn btn-wa btn-block">${ICON.whatsapp} Track on WhatsApp</a>
+          <a href="#/account" class="btn btn-ghost btn-block">View my orders</a>
         </div>
       </div>
     </div>
@@ -3354,6 +3492,25 @@ function mount(page, parts) {
   }
 
   if (page === 'checkout') {
+    /* The confirmation screen's hand-off. The way onward is hidden until the
+       customer has actually opened the WhatsApp thread; the flag lives on the
+       order so a re-render — a resize, a back-navigation — does not lock a
+       customer who already sent it back out of the rest of the site. */
+    const waDone = $('#waDone');
+    if (waDone) waDone.onclick = () => {
+      if (lastOrder) lastOrder.waSent = true;
+      const next = $('#doneNext');
+      if (next) next.classList.remove('hide');
+    };
+
+    /* The gate sends them to the account page. This remembers why, so that
+       signing in returns them to the order they were halfway through rather
+       than dropping them on their order history to find their own way back. */
+    const gateLink = $('#gateSignIn');
+    if (gateLink) gateLink.onclick = () => {
+      try { sessionStorage.setItem('toss_after_signin', '#/checkout'); } catch (e) { /* private mode */ }
+    };
+
     /* Saved details, for anyone signed in. Nothing is forced: these are a
        starting point that someone posting a bat to a team-mate types
        straight over. Signed out, acctPrefill() returns null and checkout

@@ -851,6 +851,19 @@ function viewProducts() {
     ${DB.catSynced ? '' : `<p class="muted" style="margin-bottom:14px">Categories are not in the
       database yet — run <code>sql/007-categories.sql</code> once in the Supabase SQL editor
       to create and manage them.</p>`}
+    ${(() => {
+      /* A product that is not live is invisible to customers, and nothing on
+         the storefront can say so — the shop's query and the row-level policy
+         both filter it out before it is ever a result. The only place that
+         can tell anyone is here. */
+      const off = DB.products.filter(p => !p.active).length;
+      if (!off || pFilter.state === 'off') return '';
+      return `<div class="banner" style="margin-bottom:14px">
+        <b>${off} product${off === 1 ? ' is' : 's are'} not on the storefront.</b>
+        A product only reaches customers once <i>Live on the storefront</i> is ticked.
+        <button class="btn ghost sm" id="pShowOff" style="margin-left:8px">Show them</button>
+      </div>`;
+    })()}
     <div class="filters">
       <input id="pq" placeholder="Search name or id" value="${esc(pFilter.q)}">
       <select id="ptier">
@@ -895,6 +908,8 @@ function wireProducts() {
   $('#ptier').onchange = e => { pFilter.tier = e.target.value; re(); };
   $('#pstate').onchange = e => { pFilter.state = e.target.value; re(); };
   $$('.cat-chip').forEach(b => b.onclick = () => { pFilter.cat = b.dataset.cat; re(); });
+  const showOff = $('#pShowOff');
+  if (showOff) showOff.onclick = () => { pFilter.state = 'off'; re(); };
 
   /* stock valuation, which is the reason to export products at all */
   wireExport('products', 'Stock report', () => {
@@ -1580,10 +1595,22 @@ function manageCategories() {
 
 function editProduct(id) {
   const isNew = !id;
+  const newCat = pFilter.cat || 'bats';
   const p = isNew
     ? { id: '', name: '', price: null, mrp: null, cost: null, stock: 0, tier: 'mid',
-        sort: (DB.products.length + 1) * 10, active: false, images: [], data: {},
-        category: pFilter.cat || 'bats' }
+        sort: (DB.products.length + 1) * 10,
+        /* A new bat is live the moment it is saved. This used to default to
+           hidden, which meant the only thing standing between a finished
+           product and the storefront was a checkbox nobody had a reason to
+           look at — bats were being created here and then quietly not sold,
+           because both the shop's query and the row-level policy filter on
+           active = true and neither says why a product is missing.
+
+           Anything that is not a bat still starts hidden, because it cannot
+           go live without a photo (the guard on save below) and would be
+           refused if it arrived here already ticked. */
+        active: newCat === 'bats',
+        images: [], data: {}, category: newCat }
     : DB.products.find(x => x.id === id);
   if (!p) return;
   openModal(isNew ? 'New product' : `Edit — ${esc(p.name)}`, `
