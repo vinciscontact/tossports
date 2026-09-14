@@ -535,6 +535,7 @@ function buildNav() {
       <span class="dk-tip">Account</span>
     </button>`;
 
+  wireDockTips();
   $('#dockBack').onclick = navBack;
   $$('#nav [data-tab]').forEach(b => b.onclick = () => {
     const prev = TAB;
@@ -580,6 +581,52 @@ function buildNav() {
 
 /* macOS-style magnification: icons swell as the pointer nears. Pure
    transform, mouse-only — touch and reduced-motion users get a still dock. */
+/* The dock's labels.
+
+   The name of each tab is already in the button, in a span the stylesheet
+   does not draw. It cannot be drawn there: the dock scrolls sideways, and
+   a sideways-scrolling box clips vertically too, so a label sitting above
+   the bar is cut away before it reaches the screen. This lifts the text
+   into one floating element parked at the top of the document, where
+   nothing clips it, and moves that element to whatever the pointer is on.
+
+   Pointer and keyboard only. A touchscreen has no hover to respond to, and
+   this panel is a desktop one. */
+function wireDockTips() {
+  const dock = $('#nav');
+  if (!dock || !matchMedia('(hover:hover)').matches) return;
+
+  let tip = $('#dkFloat');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'dkFloat';
+    tip.className = 'dk-float';
+    document.body.appendChild(tip);
+  }
+  tip.classList.remove('on');   /* the dock re-renders; never leave one hanging */
+
+  const hide = () => tip.classList.remove('on');
+  const show = btn => {
+    const src = btn.querySelector('.dk-tip');
+    if (!src) return;
+    tip.innerHTML = src.innerHTML;
+    const r = btn.getBoundingClientRect();
+    tip.style.left = (r.left + r.width / 2) + 'px';
+    tip.style.top  = (r.top - 10) + 'px';
+    tip.classList.add('on');
+  };
+
+  $$('.dk', dock).forEach(b => {
+    b.addEventListener('mouseenter', () => show(b));
+    b.addEventListener('mouseleave', hide);
+    b.addEventListener('focus', () => show(b));
+    b.addEventListener('blur', hide);
+    /* Opening a tab moves the page under the pointer; a label left behind
+       would be describing something that is no longer there. */
+    b.addEventListener('click', hide);
+  });
+}
+
 function wireDockMagnify() {
   const dock = $('#nav');
   if (!dock || !matchMedia('(pointer:fine)').matches
@@ -1711,6 +1758,23 @@ function editProduct(id) {
        may not go live with an empty gallery */
     if (row.category !== 'bats' && row.active && !row.images.length) {
       toast('Add at least one photo before switching this live — non-bat products have no generated artwork', true);
+      return false;
+    }
+
+    /* A bat is drawn from its wood, and a bat that does not name one took
+       the whole shop down: the card read the wood out of a lookup table,
+       found nothing, and threw in the middle of building the grid, so the
+       storefront stopped rendering entirely. The shop now falls back to a
+       dash instead of throwing — but a live bat showing "—" where its wood
+       belongs is still an unfinished product in front of a customer, and
+       this is the screen that can say so before it gets there.
+
+       The three keys are spelled out because the Maze Room does not load
+       the storefront's catalogue; they are the keys of WOOD in
+       js/products.js and have to be kept in step with it. */
+    if (row.category === 'bats' && row.active &&
+        ['srilankan', 'kashmir', 'poplar'].indexOf(data.wood) === -1) {
+      toast('Set "wood" to srilankan, kashmir or poplar in the spec data before this bat goes live', true);
       return false;
     }
 

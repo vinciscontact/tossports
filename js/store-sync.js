@@ -9,10 +9,35 @@
 
 let LIVE = { products: false, settings: false, scores: false };
 
+/* Everything the storefront reads off a product that has no column of its
+   own, with a value that is safe to render.
+
+   Supabase keeps the sellable fields as columns and the rest of the spec in
+   a free-form `data` blob. A bat created in the Maze Room and saved with
+   that blob still empty arrives here with no wood, no weight and no ball at
+   all — and the shop walked straight into it: pickupWords read p.weight[0]
+   off undefined and threw inside the map that builds the grid, so one
+   incomplete row stopped the whole catalogue from rendering and took the
+   filters and the search results down with it.
+
+   Filling the shape here, once, is what keeps a half-finished product a
+   cosmetic problem — a card with a dash on it — instead of an outage. The
+   Maze Room refuses to put a bat live without a wood, which is where it
+   belongs; this is the floor underneath that. Empty arrays rather than
+   invented numbers: every reader already has a sensible answer for "not
+   known", and none of them should be told 780 grams by a default. */
+const PRODUCT_SHAPE = {
+  wood: '', profile: 'standard',
+  weight: [], ball: [], usage: [], features: [], badges: [],
+  tagline: '', edge: '', spine: '', handle: '', finish: '',
+  height: '', sweetSpot: '',
+  rating: 0, reviews: 0, popularity: 0
+};
+
 /* Supabase keeps the queryable columns separate from the spec blob.
    Flatten back into the shape every view and the SVG renderer expect. */
 function rowToProduct(r) {
-  return Object.assign({}, r.data || {}, {
+  return Object.assign({}, PRODUCT_SHAPE, r.data || {}, {
     id: r.id, name: r.name,
     price: r.price, mrp: r.mrp, tier: r.tier,
     stock: r.stock, images: r.images || [], cost: r.cost,

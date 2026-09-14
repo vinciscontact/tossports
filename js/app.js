@@ -240,6 +240,22 @@ function pruneCart() {
   return dropped;
 }
 
+/* ---------------- the spec vocabulary, for imperfect products ----------
+
+   A bat saved from the Maze Room without a wood or a profile used to take
+   the entire shop down with it. The card read WOOD[p.wood].short straight
+   out of the table, found nothing there, and threw in the middle of the
+   map that builds the grid — so viewShop() never returned, the page kept
+   whatever had been on it, and every filter and sort along with it looked
+   broken. The catalogue is edited by people, over the web, one field at a
+   time; a row that is missing one of them is a normal thing to happen and
+   should cost that product a line of its own text, not the storefront.
+
+   The dash is deliberate. It reads as "not filled in yet" to a customer
+   and as a job to whoever opens that product in the Maze Room. */
+const WOOD_OF    = p => WOOD[p && p.wood]       || { key: '', label: '—', short: '—' };
+const PROFILE_OF = p => PROFILE[p && p.profile] || { key: '', label: '—', blurb: '' };
+
 /* ---------------- WhatsApp ---------------- */
 function waLink(text) {
   return 'https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(text);
@@ -597,7 +613,7 @@ function cardHTML(p) {
       ${batArt(p)}
     </a>
     <div class="card-b">
-      <span class="card-meta">${WOOD[p.wood].short} · ${(PROFILE_WORDS[p.profile] || PROFILE_WORDS.standard).b}</span>
+      <span class="card-meta">${WOOD_OF(p).short} · ${(PROFILE_WORDS[p.profile] || PROFILE_WORDS.standard).b}</span>
       <h3><a href="#/product/${p.id}">${esc(p.name)}</a></h3>
       ${p.tagline ? `<p class="card-tag">${esc(p.tagline)}</p>` : ''}
       <!-- plain language first, the figure as fine print. "780 grams" means
@@ -1955,8 +1971,8 @@ function viewProduct(id) {
     .sort((a, b) => b.popularity - a.popularity).slice(0, 4);
 
   const specs = [
-    ['Wood', WOOD[p.wood].label],
-    ['Profile', PROFILE[p.profile].label],
+    ['Wood', WOOD_OF(p).label],
+    ['Profile', PROFILE_OF(p).label],
     ['Weight', weightLabel(p)],
     ['Height', heightLabel(p)],
     ['Handle', p.handle],
@@ -2058,7 +2074,7 @@ function viewProduct(id) {
           <details open>
             <summary><b>Description</b><span class="acc-i"></span></summary>
             <div class="acc-b">
-              <p>${esc(p.tagline)}. ${WOOD[p.wood].short} with a
+              <p>${esc(p.tagline)}. ${WOOD_OF(p).short} with a
                 ${(PROFILE_WORDS[p.profile] || PROFILE_WORDS.standard).b.toLowerCase()} profile,
                 ${p.weight[0]}–${p.weight[1]}g and ${p.height[0]}–${p.height[1]} inches.
                 Built for ${p.ball.map(b => BALL_LABEL[b].toLowerCase()).join(' and ')} cricket.</p>
