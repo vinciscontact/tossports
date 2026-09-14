@@ -2674,6 +2674,33 @@ function viewGame() {
 
 /* ---------------- VIEW: CHECKOUT ---------------- */
 /* ------------------------------------------------------------
+   WHAT THE CUSTOMER HAS TYPED, KEPT ACROSS RE-RENDERS
+
+   route() rebuilds this page from its markup every time, and checkout
+   re-renders for perfectly ordinary reasons — applying a discount code is
+   the common one, and it is usually the LAST thing somebody does before
+   paying. Rebuilt markup meant empty inputs, so a customer who had filled
+   in their whole address watched all six fields empty themselves the moment
+   they claimed their discount. Some of them would type it all again.
+
+   The draft is only ever read into a field that is empty, so it can never
+   overwrite something the customer is in the middle of changing, and it is
+   cleared once the order is placed so the next one starts clean.
+   ------------------------------------------------------------ */
+let CO_DRAFT = {};
+const CO_FIELDS = ['#cName', '#cPhone', '#cAddr', '#cCity', '#cState', '#cPin', '#cEmail', '#cNotes'];
+
+function coSaveDraft() {
+  CO_FIELDS.forEach(function (sel) { const el = $(sel); if (el) CO_DRAFT[sel] = el.value; });
+}
+function coRestoreDraft() {
+  CO_FIELDS.forEach(function (sel) {
+    const el = $(sel);
+    if (el && !el.value && CO_DRAFT[sel]) el.value = CO_DRAFT[sel];
+  });
+}
+
+/* ------------------------------------------------------------
    THE ACCOUNT GATE
 
    An order has to belong to somebody, so checkout asks who you are.
@@ -3156,6 +3183,7 @@ function completeOrder(method, info, extra) {
 
   cart = []; saveCart(); syncCart();
   coupon = null; saveCoupon();          /* a code is single-use */
+  CO_DRAFT = {};                        /* the next order starts on a clean form */
   route();
   window.scrollTo(0, 0);
 }
@@ -3564,6 +3592,16 @@ function mount(page, parts) {
     if (gateLink) gateLink.onclick = () => {
       try { sessionStorage.setItem('toss_after_signin', '#/checkout'); } catch (e) { /* private mode */ }
     };
+
+    /* Put back whatever they had already typed before this re-render, and
+       keep watching so the next one has something to put back. Runs before
+       the account prefill below, so a half-typed address is never replaced
+       by the saved one. */
+    coRestoreDraft();
+    CO_FIELDS.forEach(function (sel) {
+      const el = $(sel);
+      if (el) el.addEventListener('input', coSaveDraft);
+    });
 
     /* Saved details, for anyone signed in. Nothing is forced: these are a
        starting point that someone posting a bat to a team-mate types
