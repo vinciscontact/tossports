@@ -670,6 +670,7 @@ function wireSales() {
     try {
       await saveRow('orders', { id, status: sel.value });
       const o = DB.orders.find(x => x.id === id); if (o) o.status = sel.value;
+      ordersChanged();
       OPS.customers = await supa('customer_stats?select=*&order=spend.desc&limit=100').catch(() => OPS.customers);
       toast('Order marked ' + sel.value);
     } catch (e) { toast(writeError(e), true); }
@@ -722,6 +723,7 @@ function logSaleModal() {
     try {
       await supa('orders', { method: 'POST', headers: { Prefer: 'return=representation' }, body: row });
       DB.orders.unshift(Object.assign({ created_at: new Date().toISOString() }, row));
+      ordersChanged();
       OPS.customers = await supa('customer_stats?select=*&order=spend.desc&limit=100').catch(() => OPS.customers);
       toast('Sale logged'); render();
     } catch (e) { toast(writeError(e), true); return false; }
@@ -2014,6 +2016,25 @@ function wireQAAdmin() {
    ============================================================ */
 
 let FUL = { rows: [], loaded: false, only: 'waiting' };
+
+/* Say that the orders table has moved under us.
+
+   Fulfilment keeps its own copy and loads it once, which is right — it is a
+   queue, not a live feed, and re-reading it on every render would be a
+   request per keystroke. What was missing is anybody telling it when an
+   order appeared from somewhere else in the panel.
+
+   Logging a counter sale and then opening Fulfilment showed "Nothing
+   waiting — all caught up" with a real unshipped order sitting in the
+   database. That is the one thing an operations queue may never do: a queue
+   that is quietly wrong is worse than no queue, because the orders it
+   forgets are the ones nobody goes looking for.
+
+   Everything that creates an order or moves its status calls this. The cost
+   is one reload the next time Fulfilment is opened. */
+function ordersChanged() {
+  FUL.loaded = false;
+}
 
 async function loadFulfil() {
   try {
