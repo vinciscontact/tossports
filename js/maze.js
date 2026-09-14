@@ -1788,6 +1788,30 @@ function editProduct(id) {
     try {
       if (isNew) { await insertRow('products', row); DB.products.push(row); }
       else       { await saveRow('products', row); Object.assign(p, row); }
+
+      /* Stock has to land in product_stock, one row per branch. That is the
+         table the order path reads and decrements, and the only one that
+         decides whether a customer can actually buy; products.stock is the
+         older single-shop copy, written above so nothing still reading it
+         goes stale.
+
+         Writing only that copy was the bug. A number typed into this form
+         looked saved and was saved — to the column nothing checks. The list
+         went on showing zero, because it reads the branch table, and every
+         order was refused for a bat the shop believed it had none of, with
+         the customer told "Order placed" all the same. */
+      const stockBranch = BRANCH || (ME && ME.branch_id) || defaultBranch();
+      if (stockBranch) {
+        await supa('product_stock?on_conflict=product_id,branch_id', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: { product_id: row.id, branch_id: stockBranch, stock: row.stock }
+        });
+        const sr = DB.stock.find(s => s.product_id === row.id && s.branch_id === stockBranch);
+        if (sr) sr.stock = row.stock;
+        else DB.stock.push({ product_id: row.id, branch_id: stockBranch, stock: row.stock });
+      }
+
       if (DB.psSynced) await savePlaystyles(row.id);
       toast('Saved');
       render();
