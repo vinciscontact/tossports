@@ -1095,7 +1095,7 @@ function viewHome() {
   <section class="trust">
     <div class="wrap trust-grid">
       <div class="trust-i">${ICON.hammer}<div><b>We make it, so we answer for it</b><span>Shaped in our own unit — never resold</span></div></div>
-      <div class="trust-i">${ICON.whatsapp}<div><b>Not sure? Ask before you pay</b><span>Message us — no account, no card</span></div></div>
+      <div class="trust-i">${ICON.whatsapp}<div><b>Not sure? Ask before you pay</b><span>Message us first — no sign-in, no card</span></div></div>
       <div class="trust-i">${ICON.truck}<div><b>Delivered across India</b><span>Free over ₹1,500 · 3–6 days</span></div></div>
       <div class="trust-i">${ICON.shield}<div><b>Breaks in 3 months? We replace it</b><span>Warranty on Toss Power X</span></div></div>
     </div>
@@ -1861,14 +1861,14 @@ function viewProductGeneric(p) {
           <div class="pdp-assure">
             <span>${ICON.hammer}<b>From our unit</b><i>Hand-checked</i></span>
             <span>${ICON.truck}<b>${hasPrice(p) && p.price >= FREE_SHIP_OVER ? 'Free shipping' : 'Ships India-wide'}</b><i>3–6 days</i></span>
-            <span>${ICON.whatsapp}<b>Ask before you pay</b><i>No account needed</i></span>
+            <span>${ICON.whatsapp}<b>Ask before you pay</b><i>Message us, no sign-in</i></span>
             <span>${ICON.check}<b>Checked &amp; packed</b><i>Photographed first</i></span>
           </div>
 
           <div class="buy-row">
             ${hasPrice(p)
               ? `<button class="btn btn-primary btn-block" id="addBtn">${ICON.cart} Add to Bag</button>
-                 <button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Order on WhatsApp</button>`
+                 <button class="btn btn-dark btn-block" id="buyBtn">Buy now</button>`
               : `<button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Ask price on WhatsApp</button>`}
           </div>
         </div>
@@ -1952,11 +1952,13 @@ function buybarHTML(p) {
     </div>
 
     <div class="bb-act">
-      <button class="btn ${priced ? 'btn-wa-ghost' : 'btn-wa'}" id="waBtn2">
-        ${ICON.whatsapp}<span class="bb-wa-t">${priced ? 'WhatsApp' : 'Ask on WhatsApp'}</span>
-      </button>
-      ${priced ? `<button class="btn btn-primary" id="addBtn2">${ICON.cart}
-        <span class="bb-add-t">Add to Bag</span></button>` : ''}
+      ${priced
+        ? `<button class="btn btn-dark" id="buyBtn2">
+             <span class="bb-wa-t">Buy now</span></button>
+           <button class="btn btn-primary" id="addBtn2">${ICON.cart}
+             <span class="bb-add-t">Add to Bag</span></button>`
+        : `<button class="btn btn-wa" id="waBtn2">
+             ${ICON.whatsapp}<span class="bb-wa-t">Ask on WhatsApp</span></button>`}
     </div>
   </div>`;
 }
@@ -2060,7 +2062,7 @@ function viewProduct(id) {
           <div class="buy-row">
             ${hasPrice(p)
               ? `<button class="btn btn-primary btn-block" id="addBtn">${ICON.cart} Add to Bag</button>
-                 <button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Order on WhatsApp</button>`
+                 <button class="btn btn-dark btn-block" id="buyBtn">Buy now</button>`
               : `<button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Ask price on WhatsApp</button>`}
           </div>
 
@@ -2825,21 +2827,30 @@ function viewCheckout() {
             <h3>How do you want to pay?</h3>
             <p class="sub">Both options are confirmed by us before dispatch.</p>
 
-            <div class="pay-opt on" data-pay="wa">
+            <!-- Paying leads. It used to sit second, behind a WhatsApp option
+                 tagged "Most used" and selected by default, so a customer who
+                 had filled in the whole form still had to notice and switch
+                 before they could actually pay. The methods are named here
+                 rather than left to appear only once Razorpay opens, because
+                 "is my UPI accepted?" is a question worth answering before
+                 the click, not after it. -->
+            <div class="pay-opt on" data-pay="online">
               <div class="pay-radio"></div>
               <div>
-                <b>${ICON.whatsapp} Order on WhatsApp <span class="pay-tag">Most used</span></b>
-                <p>Your full order opens as a ready-made WhatsApp message. We confirm stock,
-                   weight and delivery, then you pay — UPI on confirmation or cash on delivery.</p>
+                <b>${ICON.rupee} Pay now <span class="pay-tag">Fastest</span></b>
+                <p>UPI, credit or debit card, or netbanking — through Razorpay.
+                   Your order is confirmed instantly and goes straight into dispatch.</p>
+                <p style="font-size:.76rem;color:var(--ink-50);margin-top:6px">
+                  UPI · GPay · PhonePe · Paytm · Visa · Mastercard · RuPay · Netbanking</p>
               </div>
             </div>
 
-            <div class="pay-opt" data-pay="online">
+            <div class="pay-opt" data-pay="wa">
               <div class="pay-radio"></div>
               <div>
-                <b>${ICON.rupee} Pay online now</b>
-                <p>UPI, card or netbanking via Razorpay. Order is confirmed instantly
-                   and goes straight into dispatch.</p>
+                <b>${ICON.whatsapp} Confirm on WhatsApp first</b>
+                <p>Your full order opens as a ready-made WhatsApp message. We confirm stock,
+                   weight and delivery, then you pay — UPI on confirmation.</p>
               </div>
             </div>
           </div>
@@ -2900,8 +2911,8 @@ function viewCheckout() {
                  <span>Add ${fmt(FREE_SHIP_OVER - sub)} more for free shipping</span><span></span></div>` : ''}
               <div class="sum tot"><span>Total</span><span class="num">${fmt(tot)}</span></div>
             </div>
-            <button class="btn btn-wa btn-block" id="placeBtn" style="margin-top:18px">
-              ${ICON.whatsapp} Send Order on WhatsApp
+            <button class="btn btn-primary btn-block" id="placeBtn" style="margin-top:18px">
+              ${ICON.rupee} Pay ${fmt(tot)}
             </button>
             <p style="font-size:.74rem;color:var(--ink-50);text-align:center;margin:12px 0 0">
               By placing this order you agree to be contacted on WhatsApp about it.
@@ -3090,7 +3101,7 @@ function closeDrawers() {
    the fuzzy matching and the service and help entries. */
 
 /* ---------------- checkout logic ---------------- */
-let payMethod = 'wa';
+let payMethod = 'online';   /* paying is the default; WhatsApp is the alternative */
 
 function readForm() {
   return {
@@ -3548,6 +3559,19 @@ function mount(page, parts) {
     };
     ['#addBtn', '#addBtn2'].forEach(s => { const el = $(s); if (el) el.onclick = add; });
 
+    /* Buy now is Add to Bag for somebody who has already decided: the same
+       line, the same engraving check, and then straight to checkout instead
+       of back to the page they were just on. It does not clear the bag —
+       anything already in there travels with it, because emptying a
+       customer's bag because they pressed Buy on one bat would be a
+       surprising way to lose the rest of the order. */
+    const goBuy = () => {
+      const before = cartCount();
+      add();
+      if (cartCount() > before) location.hash = '#/checkout';
+    };
+    ['#buyBtn', '#buyBtn2'].forEach(s => { const el = $(s); if (el) el.onclick = goBuy; });
+
     wireQA(p.id);
 
     const wa = () => {
@@ -3638,7 +3662,7 @@ function mount(page, parts) {
       showPin();
     }
     trackEvent('begin_checkout', { value: grandTotal(), currency: 'INR' });
-    payMethod = 'wa';
+    payMethod = 'online';
     loadRazorpay();
 
     $$('.pay-opt').forEach(o => o.onclick = () => {
