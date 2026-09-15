@@ -304,6 +304,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .pill.new{background:rgba(91,140,255,.16);color:#3f6ad8}
 .pill.packed{background:rgba(255,176,32,.16);color:#9a6c00}
 .pill.shipped{background:rgba(40,199,111,.16);color:#148a4e}
+/* Delivered is not another shade of in-progress — it is the end of the
+   journey, so it reads settled rather than active. */
+.pill.delivered{background:rgba(20,138,78,.18);color:#0e6b3b}
 .pill.cancelled{background:rgba(255,90,95,.14);color:#c22f34}
 
 .warn-cell{color:var(--amber);font-weight:700}

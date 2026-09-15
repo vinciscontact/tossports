@@ -530,7 +530,14 @@ function viewSales() {
           <td>${o.paid ? '<span class="pill on">Paid</span>' : '<span class="pill off">Unpaid</span>'}</td>
           <td>${isAdminRole()
             ? `<select data-status="${esc(o.id)}" class="inline-sel">
-                ${['new','packed','shipped','cancelled'].map(s =>
+                ${/* delivered was missing, and everything downstream already
+                      expected it: the tracking timeline has a Delivered step,
+                      the customer's account marks an order done on it, and the
+                      fulfilment filter excludes it. Without it here no order
+                      could ever reach the state the rest of the system was
+                      written around. Cancelled sits last because it is not a
+                      step along the way — it is the way out. */
+                  ['new','packed','shipped','delivered','cancelled'].map(s =>
                   `<option ${o.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>`
             : `<span class="pill ${esc(o.status)}">${esc(o.status)}</span>`}</td>
           <td class="muted">${when(o.created_at)}</td></tr>`;
