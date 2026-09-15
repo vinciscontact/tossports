@@ -65,7 +65,8 @@ const ROLE = { customClaims: { role: 'authenticated' } };
 exports.beforecreated  = beforeUserCreated(() => ROLE);
 exports.beforesignedin = beforeUserSignedIn(() => ROLE);
 
-/* The Razorpay webhook. Separate file because it has nothing to do with
-   identity claims — it is the only thing allowed to say an order was paid.
-   See razorpay-webhook.js for why that matters. */
-exports.razorpaywebhook = require('./razorpay-webhook').razorpaywebhook;
+/* The Razorpay webhook is NOT here. It lives as a Supabase Edge Function
+   (supabase/functions/razorpay-webhook), because Firebase Functions v2
+   needs the Blaze plan and Supabase runs functions on the free tier. It
+   also sits next to the database it writes to, so the service role key
+   never has to travel between two providers. */
