@@ -523,7 +523,7 @@ function tierRowHTML(flush) {
         <span class="tier-line">${t.line}</span>
         <div class="tier-price"><small>from</small> ${fmt(from)}</div>
         <span class="tier-note">${t.note}</span>
-        <span class="tier-meta">${list.length} bats · ${reviews} reviews</span>
+        <span class="tier-meta">${reviews} reviews</span>
         <span class="tier-go">See these ${ICON.arrow}</span>
       </a>`;
   }).join('');
@@ -1546,7 +1546,6 @@ function groupedIndex(list) {
         <div class="ix-gh">
           <h2>${g.title}</h2>
           <p>${g.sub}</p>
-          <span class="ix-gn">${rows.length} bat${rows.length === 1 ? '' : 's'}</span>
         </div>
         <div class="grid">${rows.map(cardHTML).join('')}</div>
       </div>`;
@@ -1620,9 +1619,13 @@ function viewShop() {
             </select>
             <!-- A text search spans every category, so "bats" would be a lie
                  the moment somebody searches for a ball. -->
-            <span class="count num">${list.length} ${filters.q
-              ? 'result' + (list.length === 1 ? '' : 's')
-              : 'bat' + (list.length === 1 ? '' : 's')}</span>
+            <!-- A search result count answers something the shopper asked, so it
+                 stays. The plain browsing count did not: it only ever told them
+                 how small or large the range is, which is not their business
+                 and not ours to volunteer. -->
+            ${filters.q
+              ? `<span class="count num">${list.length} result${list.length === 1 ? '' : 's'}</span>`
+              : ''}
           </div>
 
           ${chips.length ? `<div class="pills">
