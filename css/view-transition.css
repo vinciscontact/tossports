@@ -1,0 +1,60 @@
+/* ============================================================
+   TOSS — the plate morph (homepage story band → about-us/)
+
+   The story band already calls itself a trailer for the story
+   page. This makes that literal: tap a brother's poster and the
+   poster is the thing that carries you — it lifts out of the
+   band, un-rotates, and lands as the plate at the head of his
+   spread.
+
+   Native cross-document view transitions. No library, nothing
+   to download, nothing to wait for. A browser without them
+   follows the link the ordinary way and arrives in the same
+   place, which is the whole reason to do it this way.
+
+   Loaded by exactly two pages, because exactly two pages are
+   ever on either end of this navigation. The other 136 are not
+   opted in and navigate the way they always have.
+   ============================================================ */
+@view-transition{ navigation: auto; }
+
+/* The plate being arrived at names itself, off the fragment in the URL.
+   :target is already the question worth asking — which spread did this
+   link ask for? — so it needs no script, no event and no timing, and it
+   is right on the first frame the plate exists.
+
+   Naming both plates unconditionally would match both, and the brother
+   you did not tap would fly to a spread a screenful below the fold and
+   off the bottom of the window. The homepage half of the pair is set in
+   js/app.js, which is the only end that genuinely cannot be done in CSS:
+   a page cannot know in a stylesheet which of its links you took.
+
+   These two ids do not exist on the homepage, so this rule is inert
+   there and the file stays the same file on both ends. */
+#founder:target .ed-fig picture,
+#cofounder:target .ed-fig picture{ view-transition-name:plate }
+::view-transition-group(plate){
+  animation-duration:.58s;
+  animation-timing-function:cubic-bezier(.65,.02,.25,1);
+}
+
+/* Both ends are the same photograph at the same aspect ratio, so this is
+   a pure move-and-scale. cover is here against a half-pixel disagreement
+   shearing the image halfway through the flight. */
+::view-transition-old(plate),
+::view-transition-new(plate){
+  height:100%;object-fit:cover;
+}
+
+/* Everything except the plate is a different page, so it crossfades —
+   but faster than the plate moves, and underneath it, so the poster
+   stays the thing being followed. */
+::view-transition-old(root),
+::view-transition-new(root){ animation-duration:.34s }
+
+/* The morph is motion in the sense the preference means: a large object
+   travelling across the screen. Asked to stop, stop completely — the
+   link still works and still lands on the right spread. */
+@media (prefers-reduced-motion:reduce){
+  @view-transition{ navigation: none; }
+}

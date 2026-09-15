@@ -113,6 +113,19 @@ async function accountBootFinish() {
      as its probe, which is what proved the token works. Calling it twice
      would be a wasted round trip on every page load. */
   acctHeader();
+
+  /* Anyone sent here by the checkout gate goes back to checkout, with their
+     bag and the details they had already typed still there. Without this they
+     land on their order history mid-purchase and have to find the way back
+     themselves, which is where a half-finished order stops being one. */
+  let back = null;
+  try { back = sessionStorage.getItem('toss_after_signin'); } catch (e) { /* private mode */ }
+  if (back) {
+    try { sessionStorage.removeItem('toss_after_signin'); } catch (e) {}
+    location.hash = back;
+    return;
+  }
+
   if (currentPage() === 'account') route(true);
 }
 

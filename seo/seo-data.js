@@ -21,7 +21,7 @@
    ============================================================ */
 
 /* ONE PLACE for the domain. Change this line when the domain is final. */
-const SITE = 'https://tossports.in';
+const SITE = 'https://tossports.com';
 
 const BUSINESS = {
   name: 'Toss Sports',

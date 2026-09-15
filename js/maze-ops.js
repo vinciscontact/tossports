@@ -530,7 +530,14 @@ function viewSales() {
           <td>${o.paid ? '<span class="pill on">Paid</span>' : '<span class="pill off">Unpaid</span>'}</td>
           <td>${isAdminRole()
             ? `<select data-status="${esc(o.id)}" class="inline-sel">
-                ${['new','packed','shipped','cancelled'].map(s =>
+                ${/* delivered was missing, and everything downstream already
+                      expected it: the tracking timeline has a Delivered step,
+                      the customer's account marks an order done on it, and the
+                      fulfilment filter excludes it. Without it here no order
+                      could ever reach the state the rest of the system was
+                      written around. Cancelled sits last because it is not a
+                      step along the way — it is the way out. */
+                  ['new','packed','shipped','delivered','cancelled'].map(s =>
                   `<option ${o.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>`
             : `<span class="pill ${esc(o.status)}">${esc(o.status)}</span>`}</td>
           <td class="muted">${when(o.created_at)}</td></tr>`;
@@ -567,7 +574,20 @@ function orderDetail(o) {
           <table class="od-meta">
             <tr><th>Placed</th><td>${when(o.created_at)}</td></tr>
             <tr><th>Channel</th><td>${esc(o.channel || 'web')}</td></tr>
-            <tr><th>Payment</th><td>${esc(o.method || '—')} ${o.paid ? '· paid' : '· unpaid'}</td></tr>
+            <!-- Two references, and the difference between them matters.
+
+                 payment_id is verified: the signed webhook put it there, or
+                 a person who checked the dashboard did. payment_ref_claimed
+                 is whatever the customer's browser said, which proves
+                 nothing and is shown only so it can be pasted into
+                 Razorpay's search instead of hunting by amount and time. -->
+            <tr><th>Payment</th><td>${esc(o.method || '—')} ${o.paid ? '· paid' : '· unpaid'}${
+              o.paid_source ? ` <span class="muted">(${esc(o.paid_source)})</span>` : ''}${
+              o.payment_id
+                ? `<br><span class="muted">Razorpay ref ${esc(o.payment_id)} — verified</span>`
+                : (o.payment_ref_claimed
+                    ? `<br><span class="muted">Browser reported ${esc(o.payment_ref_claimed)} — <b>unverified</b>, check it in Razorpay</span>`
+                    : '')}</td></tr>
             <tr><th>Status</th><td>${esc(o.status)}</td></tr>
             ${c.email ? `<tr><th>Email</th><td><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></td></tr>` : ''}
             ${seller ? `<tr><th>Sold by</th><td>${esc(seller.name)}</td></tr>` : ''}
@@ -668,7 +688,7 @@ function wireSales() {
     const id = sel.dataset.status;
     try {
       await saveRow('orders', { id, status: sel.value });
-      const o = DB.orders.find(x => x.id === id); if (o) o.status = sel.value;
+      ordersChanged(id, { status: sel.value });
       OPS.customers = await supa('customer_stats?select=*&order=spend.desc&limit=100').catch(() => OPS.customers);
       toast('Order marked ' + sel.value);
     } catch (e) { toast(writeError(e), true); }
@@ -721,6 +741,7 @@ function logSaleModal() {
     try {
       await supa('orders', { method: 'POST', headers: { Prefer: 'return=representation' }, body: row });
       DB.orders.unshift(Object.assign({ created_at: new Date().toISOString() }, row));
+      ordersChanged();
       OPS.customers = await supa('customer_stats?select=*&order=spend.desc&limit=100').catch(() => OPS.customers);
       toast('Sale logged'); render();
     } catch (e) { toast(writeError(e), true); return false; }
@@ -736,12 +757,17 @@ function logSaleModal() {
    make ₹2,000 of expenses look the same height as ₹40,000 of revenue.
    Months before the first order are dropped; showing eight empty columns
    to a business that started in July is just noise. */
-function monthWisePanel() {
+/* The months since trading began — the shared x-axis for every finance
+   and insight chart, so they all agree on where "the beginning" is. */
+function tradingMonths() {
   const rows = monthTable(12);
-
   const first = liveOrders().concat(OPS.expenses.map(e => ({ created_at: e.on_date })))
     .map(o => (o.created_at || '').slice(0, 7)).filter(Boolean).sort()[0];
-  const shown = first ? rows.filter(r => r.key >= first) : rows.slice(-3);
+  return first ? rows.filter(r => r.key >= first) : rows.slice(-3);
+}
+
+function monthWisePanel() {
+  const shown = tradingMonths();
   if (!shown.length) return '';
 
   const scale = Math.max(1, ...shown.map(r => Math.max(r.revenue, r.expenses + r.salaries)));
@@ -758,7 +784,9 @@ function monthWisePanel() {
 
       <div class="mw-chart">
         ${shown.map(r => `
-          <div class="mw-col" title="${esc(r.k)} — revenue ${money(r.revenue)}, out ${money(r.expenses + r.salaries)}">
+          <div class="mw-col pick ${FIN_MONTH ? (r.key === FIN_MONTH ? 'sel' : 'dim') : ''}"
+            data-fm="${r.key}" role="button" tabindex="0"
+            title="${esc(r.k)} — revenue ${money(r.revenue)}, out ${money(r.expenses + r.salaries)}. Click to ${FIN_MONTH === r.key ? 'clear the filter' : 'filter the page to this month'}.">
             <div class="mw-pair">
               <div class="mw-bar rev" style="height:${Math.max(2, r.revenue / scale * 100)}%"></div>
               <div class="mw-bar out" style="height:${Math.max(2, (r.expenses + r.salaries) / scale * 100)}%"></div>
@@ -775,8 +803,8 @@ function monthWisePanel() {
       <div class="tbl-wrap" style="margin-top:16px"><table>
         <thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Revenue</th>
           <th class="num">Cost of goods</th><th class="num">Expenses</th>
-          <th class="num">Salaries</th><th class="num">Net</th></tr></thead>
-        <tbody>${shown.slice().reverse().map(r => `<tr>
+          <th class="num">Salaries</th><th class="num">Net</th><th class="num">Margin</th></tr></thead>
+        <tbody>${shown.slice().reverse().map(r => `<tr class="${FIN_MONTH === r.key ? 'row-sel' : ''}">
           <td><b>${esc(r.k)}</b></td>
           <td class="num">${r.orders}</td>
           <td class="num">${money(r.revenue)}</td>
@@ -784,6 +812,7 @@ function monthWisePanel() {
           <td class="num muted">${money(r.expenses)}</td>
           <td class="num muted">${money(r.salaries)}</td>
           <td class="num ${r.net >= 0 ? 'good-cell' : 'warn-cell'}"><b>${money(r.net)}</b></td>
+          <td class="num muted">${r.revenue ? Math.round(r.net / r.revenue * 100) + '%' : '—'}</td>
         </tr>`).join('')}</tbody>
         <tfoot><tr>
           <td><b>Total</b></td><td class="num">${shown.reduce((s, r) => s + r.orders, 0)}</td>
@@ -792,22 +821,155 @@ function monthWisePanel() {
           <td class="num muted">${money(totals.expenses)}</td>
           <td class="num muted">${money(totals.salaries)}</td>
           <td class="num ${totals.net >= 0 ? 'good-cell' : 'warn-cell'}"><b>${money(totals.net)}</b></td>
+          <td class="num muted">${totals.revenue ? Math.round(totals.net / totals.revenue * 100) + '%' : '—'}</td>
         </tr></tfoot>
       </table></div>
     </div>`;
 }
 
+/* Running total of every rupee in minus every rupee out. Monthly bars can
+   look healthy while the total quietly sinks; this is the one line that
+   says whether the tank is filling or draining. */
+function cashPanel() {
+  const rows = tradingMonths();
+  if (!rows.length) return '';
+  let run = 0;
+  const pts = rows.map(r => ({ k: r.k, v: run += r.net }));
+  const now = pts[pts.length - 1].v;
+
+  if (pts.length < 2) return `
+    <div class="panel"><h3>Where the money stands</h3>
+      <div class="cash-now ${now >= 0 ? 'good-cell' : 'warn-cell'}">${money(now)}</div>
+      <p class="muted">One month of trading so far — the line draws itself from month two.</p>
+    </div>`;
+
+  const W = 600, H = 190, padX = 40, padT = 22, padB = 28;
+  const max = Math.max(...pts.map(p => p.v), 0);
+  const min = Math.min(...pts.map(p => p.v), 0);
+  const span = (max - min) || 1;
+  const X = i => padX + i / (pts.length - 1) * (W - padX * 2);
+  const Y = v => padT + (max - v) / span * (H - padT - padB);
+  const line = pts.map((p, i) => X(i).toFixed(1) + ',' + Y(p.v).toFixed(1)).join(' ');
+  const zero = Y(0).toFixed(1);
+  const sparse = pts.length <= 7;   /* per-dot figures only while they stay readable */
+
+  return `
+    <div class="panel">
+      <h3>Where the money stands</h3>
+      <p class="muted" style="margin:-4px 0 10px">Each month's net added to the last —
+        the running position after cost of goods, expenses and salaries.</p>
+      <svg class="cash-svg" viewBox="0 0 ${W} ${H}" role="img"
+        aria-label="Running net position, currently ${money(now)}">
+        <polygon class="cash-fill ${now >= 0 ? 'up' : 'down'}"
+          points="${X(0).toFixed(1)},${zero} ${line} ${X(pts.length - 1).toFixed(1)},${zero}"/>
+        <line class="cash-zero" x1="${padX}" y1="${zero}" x2="${W - padX}" y2="${zero}"/>
+        <polyline class="cash-line ${now >= 0 ? 'up' : 'down'}" points="${line}"/>
+        ${pts.map((p, i) => `
+          <circle class="cash-dot" cx="${X(i).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="4">
+            <title>${esc(p.k)}: ${money(p.v)}</title></circle>
+          ${sparse || i === pts.length - 1
+            ? `<text class="cash-val" x="${X(i).toFixed(1)}" y="${(Y(p.v) - 10).toFixed(1)}">${money(p.v)}</text>` : ''}
+          <text class="cash-mon" x="${X(i).toFixed(1)}" y="${H - 8}">${esc(p.k)}</text>`).join('')}
+      </svg>
+      <div class="mw-key">
+        <span>Sitting at <b class="${now >= 0 ? 'good-cell' : 'warn-cell'}">&nbsp;${money(now)}&nbsp;</b>
+          after ${pts.length} months of trading</span>
+      </div>
+    </div>`;
+}
+
+/* ---------- stacked monthly charts ---------- */
+/* One column per month, segments stacked on a shared scale. The generic
+   renderer behind "where sales come from" and "new vs returning". */
+function stackedChart(months, series, colorOf) {
+  const totals = months.map((_, i) => series.reduce((s, x) => s + x.values[i], 0));
+  const max = Math.max(...totals, 1);
+  return `
+    <div class="sk-chart">
+      ${months.map((m, i) => `
+        <div class="sk-col" title="${esc(m.k)}: ${money(totals[i])}">
+          <div class="sk-stack">
+            ${series.map((s, si) => s.values[i] ? `<i style="height:${(s.values[i] / max * 100).toFixed(1)}%;
+              background:${colorOf(s.k, si)}" title="${esc(s.k)} — ${money(s.values[i])}"></i>` : '').join('')}
+          </div>
+          <span class="mw-lbl">${esc(m.k)}</span>
+        </div>`).join('')}
+      <div class="mw-max">${money(max)}</div>
+    </div>
+    <div class="mw-key">${series.map((s, si) =>
+      `<span><i style="background:${colorOf(s.k, si)}"></i>${esc(s.k)}</span>`).join('')}</div>`;
+}
+
+/* channel -> colour, matching the pills used everywhere else */
+const CHANNEL_COLORS = { web: '#5b8cff', walkin: '#ff8a1e', whatsapp: '#28c76f',
+  phone: '#ffb020', instagram: '#c65bff' };
+const chanColor = (k, i) => CHANNEL_COLORS[k] || ['#8c92a6', '#5bc8ff', '#ff5b8c'][i % 3];
+
+function channelsByMonth() {
+  const months = tradingMonths();
+  const keys = salesByChannel().map(c => c.k);   /* biggest channel first */
+  const series = keys.map(k => ({ k, values: months.map(() => 0) }));
+  months.forEach((m, i) => {
+    liveOrders().filter(o => (o.created_at || '').slice(0, 7) === m.key).forEach(o => {
+      const s = series.find(x => x.k === (o.channel || 'web'));
+      if (s) s.values[i] += o.total || 0;
+    });
+  });
+  return { months, series };
+}
+
+/* Revenue in a customer's first month counts as new; every later month is
+   returning — the revenue that costs nothing to win. */
+function newVsReturnByMonth() {
+  const months = tradingMonths();
+  const firstSeen = {};
+  liveOrders().slice()
+    .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
+    .forEach(o => {
+      const c = o.customer || {};
+      const key = c.phone || c.name || 'unknown';
+      if (!(key in firstSeen)) firstSeen[key] = (o.created_at || '').slice(0, 7);
+    });
+  const series = [{ k: 'New customers', values: months.map(() => 0) },
+                  { k: 'Coming back',   values: months.map(() => 0) }];
+  months.forEach((m, i) => {
+    liveOrders().filter(o => (o.created_at || '').slice(0, 7) === m.key).forEach(o => {
+      const c = o.customer || {};
+      const key = c.phone || c.name || 'unknown';
+      series[firstSeen[key] === m.key ? 0 : 1].values[i] += o.total || 0;
+    });
+  });
+  return { months, series };
+}
+
+/* '' = all time, otherwise 'YYYY-MM'. Survives re-renders so the page stays
+   on the chosen month while expenses are added or branches switched. */
+let FIN_MONTH = '';
+
 function viewFinance() {
-  const orders = liveOrders();
+  const months = tradingMonths();
+  if (FIN_MONTH && !months.some(m => m.key === FIN_MONTH)) FIN_MONTH = '';
+  const mSel = FIN_MONTH ? months.find(m => m.key === FIN_MONTH) : null;
+  const inMonth = d => !FIN_MONTH || (d || '').slice(0, 7) === FIN_MONTH;
+  const scope = mSel ? esc(mSel.k) : '';
+
+  const orders = liveOrders().filter(o => inMonth(o.created_at));
   const revenue = orders.reduce((s, o) => s + (o.total || 0), 0);
-  const exp = OPS.expenses.reduce((s, e) => s + e.amount, 0);
-  const c = cogs();
-  const payrollCost = OPS.payroll.filter(p => p.status === 'paid').reduce((s, p) => s + p.net, 0);
-  const profit = revenue - c.known - exp - payrollCost;
+  const expList = OPS.expenses.filter(e => inMonth(e.on_date));
+  const exp = expList.reduce((s, e) => s + e.amount, 0);
+  /* the month rows already carry per-month cogs, computed the same way */
+  const cogsKnown = mSel ? mSel.cogs : cogs().known;
+  const payrollCost = OPS.payroll.filter(p => p.status === 'paid' && inMonth(p.month))
+    .reduce((s, p) => s + p.net, 0);
+  const profit = revenue - cogsKnown - exp - payrollCost;
   const noCost = DB.products.filter(p => p.cost == null).length;
 
   const byCat = {};
-  OPS.expenses.forEach(e => byCat[e.category] = (byCat[e.category] || 0) + e.amount);
+  expList.forEach(e => byCat[e.category] = (byCat[e.category] || 0) + e.amount);
+
+  const byChan = {};
+  orders.forEach(o => { const k = o.channel || 'web'; byChan[k] = (byChan[k] || 0) + (o.total || 0); });
+  const chan = Object.entries(byChan).map(([k, v]) => ({ k, v })).sort((a, b) => b.v - a.v);
 
   return `
     <div class="head"><h2>Finance</h2>
@@ -819,36 +981,61 @@ function viewFinance() {
       Profit below counts only the ${DB.products.length - noCost} that do, so it is
       optimistic. Set cost per bat in <b>Products → Edit</b> to make this real.</div>` : ''}
 
+    <div class="filters" style="align-items:center">
+      <select id="finMonth">
+        <option value="">All months</option>
+        ${months.slice().reverse().map(m =>
+          `<option value="${m.key}" ${FIN_MONTH === m.key ? 'selected' : ''}>${esc(m.k)}</option>`).join('')}
+      </select>
+      ${FIN_MONTH ? '<button class="btn ghost sm" id="finClear">Show all months</button>' : ''}
+      <span class="muted" style="font-size:.8rem">${FIN_MONTH
+        ? `Showing <b>${scope}</b> — ${orders.length} order${orders.length === 1 ? '' : 's'}. The trend charts keep every month for context.`
+        : 'Showing all months — pick one here, or click a month in the chart below.'}</span>
+    </div>
+
     <div class="cards">
-      <div class="card good"><b>${money(revenue)}</b><span>Revenue</span></div>
-      <div class="card"><b>${money(c.known)}</b><span>Cost of goods</span></div>
-      <div class="card"><b>${money(exp)}</b><span>Expenses</span></div>
-      <div class="card"><b>${money(payrollCost)}</b><span>Salaries paid</span></div>
-      <div class="card ${profit >= 0 ? 'good' : 'warn'}"><b>${money(profit)}</b><span>Net position</span></div>
+      <div class="card good"><b>${money(revenue)}</b><span>Revenue${scope ? ' · ' + scope : ''}</span></div>
+      <div class="card"><b>${money(cogsKnown)}</b><span>Cost of goods${scope ? ' · ' + scope : ''}</span></div>
+      <div class="card"><b>${money(exp)}</b><span>Expenses${scope ? ' · ' + scope : ''}</span></div>
+      <div class="card"><b>${money(payrollCost)}</b><span>Salaries paid${scope ? ' · ' + scope : ''}</span></div>
+      <div class="card ${profit >= 0 ? 'good' : 'warn'}"><b>${money(profit)}</b><span>Net${scope ? ' · ' + scope : ' position'}</span></div>
     </div>
 
     ${monthWisePanel()}
 
+    ${cashPanel()}
+
     <div class="grid-2">
-      <div class="panel"><h3>Expenses by category</h3>
+      <div class="panel"><h3>Expenses by category${scope ? ' — ' + scope : ''}</h3>
         ${Object.keys(byCat).length
           ? barChart(Object.entries(byCat).map(([k, v]) => ({ k, v })))
-          : '<div class="empty">No expenses recorded.</div>'}</div>
-      <div class="panel"><h3>Revenue by channel</h3>
-        ${salesByChannel().length
-          ? barChart(salesByChannel())
-          : '<div class="empty">No sales recorded.</div>'}</div>
+          : `<div class="empty">No expenses recorded${scope ? ' in ' + scope : ''}.</div>`}</div>
+      <div class="panel"><h3>Revenue by channel${scope ? ' — ' + scope : ''}</h3>
+        ${chan.length
+          ? barChart(chan)
+          : `<div class="empty">No sales recorded${scope ? ' in ' + scope : ''}.</div>`}</div>
     </div>
 
-    <div class="panel"><h3>Expense log</h3>
-      ${OPS.expenses.length ? `<div class="tbl-wrap"><table>
+    <div class="panel"><h3>Expense log${scope ? ' — ' + scope : ''}</h3>
+      ${expList.length ? `<div class="tbl-wrap"><table>
         <thead><tr><th>Date</th><th>Category</th><th>Detail</th><th class="num">Amount</th></tr></thead>
-        <tbody>${OPS.expenses.map(e => `<tr><td>${e.on_date}</td><td>${esc(e.category)}</td>
+        <tbody>${expList.map(e => `<tr><td>${e.on_date}</td><td>${esc(e.category)}</td>
           <td class="muted">${esc(e.detail || '')}</td><td class="num">${money(e.amount)}</td></tr>`).join('')}
-        </tbody></table></div>` : '<div class="empty">Nothing recorded yet.</div>'}</div>`;
+        </tbody></table></div>` : `<div class="empty">Nothing recorded${scope ? ' in ' + scope : ''} yet.</div>`}</div>`;
 }
 
 function wireFinance() {
+  /* month filter: the dropdown and the chart columns set the same state */
+  const sel = $('#finMonth');
+  if (sel) sel.onchange = () => { FIN_MONTH = sel.value; render(); };
+  const clr = $('#finClear');
+  if (clr) clr.onclick = () => { FIN_MONTH = ''; render(); };
+  $$('.mw-col.pick').forEach(col => {
+    const toggle = () => { FIN_MONTH = FIN_MONTH === col.dataset.fm ? '' : col.dataset.fm; render(); };
+    col.onclick = toggle;
+    col.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } };
+  });
+
   /* Three sheets, because a finance report that is only a total cannot be
      checked. Summary shows the position; the other two show the workings. */
   wireExport('finance', 'Finance report', () => {
@@ -1848,6 +2035,45 @@ function wireQAAdmin() {
 
 let FUL = { rows: [], loaded: false, only: 'waiting' };
 
+/* Say that the orders table has moved under us.
+
+   Fulfilment keeps its own copy and loads it once, which is right — it is a
+   queue, not a live feed, and re-reading it on every render would be a
+   request per keystroke. What was missing is anybody telling it when an
+   order appeared from somewhere else in the panel.
+
+   Logging a counter sale and then opening Fulfilment showed "Nothing
+   waiting — all caught up" with a real unshipped order sitting in the
+   database. That is the one thing an operations queue may never do: a queue
+   that is quietly wrong is worse than no queue, because the orders it
+   forgets are the ones nobody goes looking for.
+
+   Everything that creates an order or moves its status calls this. The cost
+   is one reload the next time Fulfilment is opened.
+
+   There are two copies of an order in this panel and they answer different
+   screens: DB.orders behind Sales, the dashboard and the figures, and
+   FUL.rows behind the queue. Fulfilment wrote its changes straight to the
+   database and refreshed only its own, so adding a tracking number moved an
+   order to "shipped" in the queue while Sales went on calling it "new" —
+   two screens, same order, different answers, and no way to tell from
+   either which one was lying.
+
+   Called bare, this only says "reload the queue next time". Called with an
+   id and the fields that changed, it also writes them into both copies, so
+   whatever the database was just told is what every screen says. */
+function ordersChanged(id, patch) {
+  FUL.loaded = false;
+  if (!id || !patch) return;
+
+  const inQueue = FUL.rows.find(o => o.id === id);
+  if (inQueue) Object.assign(inQueue, patch);
+
+  const inTable = (typeof DB !== 'undefined' && DB.orders)
+    ? DB.orders.find(o => o.id === id) : null;
+  if (inTable) Object.assign(inTable, patch);
+}
+
 async function loadFulfil() {
   try {
     FUL.rows = await supa('orders?select=id,created_at,total,status,customer,items,' +
@@ -1935,7 +2161,7 @@ function orderMsg(o) {
   } else {
     t += `Every bat is shaped by hand, so we will confirm the dispatch date shortly.\n\n`;
   }
-  t += `You can follow it any time at tossports.in — track order, using this ` +
+  t += `You can follow it any time at tossports.com — track order, using this ` +
        `order number and your phone number.`;
   return t;
 }
@@ -1971,13 +2197,18 @@ function wireFulfil() {
           which is what the customer sees on the tracking page.</div></div>
     `, async () => {
       const no = $('#s_no').value.trim();
+      /* Named, because the same fields have to reach the database and then
+         both of the panel's copies of this order. A tracking number moves a
+         bat to shipped, and Sales has to hear about that too. */
+      const patch = {
+        courier: $('#s_cour').value || null,
+        tracking_no: no || null,
+        tracking_url: $('#s_url').value.trim() || null,
+        status: no && ['new','making','packed'].includes(o.status) ? 'shipped' : o.status
+      };
       try {
-        await supa('orders?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: {
-          courier: $('#s_cour').value || null,
-          tracking_no: no || null,
-          tracking_url: $('#s_url').value.trim() || null,
-          status: no && ['new','making','packed'].includes(o.status) ? 'shipped' : o.status
-        }});
+        await supa('orders?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: patch });
+        ordersChanged(id, patch);
         await loadFulfil(); render(); toast('Tracking saved');
       } catch (e) { toast(e.message, true); return false; }
     });
@@ -1985,11 +2216,10 @@ function wireFulfil() {
 }
 
 async function markTold(id, quiet) {
+  const patch = { notified_at: new Date().toISOString() };
   try {
-    await supa('orders?id=eq.' + encodeURIComponent(id), { method: 'PATCH',
-      body: { notified_at: new Date().toISOString() } });
-    const row = FUL.rows.find(o => o.id === id);
-    if (row) row.notified_at = new Date().toISOString();
+    await supa('orders?id=eq.' + encodeURIComponent(id), { method: 'PATCH', body: patch });
+    ordersChanged(id, patch);
     if (!quiet) { toast('Marked as told'); render(); }
   } catch (e) { toast(e.message, true); }
 }

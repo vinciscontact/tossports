@@ -365,7 +365,7 @@ ${o.body}
   </div>
   <div class="wrap seo-ftr-bot">
     <span>© ${new Date().getFullYear()} Toss Sports. Handcrafted in Chennai.</span>
-    <span>Designed by TheVincis</span>
+    <span>Designed by <a href="https://vincisglobal.com/" target="_blank" rel="noopener">TheVincis</a></span>
   </div>
 </footer>
 

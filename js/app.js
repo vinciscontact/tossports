@@ -240,6 +240,22 @@ function pruneCart() {
   return dropped;
 }
 
+/* ---------------- the spec vocabulary, for imperfect products ----------
+
+   A bat saved from the Maze Room without a wood or a profile used to take
+   the entire shop down with it. The card read WOOD[p.wood].short straight
+   out of the table, found nothing there, and threw in the middle of the
+   map that builds the grid — so viewShop() never returned, the page kept
+   whatever had been on it, and every filter and sort along with it looked
+   broken. The catalogue is edited by people, over the web, one field at a
+   time; a row that is missing one of them is a normal thing to happen and
+   should cost that product a line of its own text, not the storefront.
+
+   The dash is deliberate. It reads as "not filled in yet" to a customer
+   and as a job to whoever opens that product in the Maze Room. */
+const WOOD_OF    = p => WOOD[p && p.wood]       || { key: '', label: '—', short: '—' };
+const PROFILE_OF = p => PROFILE[p && p.profile] || { key: '', label: '—', blurb: '' };
+
 /* ---------------- WhatsApp ---------------- */
 function waLink(text) {
   return 'https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(text);
@@ -285,6 +301,53 @@ function cartWaText(info) {
     if (info.notes) t += `\nNote: ${info.notes}`;
   }
   t += `\n\nPlease confirm availability and dispatch.`;
+  return t;
+}
+
+/* The finished order, written out as the message the customer sends us.
+
+   Built from the order rather than the cart, because completeOrder() has
+   already emptied the cart by the time the confirmation screen renders —
+   cartWaText() would hand them a message with nothing in it.
+
+   It also has to carry what the cart never knew: the order number, and for
+   an online payment the Razorpay reference. Those two are what turn this
+   from a shopping list into something either side can look up later. */
+function orderWaText(o) {
+  const paid = o.method === 'online';
+  let t = 'Hi Toss Sports 👋\n\n';
+  t += paid ? 'I have just paid for this order:\n\n' : 'I want to place this order:\n\n';
+  t += `*Order ${o.id}*\n`;
+  if (o.payment_id) t += `Payment reference: ${o.payment_id}\n`;
+  t += '\n';
+
+  (o.items || []).forEach((i, n) => {
+    const p = byId(i.id) || { name: i.id, price: 0 };
+    const v = variantName(p, i.variant);
+    t += `${n + 1}. *${p.name}*${v ? ' — ' + v : ''}\n`;
+    if (i.engrave) t += `   Engraved: "${i.engrave}"\n`;
+    if (i.warranty) {
+      const w = WARRANTY().find(x => x.id === String(i.warranty));
+      if (w) t += `   Warranty: ${w.months} months\n`;
+    }
+    const unit = (p.price || 0) + (i.engrave ? SERVICES.engraving.price : 0) + warrantyPrice(i);
+    t += `   Qty ${i.qty}`;
+    t += hasPrice(p) ? ` × ${fmt(unit)} = ${fmt(unit * i.qty)}\n` : '  (price on request)\n';
+  });
+
+  t += `\nSubtotal: ${fmt(o.subtotal)}`;
+  t += `\nShipping: ${o.shipping === 0 ? 'FREE' : fmt(o.shipping)}`;
+  if (o.off > 0) t += `\nDiscount (${o.coupon}): −${fmt(o.off)}`;
+  t += `\n*Total: ${fmt(o.total)}*\n`;
+  if (paid) t += 'Paid online ✅\n';
+
+  const info = o.info;
+  if (info) {
+    t += `\n— Delivery details —\n${info.name}\n${info.phone}\n${info.address}\n${info.city} — ${info.pin}\n${info.state}`;
+    if (info.email) t += `\n${info.email}`;
+    if (info.notes) t += `\nNote: ${info.notes}`;
+  }
+  t += '\n\nPlease confirm and share tracking.';
   return t;
 }
 
@@ -460,7 +523,7 @@ function tierRowHTML(flush) {
         <span class="tier-line">${t.line}</span>
         <div class="tier-price"><small>from</small> ${fmt(from)}</div>
         <span class="tier-note">${t.note}</span>
-        <span class="tier-meta">${list.length} bats · ${reviews} reviews</span>
+        <span class="tier-meta">${reviews} reviews</span>
         <span class="tier-go">See these ${ICON.arrow}</span>
       </a>`;
   }).join('');
@@ -550,7 +613,7 @@ function cardHTML(p) {
       ${batArt(p)}
     </a>
     <div class="card-b">
-      <span class="card-meta">${WOOD[p.wood].short} · ${(PROFILE_WORDS[p.profile] || PROFILE_WORDS.standard).b}</span>
+      <span class="card-meta">${WOOD_OF(p).short} · ${(PROFILE_WORDS[p.profile] || PROFILE_WORDS.standard).b}</span>
       <h3><a href="#/product/${p.id}">${esc(p.name)}</a></h3>
       ${p.tagline ? `<p class="card-tag">${esc(p.tagline)}</p>` : ''}
       <!-- plain language first, the figure as fine print. "780 grams" means
@@ -885,10 +948,13 @@ function viewHome() {
       w: [81, 206, 248],
       alt: 'Varnished tennis-ball cricket bat',
       label: 'Varnished Bat',      note: 'Best seller' },
-    { img: 'leather-ball-bat-1', href: '#/shop',
-      w: [91, 231, 272],
-      alt: 'Leather-ball cricket bat made by Toss',
-      label: 'Leather-ball bats',  note: 'For the harder game' }
+    /* The camo graphic bat earns the fourth slot over the leather-ball
+       shot for one reason: its grip is the site's own orange, so the
+       featured bat ties into the panel instead of sitting on it. */
+    { img: 'graphic-bats-hard-tennis-cricket-bat-2-studio-v2-1', href: '#/shop',
+      w: [52, 132, 230],
+      alt: 'Camo graphic hard tennis-ball cricket bat with orange grip',
+      label: 'Graphic bats',       note: 'Loud looks, hard hits' }
   ];
 
   /* All four bats are on stage at once, fanned across the panel — a single
@@ -1029,7 +1095,7 @@ function viewHome() {
   <section class="trust">
     <div class="wrap trust-grid">
       <div class="trust-i">${ICON.hammer}<div><b>We make it, so we answer for it</b><span>Shaped in our own unit — never resold</span></div></div>
-      <div class="trust-i">${ICON.whatsapp}<div><b>Not sure? Ask before you pay</b><span>Message us — no account, no card</span></div></div>
+      <div class="trust-i">${ICON.whatsapp}<div><b>Not sure? Ask before you pay</b><span>Message us first — no sign-in, no card</span></div></div>
       <div class="trust-i">${ICON.truck}<div><b>Delivered across India</b><span>Free over ₹1,500 · 3–6 days</span></div></div>
       <div class="trust-i">${ICON.shield}<div><b>Breaks in 3 months? We replace it</b><span>Warranty on Toss Power X</span></div></div>
     </div>
@@ -1159,9 +1225,90 @@ function viewHome() {
     </div>
   </section>
 
+  ${storyTeaserHTML()}
   ${trustBand()}
   `;
 }
+
+/* The brand story, one paragraph, pointing at about-us/.
+
+   A real crawlable URL rather than a hash route, for the reason written on
+   the footer nav below it: Google discards everything after the #, so a
+   story living at #/about would be a page nothing could link to. The full
+   version at /about-us/ carries its own Person schema for both founders. */
+function storyTeaserHTML() {
+  return `
+  <section class="sec story-x">
+    <div class="wrap story-x-in">
+      <div class="story-x-copy rv">
+        <p class="story-x-eyebrow">Our story</p>
+        <h2 class="story-x-h">Two brothers.<br><span class="g">One crazy</span> <span class="o">idea.</span></h2>
+        <p class="story-x-p">Cricket didn't start in stadiums. It started with a tennis ball,
+          a bat that was probably too heavy, and someone shouting
+          &ldquo;Match podalama?&rdquo; — which is exactly why Iniyavan and
+          Imayavarman started Toss.</p>
+        <p class="story-x-cta"><a class="btn btn-primary" href="about-us/">Read our story ${ICON.arrow}</a></p>
+      </div>
+
+      <!-- The two posters, pinned up at angles, and each one is the way
+           into that brother's spread. Tapping one carries the poster
+           itself onto the story page, where it lands as the plate at the
+           head of his section; the button above still opens the story at
+           its cover, so the opening spread is only ever skipped on
+           purpose.
+
+           They were decorative and hidden from screen readers while they
+           were just a picture of the page next door. They are navigation
+           now, so they are named and reachable instead. -->
+      <div class="story-x-art">
+        <a class="story-x-plate story-x-p2" href="about-us/#cofounder">
+          <picture>
+            <source type="image/webp" srcset="images/founders/cofounder-imayavarman-440.webp">
+            <img src="images/founders/cofounder-imayavarman-440.jpg"
+                 alt="Imayavarman, co-founder — read his story"
+                 width="440" height="782" loading="lazy" decoding="async">
+          </picture>
+        </a>
+        <a class="story-x-plate story-x-p1" href="about-us/#founder">
+          <picture>
+            <source type="image/webp" srcset="images/founders/founder-iniyavan-440.webp">
+            <img src="images/founders/founder-iniyavan-440.jpg"
+                 alt="Iniyavan, founder — read his story"
+                 width="440" height="660" loading="lazy" decoding="async">
+          </picture>
+        </a>
+      </div>
+    </div>
+  </section>`;
+}
+
+/* ============================================================
+   THE PLATE MORPH — the homepage half
+
+   A cross-document view transition pairs an element on the way out with
+   the element carrying the same name on the way in. Both posters are on
+   screen, but only one of them is being navigated to, so the name goes
+   on that one here, at the moment of the navigation.
+
+   Which one is read off the destination's hash rather than from a click
+   handler, so a keyboard activation, a tapped poster and a restored
+   session all take the identical path — there is no click to miss.
+
+   The other half of this lives in the head of about-us/index.html, and
+   the tuning in css/view-transition.css. A browser that has never heard
+   of pageswap never fires it and simply follows the link. */
+window.addEventListener('pageswap', function (e) {
+  if (!e.viewTransition || !e.activation) return;
+
+  var to = new URL(e.activation.entry.url);
+  if (!/\/about-us\/$/.test(to.pathname)) return;
+
+  var plate = to.hash === '#founder'   ? document.querySelector('.story-x-p1')
+            : to.hash === '#cofounder' ? document.querySelector('.story-x-p2')
+            : null;
+
+  if (plate) plate.style.viewTransitionName = 'plate';
+});
 
 /* Testimonials sit directly under the stats band rather than at the foot of
    the page. Numbers and quotes together make one evidence block, placed where
@@ -1399,7 +1546,6 @@ function groupedIndex(list) {
         <div class="ix-gh">
           <h2>${g.title}</h2>
           <p>${g.sub}</p>
-          <span class="ix-gn">${rows.length} bat${rows.length === 1 ? '' : 's'}</span>
         </div>
         <div class="grid">${rows.map(cardHTML).join('')}</div>
       </div>`;
@@ -1473,9 +1619,13 @@ function viewShop() {
             </select>
             <!-- A text search spans every category, so "bats" would be a lie
                  the moment somebody searches for a ball. -->
-            <span class="count num">${list.length} ${filters.q
-              ? 'result' + (list.length === 1 ? '' : 's')
-              : 'bat' + (list.length === 1 ? '' : 's')}</span>
+            <!-- A search result count answers something the shopper asked, so it
+                 stays. The plain browsing count did not: it only ever told them
+                 how small or large the range is, which is not their business
+                 and not ours to volunteer. -->
+            ${filters.q
+              ? `<span class="count num">${list.length} result${list.length === 1 ? '' : 's'}</span>`
+              : ''}
           </div>
 
           ${chips.length ? `<div class="pills">
@@ -1714,14 +1864,14 @@ function viewProductGeneric(p) {
           <div class="pdp-assure">
             <span>${ICON.hammer}<b>From our unit</b><i>Hand-checked</i></span>
             <span>${ICON.truck}<b>${hasPrice(p) && p.price >= FREE_SHIP_OVER ? 'Free shipping' : 'Ships India-wide'}</b><i>3–6 days</i></span>
-            <span>${ICON.whatsapp}<b>Ask before you pay</b><i>No account needed</i></span>
+            <span>${ICON.whatsapp}<b>Ask before you pay</b><i>Message us, no sign-in</i></span>
             <span>${ICON.check}<b>Checked &amp; packed</b><i>Photographed first</i></span>
           </div>
 
           <div class="buy-row">
             ${hasPrice(p)
               ? `<button class="btn btn-primary btn-block" id="addBtn">${ICON.cart} Add to Bag</button>
-                 <button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Order on WhatsApp</button>`
+                 <button class="btn btn-dark btn-block" id="buyBtn">Buy now</button>`
               : `<button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Ask price on WhatsApp</button>`}
           </div>
         </div>
@@ -1805,11 +1955,13 @@ function buybarHTML(p) {
     </div>
 
     <div class="bb-act">
-      <button class="btn ${priced ? 'btn-wa-ghost' : 'btn-wa'}" id="waBtn2">
-        ${ICON.whatsapp}<span class="bb-wa-t">${priced ? 'WhatsApp' : 'Ask on WhatsApp'}</span>
-      </button>
-      ${priced ? `<button class="btn btn-primary" id="addBtn2">${ICON.cart}
-        <span class="bb-add-t">Add to Bag</span></button>` : ''}
+      ${priced
+        ? `<button class="btn btn-dark" id="buyBtn2">
+             <span class="bb-wa-t">Buy now</span></button>
+           <button class="btn btn-primary" id="addBtn2">${ICON.cart}
+             <span class="bb-add-t">Add to Bag</span></button>`
+        : `<button class="btn btn-wa" id="waBtn2">
+             ${ICON.whatsapp}<span class="bb-wa-t">Ask on WhatsApp</span></button>`}
     </div>
   </div>`;
 }
@@ -1824,8 +1976,8 @@ function viewProduct(id) {
     .sort((a, b) => b.popularity - a.popularity).slice(0, 4);
 
   const specs = [
-    ['Wood', WOOD[p.wood].label],
-    ['Profile', PROFILE[p.profile].label],
+    ['Wood', WOOD_OF(p).label],
+    ['Profile', PROFILE_OF(p).label],
     ['Weight', weightLabel(p)],
     ['Height', heightLabel(p)],
     ['Handle', p.handle],
@@ -1913,7 +2065,7 @@ function viewProduct(id) {
           <div class="buy-row">
             ${hasPrice(p)
               ? `<button class="btn btn-primary btn-block" id="addBtn">${ICON.cart} Add to Bag</button>
-                 <button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Order on WhatsApp</button>`
+                 <button class="btn btn-dark btn-block" id="buyBtn">Buy now</button>`
               : `<button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Ask price on WhatsApp</button>`}
           </div>
 
@@ -1927,7 +2079,7 @@ function viewProduct(id) {
           <details open>
             <summary><b>Description</b><span class="acc-i"></span></summary>
             <div class="acc-b">
-              <p>${esc(p.tagline)}. ${WOOD[p.wood].short} with a
+              <p>${esc(p.tagline)}. ${WOOD_OF(p).short} with a
                 ${(PROFILE_WORDS[p.profile] || PROFILE_WORDS.standard).b.toLowerCase()} profile,
                 ${p.weight[0]}–${p.weight[1]}g and ${p.height[0]}–${p.height[1]} inches.
                 Built for ${p.ball.map(b => BALL_LABEL[b].toLowerCase()).join(' and ')} cricket.</p>
@@ -2526,6 +2678,92 @@ function viewGame() {
 }
 
 /* ---------------- VIEW: CHECKOUT ---------------- */
+/* ------------------------------------------------------------
+   WHAT THE CUSTOMER HAS TYPED, KEPT ACROSS RE-RENDERS
+
+   route() rebuilds this page from its markup every time, and checkout
+   re-renders for perfectly ordinary reasons — applying a discount code is
+   the common one, and it is usually the LAST thing somebody does before
+   paying. Rebuilt markup meant empty inputs, so a customer who had filled
+   in their whole address watched all six fields empty themselves the moment
+   they claimed their discount. Some of them would type it all again.
+
+   The draft is only ever read into a field that is empty, so it can never
+   overwrite something the customer is in the middle of changing, and it is
+   cleared once the order is placed so the next one starts clean.
+   ------------------------------------------------------------ */
+let CO_DRAFT = {};
+const CO_FIELDS = ['#cName', '#cPhone', '#cAddr', '#cCity', '#cState', '#cPin', '#cEmail', '#cNotes'];
+
+function coSaveDraft() {
+  CO_FIELDS.forEach(function (sel) { const el = $(sel); if (el) CO_DRAFT[sel] = el.value; });
+}
+function coRestoreDraft() {
+  CO_FIELDS.forEach(function (sel) {
+    const el = $(sel);
+    if (el && !el.value && CO_DRAFT[sel]) el.value = CO_DRAFT[sel];
+  });
+}
+
+/* ------------------------------------------------------------
+   THE ACCOUNT GATE
+
+   An order has to belong to somebody, so checkout asks who you are.
+   Browsing and the bag stay open on purpose: the gate stands at the
+   last possible moment, which is also the first moment the Firebase
+   SDK is worth downloading. Up to here the storefront still carries
+   no external JavaScript, which is the rule it was written under.
+
+   Two states are NOT "signed out" and must not be treated as it:
+
+     · settling — the SDK has not reported yet. Showing the gate on a
+       maybe would bounce an already-signed-in customer into a sign-in
+       form every time they opened checkout.
+     · unavailable — Firebase is unconfigured, or its CDN is blocked.
+       The shop sells anyway. Closing the till because Google is having
+       a bad day is the worse failure of the two, and this gate was
+       never the thing deciding who owns an order — the database is.
+   ------------------------------------------------------------ */
+let AUTH_STATE = 'idle';          /* idle | settling | ready | unavailable */
+
+function authGateStatus() {
+  if (AUTH_STATE === 'ready' || AUTH_STATE === 'unavailable') return AUTH_STATE;
+
+  if (typeof fbReady !== 'function' ||
+      (typeof fbConfigured === 'function' && !fbConfigured())) {
+    AUTH_STATE = 'unavailable';
+    return AUTH_STATE;
+  }
+
+  if (AUTH_STATE === 'idle') {
+    AUTH_STATE = 'settling';
+    fbReady().then(
+      () => { AUTH_STATE = 'ready';       route(true); },
+      () => { AUTH_STATE = 'unavailable'; route(true); }
+    );
+  }
+  return AUTH_STATE;
+}
+
+function viewCheckoutGate() {
+  const n = cartCount();
+  return `
+  <section class="co"><div class="wrap">
+    <div class="panel" style="max-width:520px;margin:0 auto">
+      <h1 class="d2">Sign in to place your order</h1>
+      <p class="lede" style="margin:12px 0 0">
+        Your bag is saved — ${n} item${n === 1 ? '' : 's'}, ${fmt(grandTotal())}.
+        An account is how you track this order, reorder it later and claim the
+        warranty on it.
+      </p>
+      <div class="buy-row" style="margin-top:22px">
+        <a href="#/account" class="btn btn-primary btn-block" id="gateSignIn">Sign in or create an account</a>
+        <a href="#/shop" class="btn btn-ghost btn-block">Keep shopping</a>
+      </div>
+    </div>
+  </div></section>`;
+}
+
 function viewCheckout() {
   if (lastOrder) return viewDone();
   /* Before the empty-bag check, so a bag holding only retired lines is
@@ -2537,6 +2775,18 @@ function viewCheckout() {
       <p>Add a bat and come back.</p>
       <a href="#/shop" class="btn btn-primary btn-sm" style="margin-top:16px">Shop Bats</a>
     </div></div></section>`;
+
+  /* Who is buying. Asked after the bag is known to be real, so an empty bag
+     never sends anyone to a sign-in form for an order that does not exist. */
+  const gate = authGateStatus();
+  if (gate === 'settling') return `
+    <section class="co"><div class="wrap">
+      <div class="panel" style="max-width:520px;margin:0 auto;text-align:center">
+        <p class="lede" style="margin:0">Checking your account…</p>
+      </div>
+    </div></section>`;
+  if (gate === 'ready' && typeof acctUser === 'function' && !acctUser())
+    return viewCheckoutGate();
 
   const sub = cartSubtotal(), sh = shipFee(), off = couponOff(), tot = sub + sh - off;
   return `
@@ -2580,21 +2830,30 @@ function viewCheckout() {
             <h3>How do you want to pay?</h3>
             <p class="sub">Both options are confirmed by us before dispatch.</p>
 
-            <div class="pay-opt on" data-pay="wa">
+            <!-- Paying leads. It used to sit second, behind a WhatsApp option
+                 tagged "Most used" and selected by default, so a customer who
+                 had filled in the whole form still had to notice and switch
+                 before they could actually pay. The methods are named here
+                 rather than left to appear only once Razorpay opens, because
+                 "is my UPI accepted?" is a question worth answering before
+                 the click, not after it. -->
+            <div class="pay-opt on" data-pay="online">
               <div class="pay-radio"></div>
               <div>
-                <b>${ICON.whatsapp} Order on WhatsApp <span class="pay-tag">Most used</span></b>
-                <p>Your full order opens as a ready-made WhatsApp message. We confirm stock,
-                   weight and delivery, then you pay — UPI on confirmation or cash on delivery.</p>
+                <b>${ICON.rupee} Pay now <span class="pay-tag">Fastest</span></b>
+                <p>UPI, credit or debit card, or netbanking — through Razorpay.
+                   Your order is confirmed instantly and goes straight into dispatch.</p>
+                <p style="font-size:.76rem;color:var(--ink-50);margin-top:6px">
+                  UPI · GPay · PhonePe · Paytm · Visa · Mastercard · RuPay · Netbanking</p>
               </div>
             </div>
 
-            <div class="pay-opt" data-pay="online">
+            <div class="pay-opt" data-pay="wa">
               <div class="pay-radio"></div>
               <div>
-                <b>${ICON.rupee} Pay online now</b>
-                <p>UPI, card or netbanking via Razorpay. Order is confirmed instantly
-                   and goes straight into dispatch.</p>
+                <b>${ICON.whatsapp} Confirm on WhatsApp first</b>
+                <p>Your full order opens as a ready-made WhatsApp message. We confirm stock,
+                   weight and delivery, then you pay — UPI on confirmation.</p>
               </div>
             </div>
           </div>
@@ -2655,8 +2914,8 @@ function viewCheckout() {
                  <span>Add ${fmt(FREE_SHIP_OVER - sub)} more for free shipping</span><span></span></div>` : ''}
               <div class="sum tot"><span>Total</span><span class="num">${fmt(tot)}</span></div>
             </div>
-            <button class="btn btn-wa btn-block" id="placeBtn" style="margin-top:18px">
-              ${ICON.whatsapp} Send Order on WhatsApp
+            <button class="btn btn-primary btn-block" id="placeBtn" style="margin-top:18px">
+              ${ICON.rupee} Pay ${fmt(tot)}
             </button>
             <p style="font-size:.74rem;color:var(--ink-50);text-align:center;margin:12px 0 0">
               By placing this order you agree to be contacted on WhatsApp about it.
@@ -2682,6 +2941,24 @@ function viewDone() {
             : 'Payment received. We\'re packing your bat now.'}
         </p>
         <div class="oid">${o.id}</div>
+        ${o.payment_id ? `<p style="font-size:.8rem;color:var(--ink-50);margin-top:6px">
+          Payment reference <b style="color:var(--ink)">${esc(o.payment_id)}</b> — also on your Razorpay receipt</p>` : ''}
+
+        <!-- The honest line. The order did not reach us, and saying nothing
+             would leave the customer holding a number that means nothing at
+             this end. The WhatsApp step below is already compulsory, so the
+             way out is the one they were about to take anyway — this only
+             explains why it matters this time. -->
+        ${o.recorded === false ? `
+        <div style="margin-top:16px;padding:14px 16px;text-align:left;border-radius:12px;
+             border:1px solid rgba(255,176,32,.45);background:rgba(255,176,32,.1)">
+          <b style="display:block;margin-bottom:4px">This order has not reached us yet.</b>
+          <span style="font-size:.84rem;color:var(--ink-70);line-height:1.5">
+            ${o.method === 'online'
+              ? 'Your payment went through and nothing is lost — but the order itself did not save, so please send it on WhatsApp below and we will match it to your payment.'
+              : 'Nothing is lost — but we do not have the order yet, so please send it on WhatsApp below and we will pick it up from there.'}
+          </span>
+        </div>` : ''}
         <div style="text-align:left;border-top:1px solid var(--line);padding-top:18px;margin-top:6px">
           ${o.items.map(i => {
             const p = byId(i.id), v = variantName(p, i.variant);
@@ -2696,10 +2973,30 @@ function viewDone() {
              <span class="off num">− ${fmt(o.off)}</span></div>` : ''}
           <div class="sum tot"><span>Total</span><span class="num">${fmt(o.total)}</span></div>
         </div>
-        <div class="buy-row" style="margin-top:24px">
+        <!-- The hand-off, and the only thing on this screen until it is done.
+
+             Every order is finished on WhatsApp — stock, weight and delivery
+             are confirmed there, not here. When this was one of two equal
+             buttons sitting beside "Keep shopping", orders arrived with
+             nobody on the other end of them. It leads now, and the way on
+             appears once they have opened it.
+
+             It is a real link the customer taps, not a window.open on a
+             timer: a tab opened without a gesture behind it is what popup
+             blockers exist to stop. -->
+        <div class="done-wa" style="margin-top:24px;text-align:left;
+             border:1px solid var(--line);border-radius:14px;padding:18px">
+          <b style="display:block;margin-bottom:6px">One last step — send us this order on WhatsApp</b>
+          <p style="font-size:.82rem;color:var(--ink-50);margin:0 0 14px">
+            It opens already written, with your order number and details in it. This is the
+            thread we use to confirm ${o.method === 'online' ? 'weight and delivery' : 'stock, weight and delivery'}.
+          </p>
+          <a href="${waLink(orderWaText(o))}" target="_blank" rel="noopener"
+             id="waDone" class="btn btn-wa btn-block">${ICON.whatsapp} Send my order on WhatsApp</a>
+        </div>
+        <div class="buy-row${o.waSent ? '' : ' hide'}" id="doneNext" style="margin-top:14px">
           <a href="#/shop" class="btn btn-ghost btn-block">Keep shopping</a>
-          <a href="${waLink('Hi Toss Sports, checking on my order ' + o.id)}" target="_blank"
-             rel="noopener" class="btn btn-wa btn-block">${ICON.whatsapp} Track on WhatsApp</a>
+          <a href="#/account" class="btn btn-ghost btn-block">View my orders</a>
         </div>
       </div>
     </div>
@@ -2807,7 +3104,7 @@ function closeDrawers() {
    the fuzzy matching and the service and help entries. */
 
 /* ---------------- checkout logic ---------------- */
-let payMethod = 'wa';
+let payMethod = 'online';   /* paying is the default; WhatsApp is the alternative */
 
 function readForm() {
   return {
@@ -2853,16 +3150,42 @@ function newOrderId() {
   return 'TOSS-' + Date.now().toString(36).toUpperCase().slice(-6) +
          '-' + Math.floor(Math.random() * 900 + 100);
 }
-function completeOrder(method, info) {
+function completeOrder(method, info, extra) {
+  extra = extra || {};
   lastOrder = {
-    id: newOrderId(), method, info,
+    id: extra.id || newOrderId(), method, info,
+    /* the Razorpay payment id — the thread that ties this order to the
+       payment in their dashboard; without it reconciliation is manual */
+    payment_id: extra.payment_id || null,
     items: cart.slice(),
     subtotal: cartSubtotal(), shipping: shipFee(),
     total: grandTotal(),
     coupon: couponOff() > 0 ? couponCode() : null, off: couponOff()
   };
-  /* fire and forget — a network problem must not cost the customer their order */
-  if (typeof pushOrder === 'function') pushOrder(lastOrder);
+  /* Recording must never block the customer: the confirmation screen and the
+     WhatsApp hand-off happen whatever the database says. But "never block"
+     had quietly become "never mention". The insert can be refused outright —
+     no stock is the ordinary case — and the screen still said Order placed
+     while the shop received nothing and the customer was left holding an
+     order number that nobody here would recognise.
+
+     So it is still fire-and-forget in the sense that matters: nothing waits
+     on it. The difference is that the answer, when it comes, is allowed to
+     reach the screen. `recorded` is null while in flight, true once the
+     database has it, false when it refused — and viewDone() says so. */
+  lastOrder.recorded = null;
+  if (typeof pushOrder === 'function') {
+    const mine = lastOrder;
+    pushOrder(mine).then(function (ok) {
+      mine.recorded = !!ok;
+      /* Only redraw if this is still the order on screen. A customer who has
+         already moved on should not have the page pulled out from under
+         them by an answer to a question they stopped asking. */
+      if (lastOrder === mine && /^#\/checkout/.test(location.hash)) route(true);
+    });
+  } else {
+    lastOrder.recorded = true;      /* no database configured; nothing to tell */
+  }
 
   /* The account holds its orders in memory and only fetches them once
      (ACCOUNT.loaded), and acctWarm() has usually filled that in long before
@@ -2874,14 +3197,24 @@ function completeOrder(method, info) {
 
   cart = []; saveCart(); syncCart();
   coupon = null; saveCoupon();          /* a code is single-use */
+  CO_DRAFT = {};                        /* the next order starts on a clean form */
   route();
   window.scrollTo(0, 0);
 }
 function payOnline(info) {
   const amount = grandTotal() * 100;
-  if (RAZORPAY_KEY.includes('REPLACE')) {
+  /* The order id exists BEFORE the payment so it can ride along in the
+     Razorpay notes — then either side of a dispute can find the other:
+     the dashboard shows the order id, the order shows the payment id. */
+  const oid = newOrderId();
+  if (!RAZORPAY_KEY || RAZORPAY_KEY.includes('REPLACE')) {
     toast('Demo mode — add your Razorpay key to go live');
-    setTimeout(() => completeOrder('online', info), 900);
+    setTimeout(() => completeOrder('online', info, { id: oid }), 900);
+    return;
+  }
+  if (!window.Razorpay) {
+    loadRazorpay();
+    toast('Payment is still loading — try again in a second');
     return;
   }
   const rzp = new window.Razorpay({
@@ -2889,11 +3222,17 @@ function payOnline(info) {
     amount, currency: 'INR',
     name: 'Toss Sports',
     description: cart.map(i => byId(i.id).name).join(', ').slice(0, 200),
-    prefill: { name: info.name, contact: info.phone },
-    notes: { address: info.address + ', ' + info.city + ' ' + info.pin },
+    prefill: { name: info.name, contact: info.phone, email: info.email || undefined },
+    notes: { order_id: oid, address: info.address + ', ' + info.city + ' ' + info.pin },
     theme: { color: '#FF8A1E' },
-    handler: () => completeOrder('online', info)
+    handler: r => completeOrder('online', info, { id: oid, payment_id: r.razorpay_payment_id }),
+    /* Closing the sheet is not an error — the bag is untouched and the
+       button still says Pay. Say so, or the customer assumes the worst. */
+    modal: { ondismiss: () => toast('Payment not completed — your bag is safe. Pay when ready, or order on WhatsApp.') }
   });
+  rzp.on('payment.failed', r => toast(
+    ((r.error && r.error.description) || 'Payment failed') +
+    ' — nothing was charged. Try again or order on WhatsApp.'));
   rzp.open();
 }
 function loadRazorpay() {
@@ -3223,6 +3562,19 @@ function mount(page, parts) {
     };
     ['#addBtn', '#addBtn2'].forEach(s => { const el = $(s); if (el) el.onclick = add; });
 
+    /* Buy now is Add to Bag for somebody who has already decided: the same
+       line, the same engraving check, and then straight to checkout instead
+       of back to the page they were just on. It does not clear the bag —
+       anything already in there travels with it, because emptying a
+       customer's bag because they pressed Buy on one bat would be a
+       surprising way to lose the rest of the order. */
+    const goBuy = () => {
+      const before = cartCount();
+      add();
+      if (cartCount() > before) location.hash = '#/checkout';
+    };
+    ['#buyBtn', '#buyBtn2'].forEach(s => { const el = $(s); if (el) el.onclick = goBuy; });
+
     wireQA(p.id);
 
     const wa = () => {
@@ -3249,6 +3601,35 @@ function mount(page, parts) {
   }
 
   if (page === 'checkout') {
+    /* The confirmation screen's hand-off. The way onward is hidden until the
+       customer has actually opened the WhatsApp thread; the flag lives on the
+       order so a re-render — a resize, a back-navigation — does not lock a
+       customer who already sent it back out of the rest of the site. */
+    const waDone = $('#waDone');
+    if (waDone) waDone.onclick = () => {
+      if (lastOrder) lastOrder.waSent = true;
+      const next = $('#doneNext');
+      if (next) next.classList.remove('hide');
+    };
+
+    /* The gate sends them to the account page. This remembers why, so that
+       signing in returns them to the order they were halfway through rather
+       than dropping them on their order history to find their own way back. */
+    const gateLink = $('#gateSignIn');
+    if (gateLink) gateLink.onclick = () => {
+      try { sessionStorage.setItem('toss_after_signin', '#/checkout'); } catch (e) { /* private mode */ }
+    };
+
+    /* Put back whatever they had already typed before this re-render, and
+       keep watching so the next one has something to put back. Runs before
+       the account prefill below, so a half-typed address is never replaced
+       by the saved one. */
+    coRestoreDraft();
+    CO_FIELDS.forEach(function (sel) {
+      const el = $(sel);
+      if (el) el.addEventListener('input', coSaveDraft);
+    });
+
     /* Saved details, for anyone signed in. Nothing is forced: these are a
        starting point that someone posting a bat to a team-mate types
        straight over. Signed out, acctPrefill() returns null and checkout
@@ -3284,7 +3665,7 @@ function mount(page, parts) {
       showPin();
     }
     trackEvent('begin_checkout', { value: grandTotal(), currency: 'INR' });
-    payMethod = 'wa';
+    payMethod = 'online';
     loadRazorpay();
 
     $$('.pay-opt').forEach(o => o.onclick = () => {
