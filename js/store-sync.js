@@ -153,7 +153,17 @@ async function pushOrder(order) {
         method: order.method === 'wa' ? 'whatsapp' : order.method,
         channel: 'web',
         paid: order.method === 'online',
-        payment_id: order.payment_id || null
+        /* Both of these are thrown away by orders_sanitise() on insert, and
+           should be: a checkout that ran in the customer's browser cannot
+           prove money moved. They are sent anyway so a staff-entered order
+           still carries them, and so the shape of an order is one thing.
+
+           payment_ref_claimed is the hint that survives. It is what the
+           browser SAYS the payment was, stored under a name that says so,
+           to be pasted into Razorpay's search rather than believed. What
+           settles an order is the signed webhook — see sql/026. */
+        payment_id: order.payment_id || null,
+        payment_ref_claimed: order.payment_id || null
       }
     });
     return true;

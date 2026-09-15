@@ -567,8 +567,20 @@ function orderDetail(o) {
           <table class="od-meta">
             <tr><th>Placed</th><td>${when(o.created_at)}</td></tr>
             <tr><th>Channel</th><td>${esc(o.channel || 'web')}</td></tr>
+            <!-- Two references, and the difference between them matters.
+
+                 payment_id is verified: the signed webhook put it there, or
+                 a person who checked the dashboard did. payment_ref_claimed
+                 is whatever the customer's browser said, which proves
+                 nothing and is shown only so it can be pasted into
+                 Razorpay's search instead of hunting by amount and time. -->
             <tr><th>Payment</th><td>${esc(o.method || '—')} ${o.paid ? '· paid' : '· unpaid'}${
-              o.payment_id ? `<br><span class="muted">Razorpay ref ${esc(o.payment_id)}</span>` : ''}</td></tr>
+              o.paid_source ? ` <span class="muted">(${esc(o.paid_source)})</span>` : ''}${
+              o.payment_id
+                ? `<br><span class="muted">Razorpay ref ${esc(o.payment_id)} — verified</span>`
+                : (o.payment_ref_claimed
+                    ? `<br><span class="muted">Browser reported ${esc(o.payment_ref_claimed)} — <b>unverified</b>, check it in Razorpay</span>`
+                    : '')}</td></tr>
             <tr><th>Status</th><td>${esc(o.status)}</td></tr>
             ${c.email ? `<tr><th>Email</th><td><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></td></tr>` : ''}
             ${seller ? `<tr><th>Sold by</th><td>${esc(seller.name)}</td></tr>` : ''}
