@@ -24,11 +24,29 @@ try { cart = JSON.parse(localStorage.getItem('toss_cart') || '[]'); } catch (e) 
 const saveCart = () => localStorage.setItem('toss_cart', JSON.stringify(cart));
 
 let filters = { wood: [], profile: [], ball: [], tier: [], division: [],
-                style: [], weight: [], sort: 'pop', cat: 'bats', q: '' };
+                level: [], style: [], weight: [], sort: 'pop', cat: 'bats', q: '' };
 
-/* Who a bat is for, as tagged in the Maze Room. A bat carries several, so
-   these read from the join the sync built rather than a field on the product. */
-const stylesOf = p => (typeof PROD_STYLES !== 'undefined' && PROD_STYLES[p.id]) || [];
+/* Who a bat is for. The printed catalogue answers this directly — every bat
+   carries a level and one or two styles — so this reads the product itself
+   rather than a join table that can only answer once Supabase has replied.
+   Offline, on a cold cache, or with the database unreachable, the shop's
+   "Best for" filter now still works.
+
+   PROD_STYLES is merged in behind it so a tag the owner added by hand in the
+   Maze Room still shows on the shop. sql/027 keeps product_playstyles equal
+   to these fields, so in practice the two agree and the merge is a no-op. */
+const stylesOf = p => {
+  const own = [p.level].concat(p.style || [], weightBand(p)).filter(Boolean);
+  const db = (typeof PROD_STYLES !== 'undefined' && PROD_STYLES[p.id]) || [];
+  return own.concat(db.filter(id => !own.includes(id)));
+};
+
+/* One name for any facet id, wherever it came from: the catalogue's own
+   vocabulary first, then whatever the Maze Room has on file, then the raw id
+   so a retired tag sitting in a bookmarked URL renders instead of crashing. */
+const facetLabel = id => LEVEL_LABEL[id] || STYLE_LABEL[id] ||
+  ({ light: 'Light', medium: 'Medium', heavy: 'Heavy' })[id] ||
+  ((typeof styleMeta === 'function' && styleMeta(id)) || {}).name || id;
 const styleMeta = id => (typeof PLAYSTYLES !== 'undefined' &&
   PLAYSTYLES.find(s => s.id === id)) || null;
 /* The live styles in one group, in the order the owner sorted them. */
@@ -372,7 +390,10 @@ const DIVISION = {
 };
 function division(p) {
   if (p.division) return p.division;
-  return (p.ball || []).includes('medium') ? 'pro' : 'gully';
+  /* Anything built for a medium or hard ball is turf-and-tournament kit.
+     Only the soft-ball range is gully cricket. */
+  const b = p.ball || [];
+  return (b.includes('medium') || b.includes('hard')) ? 'pro' : 'gully';
 }
 
 function filtered() {
@@ -411,10 +432,11 @@ function filtered() {
     (!filters.ball.length    || filters.ball.some(b => (p.ball || []).includes(b))) &&
     (!filters.tier.length    || filters.tier.includes(p.tier)) &&
     (!filters.division.length || filters.division.includes(division(p))) &&
-    /* OR within a group, AND across groups: "attacker or all-rounder, and
-       light" is what a person means when they tick three chips. */
+    /* OR within a group, AND across groups: "attacker or classic, tournament
+       level, and light" is what a person means when they tick four chips. */
+    (!filters.level.length  || filters.level.includes(p.level)) &&
     (!filters.style.length  || filters.style.some(v => stylesOf(p).includes(v))) &&
-    (!filters.weight.length || filters.weight.some(v => stylesOf(p).includes(v)))
+    (!filters.weight.length || filters.weight.includes(weightBand(p)))
   );
   const s = filters.sort;
   /* "price on request" items always sink to the bottom, whichever way we sort */
@@ -441,12 +463,13 @@ function activeChips() {
   filters.division.forEach(v => out.push({ g: 'division', v, l: DIVISION[v].label }));
   /* A style the owner has since retired can still be sitting in a bookmarked
      URL, so fall back to the raw id rather than crashing on a missing name. */
-  filters.style.forEach(v  => out.push({ g: 'style',  v, l: (styleMeta(v) || {}).name || v }));
-  filters.weight.forEach(v => out.push({ g: 'weight', v, l: (styleMeta(v) || {}).name || v }));
+  filters.level.forEach(v  => out.push({ g: 'level',  v, l: facetLabel(v) }));
+  filters.style.forEach(v  => out.push({ g: 'style',  v, l: facetLabel(v) }));
+  filters.weight.forEach(v => out.push({ g: 'weight', v, l: facetLabel(v) }));
   return out;
 }
 /* filter state lives in the URL so filtered views are shareable and Back works */
-const FKEYS = ['wood', 'profile', 'ball', 'tier', 'division', 'style', 'weight'];
+const FKEYS = ['wood', 'profile', 'ball', 'tier', 'division', 'level', 'style', 'weight'];
 
 function shopURL() {
   const q = [];
@@ -498,10 +521,12 @@ const IG_PROFILE = TOSS_LINKS.instagram;
    the cheapest choice, which is also where the margin is better. */
 function tierRowHTML(flush) {
   const TIERS = [
+    /* Ball type is a filter of its own and every price bracket now covers
+       all three, so these notes describe the spend, not the ball. */
     { id: 'entry',   name: 'Starter',      line: 'First proper bat',
-      note: 'Street and soft tennis ball' },
+      note: 'Where the range starts' },
     { id: 'mid',     name: 'Intermediate', line: 'What most players buy',
-      note: 'Soft and medium ball, weekend matches', star: true },
+      note: 'Better wood, weekend matches', star: true },
     { id: 'premium', name: 'Professional', line: 'Tournament weapons',
       note: 'Big edges, custom weights, warranty' }
   ];
@@ -515,7 +540,6 @@ function tierRowHTML(flush) {
     const list = PRODUCTS.filter(p => p.tier === t.id && prodCat(p) === 'bats' && hasPrice(p));
     if (!list.length) return '';
     const from = Math.min(...list.map(p => p.price));
-    const reviews = list.reduce((s, p) => s + (p.reviews || 0), 0);
     return `
       <a class="tier${t.star ? ' star' : ''}" href="#/shop?tier=${t.id}">
         ${t.star ? '<span class="tier-flag">Most picked</span>' : ''}
@@ -523,7 +547,6 @@ function tierRowHTML(flush) {
         <span class="tier-line">${t.line}</span>
         <div class="tier-price"><small>from</small> ${fmt(from)}</div>
         <span class="tier-note">${t.note}</span>
-        <span class="tier-meta">${reviews} reviews</span>
         <span class="tier-go">See these ${ICON.arrow}</span>
       </a>`;
   }).join('');
@@ -547,26 +570,38 @@ function tierRowHTML(flush) {
   </section>`;
 }
 
-/* Evidence that other people already did this. For a first-time buyer from
-   a small brand, this does more than any amount of copy. */
+/* Evidence that this is a real workshop with a real range. For a first-time
+   buyer from a small brand, this does more than any amount of copy.
+
+   IT USED TO BE A RATINGS BAND, AND THE RATINGS WERE NOT REAL
+   -----------------------------------------------------------
+   This printed an average star rating and a total review count, both summed
+   from numbers sitting in the catalogue file — numbers no customer had ever
+   left, on a shop that had taken no orders. Carrying them into the new
+   catalogue would have meant inventing 31 fresh ones, which is a lie told
+   in a place people specifically look to decide whether to trust you.
+
+   So the band now counts things that are true and checkable: how many models
+   we actually make, how many ball types they cover, and what the range
+   starts at. The day real reviews exist, a stars tile belongs back here —
+   with the number those reviews add up to. */
 function socialProofHTML() {
-  const priced = PRODUCTS.filter(p => p.reviews);
-  const reviews = priced.reduce((s, p) => s + p.reviews, 0);
-  const avg = priced.length
-    ? (priced.reduce((s, p) => s + p.rating * p.reviews, 0) / reviews).toFixed(1)
-    : '0';
-  const top = PRODUCTS.slice().sort((a, b) => (b.reviews || 0) - (a.reviews || 0))[0];
+  const bats   = PRODUCTS.filter(p => prodCat(p) === 'bats');
+  const priced = bats.filter(hasPrice);
+  const from   = priced.length ? Math.min(...priced.map(p => p.price)) : null;
+  const balls  = new Set(); bats.forEach(p => (p.ball || []).forEach(b => balls.add(b)));
+  const top    = bats.slice().sort((a, b) => (b.popularity || 0) - (a.popularity || 0))[0];
 
   return `
   <section class="proof">
     <div class="wrap proof-grid">
-      <div class="proof-i"><b>${avg}<span>★</span></b><span>Average rating</span></div>
-      <div class="proof-i"><b>${reviews.toLocaleString('en-IN')}</b><span>Player reviews</span></div>
-      <div class="proof-i"><b>${PRODUCTS.length}</b><span>Models in our unit</span></div>
-      <div class="proof-i wide">
-        <b>Most bought</b>
-        <a href="#/product/${top.id}">${esc(top.name)} — ${top.reviews} reviews ${ICON.arrow}</a>
-      </div>
+      <div class="proof-i"><b>${bats.length}</b><span>Models in our unit</span></div>
+      <div class="proof-i"><b>${balls.size}</b><span>Ball types covered</span></div>
+      ${from ? `<div class="proof-i"><b>${fmt(from)}</b><span>Range starts at</span></div>` : ''}
+      ${top ? `<div class="proof-i wide">
+        <b>Best seller</b>
+        <a href="#/product/${top.id}">${esc(top.name)} ${ICON.arrow}</a>
+      </div>` : ''}
     </div>
   </section>`;
 }
@@ -623,7 +658,7 @@ function cardHTML(p) {
           <u>${p.weight[0]}–${p.weight[1]}g</u></span>
         <span><b>${ballWords(p).b}</b><i>${ballWords(p).s}</i></span>
       </div>
-      <div class="rate">${ICON.star}${p.rating}<span>(${p.reviews})</span></div>
+      ${p.reviews ? `<div class="rate">${ICON.star}${p.rating}<span>(${p.reviews})</span></div>` : ''}
       <div class="card-foot">
         ${hasPrice(p)
           ? `<div class="price num">${fmt(p.price)}${p.mrp ? `<small>${fmt(p.mrp)}</small>` : ''}
@@ -641,6 +676,8 @@ function filterPanelHTML() {
   const count = (g, v) => PRODUCTS.filter(p => prodCat(p) === 'bats' &&
     (g === 'ball'     ? (p.ball || []).includes(v)
      : g === 'division' ? division(p) === v
+     : g === 'style'  ? stylesOf(p).includes(v)
+     : g === 'weight' ? weightBand(p) === v
      : p[g] === v)).length;
   const grp = (title, g, opts) => `
     <div class="fgroup">
@@ -651,38 +688,32 @@ function filterPanelHTML() {
           <span>${o.l}</span><span class="n">${count(g, o.v)}</span>
         </label>`).join('')}
     </div>`;
-  /* One block per play-style group, driven entirely by what the Maze Room
-     holds — add "Finisher" there and it appears here with no code change.
-     Renders nothing at all when the tables are absent or empty, which is
-     also what happens offline. */
-  const styleGroups = (typeof PLAYSTYLE_GROUPS === 'undefined' ? [] : PLAYSTYLE_GROUPS)
-    .slice().sort((a, b) => (a.sort || 0) - (b.sort || 0))
-    .map(g => {
-      const key = g.id === 'weight' ? 'weight' : 'style';
-      const live = stylesInGroup(g.id);
-      if (!live.length) return '';
-      const n = sid => PRODUCTS.filter(p => prodCat(p) === 'bats' &&
-        stylesOf(p).includes(sid)).length;
-      return `
-        <div class="fgroup">
-          <b>${esc(g.name)}</b>
-          ${live.map(s => `
-            <label class="chk">
-              <input type="checkbox" data-f="${key}" value="${esc(s.id)}"
-                ${filters[key].includes(s.id) ? 'checked' : ''}>
-              <span>${esc(s.name)}</span>
-              <span class="n">${n(s.id)}</span>
-            </label>`).join('')}
-        </div>`;
-    }).join('');
+  /* The three facets the printed catalogue sorts by — level, style and how
+     the bat picks up. Built from the catalogue constants rather than from the
+     play-style tables, because those can only answer once Supabase has
+     replied and this panel has to render on a cold, offline first paint too.
+     The old version simply rendered nothing when the database was slow.
+
+     The Maze Room still tags bats, and sql/027 keeps product_playstyles equal
+     to these same fields, so the two never disagree. */
+  const facetGroups =
+    grp('Level',    'level', Object.values(LEVEL).map(l => ({ v: l.key, l: l.label }))) +
+    grp('Best for', 'style', Object.values(STYLE).map(s => ({ v: s.key, l: s.label }))) +
+    /* Light and heavy mean different grams for different balls — a 950g bat
+       is the lightest hard bat we make. weightBand() resolves that per ball,
+       so these three chips stay meaningful across all three ranges. */
+    grp('Weight feel', 'weight', [
+      { v: 'light', l: 'Light' }, { v: 'medium', l: 'Medium' }, { v: 'heavy', l: 'Heavy' }
+    ]);
 
   return (
-    styleGroups +
+    facetGroups +
     grp('Division', 'division',
       Object.keys(DIVISION).map(k => ({ v: k, l: DIVISION[k].label }))) +
     grp('Wood', 'wood', Object.values(WOOD).map(w => ({ v: w.key, l: w.label }))) +
     grp('Profile', 'profile', Object.values(PROFILE).map(w => ({ v: w.key, l: w.label }))) +
-    grp('Ball Type', 'ball', [{ v: 'soft', l: 'Soft Tennis' }, { v: 'medium', l: 'Medium Tennis' }]) +
+    grp('Ball Type', 'ball',
+      Object.keys(BALL_LABEL).map(k => ({ v: k, l: BALL_LABEL[k] }))) +
     `<div class="fgroup"><b>Price</b>
       ${['entry','mid','premium'].map(t => `
         <label class="chk">
@@ -881,7 +912,14 @@ function styleRowsHTML() {
 function viewHome() {
   const best = PRODUCTS.filter(p => p.popularity >= 80)
     .sort((a, b) => b.popularity - a.popularity).slice(0, 8);
-  const px = byId('power-x');
+  /* The flagship is a family of three now, not one bat with three variants:
+     the catalogue lists Feather, Mercury and Sixit as separate products
+     because Sixit is a medium-ball bat and the other two are soft-ball, and
+     a single product cannot sit in two ball ranges. byId is filtered so the
+     section survives any one of them being taken off sale. */
+  const pxFamily = ['power-x-feather', 'power-x-mercury', 'power-x-sixit']
+    .map(byId).filter(Boolean);
+  const px = pxFamily[0];
   const entry = PRODUCTS.filter(p => p.tier === 'entry').sort((a,b)=>b.popularity-a.popularity).slice(0, 6);
 
   /* THE HERO — copy on the left, the bats on the right.
@@ -936,7 +974,7 @@ function viewHome() {
      no re-shoot, and the two replacements are TOSS-branded where the
      side views showed no branding at all. */
   const HERO_SHOTS = [
-    { img: 'power-x-front',      href: '#/product/power-x',
+    { img: 'power-x-front',      href: '#/product/power-x-feather',
       w: [69, 167, 213],
       alt: 'Toss Power X — handmade Sri Lankan willow bat',
       label: 'Toss Power X',       note: '3 years of research' },
@@ -944,10 +982,10 @@ function viewHome() {
       w: [75, 184, 216],
       alt: 'Sri Lankan willow tennis-ball cricket bat',
       label: 'Sri Lankan willow',  note: 'Dense grain, big ping' },
-    { img: 'varnished-bat-3',    href: '#/product/varnished-bat',
+    { img: 'varnished-bat-3',    href: '#/product/srilankan-pro',
       w: [81, 206, 248],
       alt: 'Varnished tennis-ball cricket bat',
-      label: 'Varnished Bat',      note: 'Best seller' },
+      label: 'Srilankan PRO',      note: 'Best seller' },
     /* The camo graphic bat earns the fourth slot over the leather-ball
        shot for one reason: its grip is the site's own orange, so the
        featured bat ties into the panel instead of sitting on it. */
@@ -1118,6 +1156,7 @@ function viewHome() {
 
   ${tierRowHTML(true)}
 
+  ${!px ? '' : `
   <section class="sec flag dark">
     <div class="wrap flag-grid">
       <div class="flag-art">
@@ -1127,24 +1166,26 @@ function viewHome() {
       <div class="rv">
         <p class="eyebrow">The flagship</p>
         <h2 class="d2">Toss Power X</h2>
-        <p class="lede">Three years of research packed into one blade. Triple hard seasoned,
-          water resistant, science-induced rock toe and handle guard.</p>
+        <p class="lede">Three years of research packed into one blade. Hand crafted,
+          with a science-induced rock toe and handle guard.</p>
         <ul>
-          <li>${ICON.check}Molecules packed powerful bat</li>
-          <li>${ICON.check}Triple hard seasoned, water resistant</li>
+          <li>${ICON.check}Hand crafted, triple hard seasoned</li>
           <li>${ICON.check}Rock toe + handle guard</li>
-          <li>${ICON.check}3 months assured warranty</li>
+          <li>${ICON.check}The lightest bats we make — from 650g</li>
+          <li>${ICON.check}Tournament build across soft and medium ball</li>
         </ul>
         <div class="editions">
-          ${px.variants.map(v => `<div class="edition"><b>${v.name.replace(' Edition','')}</b><span>${v.weight[0]}–${v.weight[1]}g</span></div>`).join('')}
+          ${pxFamily.map(v => `<a class="edition" href="#/product/${v.id}">
+            <b>${esc(v.name.replace('Power X ', ''))}</b>
+            <span>${v.weight[0]}–${v.weight[1]}g</span></a>`).join('')}
         </div>
-        <div class="flag-price"><b>${fmt(px.price)}</b><s>${fmt(px.mrp)}</s></div>
+        <div class="flag-price"><b>${fmt(px.price)}</b></div>
         <div class="hero-cta" style="margin-top:20px">
-          <a href="#/product/power-x" class="btn btn-primary">View Power X ${ICON.arrow}</a>
+          <a href="#/shop?q=Power+X" class="btn btn-primary">See the Power X range ${ICON.arrow}</a>
         </div>
       </div>
     </div>
-  </section>
+  </section>`}
 
   ${communityHTML()}
 
@@ -1212,7 +1253,7 @@ function viewHome() {
         </div>
         <div class="mk-stage">
           <span class="mk-n">05</span>
-          <span class="mk-art">${batSVG(byId('power-x') || PRODUCTS[0], { glow: false })}</span>
+          <span class="mk-art">${batSVG(byId('power-x-feather') || PRODUCTS[0], { glow: false })}</span>
           <b>Finished</b>
           <p>Custom weight, scoop and colour on request — then it ships to you.</p>
         </div>
@@ -1498,17 +1539,21 @@ function wireTrust() {
    "780 grams" tells you nothing unless you already know bats; "Heavy — hits
    hardest" does. The figure stays underneath for anyone who wants it, so
    nothing is hidden — the meaning just leads and the data supports it. */
+/* Light and heavy are judged against the bat's own ball type, not against
+   the whole catalogue. A 1000g hard bat is mid-range for a hard ball and
+   absurd for a soft one; calling it "Heavy" on both would be true of the
+   scales and useless to the player holding it. */
 function pickupWords(p) {
-  const mid = (p.weight[0] + p.weight[1]) / 2;
-  if (mid < 760) return { b: 'Light pickup', s: 'Fast swing, easy to control' };
-  if (mid > 850) return { b: 'Heavy',        s: 'Hits hardest, tires you sooner' };
-  return             { b: 'Balanced',   s: 'The range most players pick' };
+  const band = weightBand(p);
+  if (band === 'light') return { b: 'Light pickup', s: 'Fast swing, easy to control' };
+  if (band === 'heavy') return { b: 'Heavy',        s: 'Hits hardest, tires you sooner' };
+  return                       { b: 'Balanced',     s: 'The range most players pick' };
 }
 function ballWords(p) {
-  const soft = p.ball.includes('soft'), med = p.ball.includes('medium');
-  if (soft && med) return { b: 'Soft or medium ball', s: 'Handles either' };
-  if (med)         return { b: 'Medium ball',         s: 'Tournaments and turf' };
-  return                { b: 'Soft ball',          s: 'Street and gully' };
+  const b = p.ball || [];
+  if (b.includes('hard'))   return { b: 'Hard ball',   s: 'Hard tennis and stumper' };
+  if (b.includes('medium')) return { b: 'Medium ball', s: 'Tournaments and turf' };
+  return                           { b: 'Soft ball',   s: 'Street and gully' };
 }
 const PROFILE_WORDS = {
   standard: { b: 'Classic shape',  s: 'All-round, nothing extreme' },
@@ -1523,10 +1568,15 @@ const PROFILE_WORDS = {
    ₹2,999 flagship as if they were alternatives. Dropping the 01–29 numbering
    also removes a false ranking — it was only sort position, so switching to
    "price low to high" would have made "01" quietly mean cheapest. */
+/* The subtitles deliberately say nothing about ball type. These are PRICE
+   brackets, and since the 2026 catalogue every bracket spans all three balls
+   — the cheapest hard-tennis bat is ₹1,350 and lands in "Starting out",
+   which used to tell the reader it was for "street games and soft tennis
+   ball". Ball type is its own filter; this row is about what you spend. */
 const SHOP_GROUPS = [
-  { tier: 'entry',   title: 'Starting out',    sub: 'A first proper bat. Street games and soft tennis ball.' },
-  { tier: 'mid',     title: 'Weekend matches', sub: 'Soft and medium ball, regular play, better wood.' },
-  { tier: 'premium', title: 'Tournament bats', sub: 'Big edges, custom weights, and our warranty.' }
+  { tier: 'entry',   title: 'Starting out',    sub: 'A first proper bat. Every ball type has one.' },
+  { tier: 'mid',     title: 'Weekend matches', sub: 'Better wood and finish, for regular weekly play.' },
+  { tier: 'premium', title: 'Tournament bats', sub: 'Our best timber, finishes and tournament builds.' }
 ];
 
 function groupedIndex(list) {
@@ -1615,7 +1665,9 @@ function viewShop() {
               <option value="lo"${filters.sort==='lo'?' selected':''}>Price: low to high</option>
               <option value="hi"${filters.sort==='hi'?' selected':''}>Price: high to low</option>
               <option value="light"${filters.sort==='light'?' selected':''}>Lightest first</option>
-              <option value="rate"${filters.sort==='rate'?' selected':''}>Top rated</option>
+              ${PRODUCTS.some(p => p.reviews)
+                ? `<option value="rate"${filters.sort==='rate'?' selected':''}>Top rated</option>`
+                : ''}
             </select>
             <!-- A text search spans every category, so "bats" would be a lie
                  the moment somebody searches for a ball. -->
@@ -2007,7 +2059,7 @@ function viewProduct(id) {
         <div>
           <h1 class="pdp-title">${esc(p.name)}</h1>
           <p class="pdp-tag">${esc(p.tagline)}</p>
-          <div class="rate">${ICON.star}${p.rating} <span>· ${p.reviews} reviews</span></div>
+          ${p.reviews ? `<div class="rate">${ICON.star}${p.rating} <span>· ${p.reviews} reviews</span></div>` : ''}
 
           ${hasPrice(p) ? `
             <div class="pdp-price">
@@ -2161,7 +2213,8 @@ const QUIZ = [
     opts:[
       {v:'soft',   e:'🎾', b:'Soft tennis ball',   s:'Regular street and gully cricket'},
       {v:'medium', e:'🏏', b:'Medium tennis ball', s:'Heavier ball, tournaments and turf'},
-      {v:'any',    e:'🤷', b:'Both / not sure',    s:'Show me bats that handle either'}
+      {v:'hard',   e:'🥎', b:'Hard tennis ball',   s:'Hard tennis, stumper and rubber ball'},
+      {v:'any',    e:'🤷', b:'Not sure yet',       s:'Show me the whole range'}
     ]},
   { key:'style', q:'How do you bat?', sub:'Be honest — it changes the profile we suggest.',
     opts:[
@@ -2170,13 +2223,8 @@ const QUIZ = [
       {v:'speed',   e:'⚡', b:'Fast hands, quick swing', s:'Lighter scoop and mongoose builds'},
       {v:'new',     e:'🌱', b:"I'm just starting", s:'Simple, forgiving, affordable'}
     ]},
-  { key:'weight', q:'What weight feels right?', sub:'Heavier hits harder. Lighter swings faster.',
-    opts:[
-      {v:'light',  e:'🪶', b:'Light — under 750g',  s:'Fast swing, easier control'},
-      {v:'mid',    e:'🎯', b:'Medium — 750g to 850g', s:'The most popular range'},
-      {v:'heavy',  e:'🔨', b:'Heavy — 850g plus',   s:'Maximum power transfer'},
-      {v:'any',    e:'🤷', b:"Don't mind",          s:'Show me everything'}
-    ]},
+  /* No fixed options: see weightOpts() — the grams depend on the ball. */
+  { key:'weight', q:'What weight feels right?', sub:'Heavier hits harder. Lighter swings faster.' },
   { key:'budget', q:"What's your budget?", sub:'Every price band has a good bat in it.',
     opts:[
       {v:'entry',   e:'💸', b:'Under ₹1500',   s:'Solid starter bats'},
@@ -2187,17 +2235,47 @@ const QUIZ = [
 ];
 let quizStep = 0, quizAns = {};
 
+/* The weight question has to be asked in the grams of the ball they just
+   picked. "Light — under 750g" is meaningless to somebody buying a hard-ball
+   bat, where the lightest thing we make is 850g: they would answer "light",
+   nothing would match, and the finder would dead-end on its own last step
+   having eliminated the entire catalogue. Before they have chosen a ball —
+   or if they answered "not sure" — the options carry no grams at all rather
+   than a number that would only be right for one third of the range. */
+function weightOpts(ans) {
+  const s = BALL_SPLIT[(ans || {}).ball] || null;
+  const g = n => n + 'g';
+  return [
+    { v:'light', e:'🪶', b: s ? 'Light — under ' + g(s[0]) : 'Light',
+      s:'Fast swing, easier control' },
+    { v:'medium', e:'🎯', b: s ? 'Medium — ' + g(s[0]) + ' to ' + g(s[1]) : 'Medium',
+      s:'The most popular range' },
+    { v:'heavy', e:'🔨', b: s ? 'Heavy — ' + g(s[1]) + ' plus' : 'Heavy',
+      s:'Maximum power transfer' },
+    { v:'any',   e:'🤷', b:"Don't mind", s:'Show me everything' }
+  ];
+}
+const quizOpts = step => step.opts || weightOpts(quizAns);
+
 function scoreProduct(p) {
   let s = p.popularity / 20;
   if (quizAns.ball && quizAns.ball !== 'any') { if (p.ball.includes(quizAns.ball)) s += 30; else s -= 40; }
-  if (quizAns.style === 'power')   s += (p.profile === 'bigedge' ? 26 : 0) + (/thick|big/i.test(p.edge||'') ? 14 : 0) + (p.profile === 'multi' ? 10 : 0);
-  if (quizAns.style === 'speed')   s += (p.profile === 'scoop' ? 24 : 0) + (p.profile === 'mongoose' ? 22 : 0) + (p.weight[0] < 750 ? 12 : 0);
-  if (quizAns.style === 'balance') s += (p.profile === 'standard' ? 20 : 0) + (p.profile === 'scoop' ? 12 : 0);
-  if (quizAns.style === 'new')     s += (p.tier === 'entry' ? 26 : 0) + (/beginner/i.test(p.features.join(' ')) ? 14 : 0);
-  const mid = (p.weight[0] + p.weight[1]) / 2;
-  if (quizAns.weight === 'light' ) s += mid < 760 ? 20 : -16;
-  if (quizAns.weight === 'mid'   ) s += (mid >= 740 && mid <= 870) ? 20 : -10;
-  if (quizAns.weight === 'heavy' ) s += mid > 840 ? 20 : -16;
+  /* The catalogue's own style word is the strongest signal there is — it is
+     the workshop's judgement on who the bat is for. Shape still scores
+     behind it, because a player who says "boundary" and a bat the catalogue
+     calls an attacker should agree most of the time, but not always. */
+  if (quizAns.style === 'power')   s += (p.style || []).includes('attacker') ? 24 : 0;
+  if (quizAns.style === 'speed')   s += (p.style || []).includes('quick-hands') ? 24 : 0;
+  if (quizAns.style === 'balance') s += (p.style || []).includes('classic') ? 24 : 0;
+  if (quizAns.style === 'power')   s += (p.profile === 'bigedge' ? 14 : 0) + (/thick|big/i.test(p.edge||'') ? 8 : 0) + (p.profile === 'multi' ? 6 : 0);
+  if (quizAns.style === 'speed')   s += (p.profile === 'scoop' ? 12 : 0) + (p.profile === 'mongoose' ? 10 : 0);
+  if (quizAns.style === 'balance') s += (p.profile === 'standard' ? 10 : 0) + (p.profile === 'scoop' ? 6 : 0);
+  if (quizAns.style === 'new')     s += (p.level === 'beginner' ? 26 : 0) + (p.tier === 'entry' ? 10 : 0);
+  /* Judged per ball, so "light" means light FOR A HARD BAT when that is
+     what they are buying. */
+  if (quizAns.weight && quizAns.weight !== 'any') {
+    s += weightBand(p) === quizAns.weight ? 20 : -16;
+  }
   if (quizAns.budget && quizAns.budget !== 'any') s += p.tier === quizAns.budget ? 26 : -20;
   if (!hasPrice(p)) s -= 12;
   return s;
@@ -2214,10 +2292,10 @@ function stillMatching() {
     const a = quizAns;
     if (a.ball && a.ball !== 'any' && !p.ball.includes(a.ball)) return false;
     if (a.budget && a.budget !== 'any' && p.tier !== a.budget) return false;
-    const mid = (p.weight[0] + p.weight[1]) / 2;
-    if (a.weight === 'light' && mid >= 790) return false;
-    if (a.weight === 'heavy' && mid <= 800) return false;
-    if (a.weight === 'mid'   && (mid < 700 || mid > 900)) return false;
+    /* Per-ball bands, for the same reason weightOpts() shows per-ball grams:
+       absolute thresholds would eliminate every hard-ball bat the moment
+       somebody asked for something light. */
+    if (a.weight && a.weight !== 'any' && weightBand(p) !== a.weight) return false;
     return true;
   });
 }
@@ -2237,15 +2315,18 @@ function ballArt(fill, shade, seam) {
 
 /* Each option shows the kind of bat it leads to, using the real renderer. */
 const OPT_BAT = {
-  style:  { power:'big-edge-varnish-pro', balance:'cws', speed:'custom-scoop', new:'regular-bat' },
-  weight: { light:'regular-bat', mid:'cws', heavy:'cs-pro' },
-  budget: { entry:'regular-bat', mid:'custom-scoop', premium:'power-x' }
+  style:  { power:'ys-big-edge', balance:'cws', speed:'customised-scoop-lite', new:'regular-srilankan' },
+  weight: { light:'power-x-feather', mid:'kerala-scoop', heavy:'hard-scoop-elite' },
+  budget: { entry:'regular-srilankan', mid:'four-scoop', premium:'glossy-premium' }
 };
 
 function optArt(key, v) {
   if (key === 'ball') {
     if (v === 'soft')   return ballArt('#e3f56b', '#a8c23c', 'a');
     if (v === 'medium') return ballArt('#c2cf4a', '#7d8f24', 'b');
+    /* The hard ball is the one that is visibly not a tennis ball — darker,
+       denser, and the reason the whole third of the range exists. */
+    if (v === 'hard')   return ballArt('#9aa63a', '#5c6b16', 'h');
     return `<span class="opt-both">${ballArt('#e3f56b', '#a8c23c', 'c')}${ballArt('#c2cf4a', '#7d8f24', 'd')}</span>`;
   }
   const id = (OPT_BAT[key] || {})[v];
@@ -2260,7 +2341,8 @@ function fitReasons(p) {
   const a = quizAns, r = [];
   if (a.ball === 'soft')        r.push('Built for the soft tennis ball you play with');
   else if (a.ball === 'medium') r.push('Strong enough for the heavier medium ball');
-  else                          r.push('Handles both soft and medium tennis balls');
+  else if (a.ball === 'hard')   r.push('Built to take a hard tennis or stumper ball');
+  else                          r.push('Picked from across the whole range');
   const style = {
     power:   p.profile === 'bigedge' ? 'Thick edges to carry your boundary swing'
                                      : 'Real meat behind the ball for big hitting',
@@ -2324,6 +2406,7 @@ function viewFinder() {
   }
 
   const q = QUIZ[quizStep];
+  const qOpts = quizOpts(q);
   const pct = (quizStep / QUIZ.length) * 100;
   const left = stillMatching();
   const lead = left.slice().sort((a, b) => scoreProduct(b) - scoreProduct(a))[0] || PRODUCTS[0];
@@ -2353,7 +2436,7 @@ function viewFinder() {
         <div class="fdr-specs">
           ${QUIZ.map((s, i) => {
             const done = quizAns[s.key] !== undefined;
-            const opt = done && s.opts.find(o => o.v === quizAns[s.key]);
+            const opt = done && quizOpts(s).find(o => o.v === quizAns[s.key]);
             return `<div class="fdr-spec${done ? ' done' : ''}${i === quizStep ? ' now' : ''}">
               <span>${SPEC_LABEL[s.key]}</span>
               <b>${opt ? esc(opt.b) : i === quizStep ? 'Answering…' : '—'}</b>
@@ -2374,8 +2457,8 @@ function viewFinder() {
         <h1 class="d2 q-head">${q.q}</h1>
         <p class="lede">${q.sub}</p>
 
-        <div class="q-opts n${q.opts.length}">
-          ${q.opts.map(o => `
+        <div class="q-opts n${qOpts.length}">
+          ${qOpts.map(o => `
             <button class="q-opt${quizAns[q.key] === o.v ? ' on' : ''}" data-q="${o.v}">
               <span class="q-art">${optArt(q.key, o.v)}</span>
               <b>${o.b}</b>

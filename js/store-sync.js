@@ -28,6 +28,11 @@ let LIVE = { products: false, settings: false, scores: false };
    known", and none of them should be told 780 grams by a default. */
 const PRODUCT_SHAPE = {
   wood: '', profile: 'standard',
+  /* `level` and `style` are the catalogue's own player vocabulary and they
+     drive the shop's Level and Best-for filters. Empty, not guessed: a bat
+     nobody has classified yet should be absent from those chips rather than
+     silently filed under "beginner" and recommended to someone. */
+  level: '', style: [],
   weight: [], ball: [], usage: [], features: [], badges: [],
   tagline: '', edge: '', spine: '', handle: '', finish: '',
   height: '', sweetSpot: '',

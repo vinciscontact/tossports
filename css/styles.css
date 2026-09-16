@@ -1583,6 +1583,12 @@ canvas.gp-cv{display:block;width:100%;height:auto;image-rendering:pixelated;
   border-radius:var(--r-sm);padding:11px 10px;text-align:center}
 .edition b{display:block;font-size:.78rem;font-weight:800;color:#fff}
 .edition span{font-size:.68rem;color:rgba(255,255,255,.52);font-variant-numeric:tabular-nums}
+/* Each edition is its own product now, so the chip is a link. It has to lose
+   the underline it inherits and gain a hover state, or it reads as three
+   dead labels sitting next to a live button. */
+a.edition{display:block;text-decoration:none;transition:background .18s,border-color .18s}
+a.edition:hover,a.edition:focus-visible{background:rgba(255,255,255,.12);
+  border-color:rgba(255,255,255,.3)}
 
 /* ---------- finder CTA ---------- */
 .finder-cta{background:linear-gradient(120deg,var(--orange),#FFB259);color:var(--navy-900);

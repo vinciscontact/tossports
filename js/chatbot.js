@@ -64,7 +64,8 @@ const Bot = (function () {
     const money = s.match(/(?:under|below|within|less than|upto|up to|max)?\s*₹?\s*(\d{3,5})/);
     if (money) c.budget = +money[1];
     if (/\bsoft\b/.test(s)) c.ball = 'soft';
-    if (/\bmedium\b|\bheavy tennis\b/.test(s)) c.ball = 'medium';
+    if (/hard|stumper|rubber/.test(s)) c.ball = 'hard';
+    else if (/medium|heavy tennis/.test(s)) c.ball = 'medium';
     if (/scoop/.test(s)) c.profile = 'scoop';
     if (/flat/.test(s)) c.profile = 'flat';
     if (/big edge|thick edge/.test(s)) c.profile = 'bigedge';
@@ -279,7 +280,7 @@ const Bot = (function () {
 
     if (/take me to the game|the game/i.test(text)) { location.hash = '#/game'; }
     if (/show me everything|all bats/i.test(text))  { location.hash = '#/shop'; }
-    if (/show me power x/i.test(text))              { location.hash = '#/product/power-x'; }
+    if (/show me power x/i.test(text))              { location.hash = '#/shop?q=Power+X'; }
     if (/light bats/i.test(text))  return say({ say: pick(ACK) + " Quickest pickup we make:", products: recommend({ light: true }, 3), chips: defaultChips() });
     if (/power bats|durable/i.test(text)) return say({ say: pick(ACK) + " Built to hit:", products: recommend({ power: true }, 3), chips: defaultChips() });
 

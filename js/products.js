@@ -1,7 +1,51 @@
 /* ============================================================
    TOSS SPORTS — CATALOG
-   29 unique SKUs. Source: client product sheet.
-   price: null  => "Price on request" (WhatsApp enquiry flow)
+   31 bats. Source: TOSS Bat Catalogue (client, September 2026).
+
+   THE PRINTED CATALOGUE IS THE SOURCE OF TRUTH
+   --------------------------------------------
+   Every bat here is one entry in the catalogue, and the numbers
+   match it exactly: same name, same weight band, same height,
+   same price. A customer holding the PDF and a customer on the
+   site must never see two different figures for the same bat.
+
+   THREE BALL TYPES, NOT TWO
+   -------------------------
+   The catalogue's front page sorts the range by ball before
+   anything else — "FIND YOUR BAT BY BALL TYPE" — because it is
+   the one choice that cannot be fudged. A soft-tennis bat at 700g
+   will not survive a hard ball, and a 1050g hard bat is unplayable
+   against a soft one. So `hard` now exists alongside `soft` and
+   `medium`, and every bat belongs to exactly one of them. That is
+   a deliberate narrowing: the old catalogue let most bats claim
+   both soft and medium, which made the filter nearly meaningless.
+
+   LEVEL AND STYLE
+   ---------------
+   The catalogue markets by player rather than by timber, with two
+   words per bat that the shop now uses too:
+
+     level  beginner | serious | tournament
+     style  attacker | classic | quick-hands   (a bat may suit two)
+
+   These drive the shop's filter chips, the landing pages and the
+   bat finder. They are the words on the printed page and the words
+   the workshop already uses — the site should not invent a third
+   dialect for the same idea.
+
+   PRICE
+   -----
+   `price` is what the customer pays. `mrp` is null throughout: the
+   catalogue quotes one figure per bat, so there is no higher "was"
+   price to strike through. Inventing one to manufacture a discount
+   would be a lie printed beside a real number.
+
+   RATINGS
+   -------
+   `rating` and `reviews` are 0 because Toss has not collected any
+   yet. The shop hides the stars entirely when the count is zero,
+   rather than printing "0 ★ (0)" — or, worse, a number nobody
+   earned. They fill in honestly once real reviews arrive.
    ============================================================ */
 
 const WOOD = {
@@ -19,631 +63,698 @@ const PROFILE = {
   multi:    { key: 'multi',    label: 'Double / Triple Blade', blurb: 'Laminated blades. Extra strength and punch.' }
 };
 
+/* The catalogue's two player words. Declaration order is the order the
+   chips appear in on the shop and in the finder. */
+const LEVEL = {
+  beginner:   { key: 'beginner',   label: 'Beginner',   blurb: 'Your first proper bat' },
+  serious:    { key: 'serious',    label: 'Serious',    blurb: 'You play every week and it shows' },
+  tournament: { key: 'tournament', label: 'Tournament', blurb: 'Built for the weekend that counts' }
+};
+
+const STYLE = {
+  attacker:      { key: 'attacker',    label: 'Attacker',    blurb: 'Bottom weight, low-mid sweet spot' },
+  classic:       { key: 'classic',     label: 'Classic',     blurb: 'Even balance, mid sweet spot' },
+  'quick-hands': { key: 'quick-hands', label: 'Quick Hands', blurb: 'Top-light, mid-high sweet spot' }
+};
+
 const PRODUCTS = [
-  /* ---------- ENTRY / SRI LANKAN ---------- */
+
+  /* ============================================================
+     01 — SOFT TENNIS  (65g – 70g ball)
+     Fast, light, responsive. Street, gully and practice cricket.
+     ============================================================ */
   {
-    id: 'regular-bat',
-    name: 'Regular Bat',
+    id: 'regular-srilankan',
+    name: 'Regular Srilankan',
     tagline: 'The one everybody starts with',
-    price: 950, mrp: 1200,
+    price: 950, mrp: null,
     wood: 'srilankan', profile: 'standard',
-    ball: ['soft'],
-    weight: [550, 850], height: [34, 34.5],
-    handle: 'Single wood handle', sweetSpot: 'Mid to low',
+    ball: ['soft'], level: 'beginner', style: ['quick-hands'],
+    weight: [650, 750], height: [34.5, 35.5],
+    handle: 'Single wood handle', sweetSpot: 'Mid to high',
     finish: 'Raw bat', spine: true, edge: 'Standard',
-    tier: 'entry', popularity: 78, rating: 4.2, reviews: 214,
-    badges: ['Budget Pick'],
-    usage: 'Street cricket, village tournaments, turf',
+    tier: 'entry', popularity: 88, rating: 0, reviews: 0,
+    badges: ['Best Seller'],
+    usage: 'Soft tennis ball cricket — street, gully and practice',
     features: [
-      'Sri Lankan wood, single piece',
-      'Strong and durable for soft tennis ball',
-      'Beginner friendly — nothing to learn, just swing',
-      'Most affordable bat in the Toss range'
+      'Sri Lankan wood in a raw, unfinished build',
+      'Light 650–750g pickup for quick hands',
+      'Lightweight and easy to handle — ideal for beginners',
+      'The most affordable bat in the Toss range'
     ]
   },
   {
-    id: 'regular-premium',
-    name: 'Regular Premium',
-    tagline: 'Same bat, finished properly',
-    price: 1300, mrp: 1600,
+    id: 'regular-upgraded',
+    name: 'Regular Upgraded',
+    tagline: 'Same easy bat, finished properly',
+    price: 1300, mrp: null,
     wood: 'srilankan', profile: 'standard',
-    ball: ['soft'],
-    weight: [600, 800], height: [34, 34.5],
-    handle: 'Single wood handle', sweetSpot: 'Mid to low',
-    finish: 'Glossy coated, fully furnished', spine: true, edge: 'Standard',
-    toeGuard: true,
-    tier: 'entry', popularity: 74, rating: 4.4, reviews: 168,
-    badges: ['Best Value'],
+    ball: ['soft'], level: 'beginner', style: ['quick-hands'],
+    weight: [650, 750], height: [34.5, 35],
+    handle: 'Single wood handle', sweetSpot: 'Mid to high',
+    finish: 'Finished', spine: true, edge: 'Standard',
+    tier: 'entry', popularity: 78, rating: 0, reviews: 0,
+    badges: ['Value'],
     usage: 'Soft tennis ball cricket',
     features: [
-      'Glassy coated and fully furnished',
-      'Comes with threading, power striker and toe guard',
-      'Single piece Sri Lankan wood',
+      'Upgraded look with better durability',
+      'Sri Lankan wood, single piece',
+      'Light 650–750g pickup for quick hands',
       'Beginner friendly at an affordable price'
     ]
   },
   {
-    id: 'varnished-bat',
-    name: 'Varnished Bat',
-    tagline: 'Best seller. Sleek edge, big ping.',
-    price: null, mrp: null,
+    id: 'srilankan-prime',
+    name: 'Srilankan Prime',
+    tagline: 'Best value pick in the range',
+    price: 1200, mrp: null,
     wood: 'srilankan', profile: 'standard',
-    ball: ['soft', 'medium'],
-    weight: [650, 900], height: [35, 36],
-    handle: 'Single wood handle', sweetSpot: 'Large, mid to low',
-    finish: 'Fully varnished, glossy', spine: true, edge: 'Sleek edge',
-    tier: 'entry', popularity: 88, rating: 4.6, reviews: 302,
-    badges: ['Best Seller'],
-    usage: 'Tennis ball cricket, tournaments',
-    features: [
-      'Good grade Sri Lankan wood',
-      'Sleek edge for faster play',
-      'Lightweight, well-balanced design',
-      'Fully varnished for moisture protection',
-      'Powerful ping with a large sweet spot'
-    ]
-  },
-  {
-    id: 'csl-scoop',
-    name: 'CSL Customized Scoop',
-    tagline: "Chennai's favourite",
-    price: null, mrp: null,
-    wood: 'srilankan', profile: 'scoop',
-    ball: ['soft', 'medium'],
-    weight: [650, 800], height: [34, 35.5],
-    handle: 'Single wood handle', sweetSpot: 'Mid to low',
-    finish: 'Plain / Burnt / Painted (your choice)', spine: true, edge: 'Good edge',
-    customizable: true,
-    tier: 'mid', popularity: 84, rating: 4.5, reviews: 191,
-    badges: ["Chennai's Favourite", 'Customizable'],
-    usage: 'Tennis ball cricket, street cricket, tournament matches',
-    features: [
-      'Customized scoop design — plain, burnt or painted',
-      'Big hitting area with lightweight pickup',
-      'Overall balance thanks to the scoop',
-      'Height customizable 34 – 35.5 inches',
-      'Better balance, power hitting and fast swing'
-    ]
-  },
-  {
-    id: 'jhl',
-    name: 'JHL Joint Handle',
-    tagline: 'Raw look, serious rebound',
-    price: null, mrp: null,
-    wood: 'srilankan', profile: 'standard',
-    ball: ['soft'],
-    weight: [700, 850], height: [35, 36],
-    handle: 'Joint handle', sweetSpot: 'Mid to low',
-    finish: 'Raw bat with stickers', spine: true, edge: 'Standard',
-    tier: 'mid', popularity: 66, rating: 4.3, reviews: 97,
+    ball: ['soft'], level: 'beginner', style: ['classic'],
+    weight: [650, 850], height: [35, 36],
+    handle: 'Single wood handle', sweetSpot: 'Mid',
+    finish: 'Raw bat', spine: true, edge: 'Standard',
+    tier: 'entry', popularity: 70, rating: 0, reviews: 0,
+    badges: [],
     usage: 'Soft tennis ball cricket',
     features: [
-      'Sri Lankan wood with an appealing spine',
-      'Joint handle construction',
-      'Excellent rebound and power transfer',
-      'Raw finish with Toss stickers'
+      'Best value pick — better durability for the money',
+      'Reliable performance at affordable pricing',
+      'Even balance with a mid sweet spot',
+      'Sri Lankan wood, raw finish'
     ]
   },
   {
-    id: 'mongoose-style',
-    name: 'Mongoose Style',
-    tagline: 'T20 batting, bottled',
-    price: null, mrp: null,
+    id: 'double-wood-pressed',
+    name: 'Double Wood Pressed',
+    tagline: 'Two blades pressed into one',
+    price: 1650, mrp: null,
+    wood: 'srilankan', profile: 'multi',
+    ball: ['soft'], level: 'beginner', style: ['classic'],
+    weight: [650, 850], height: [35, 36],
+    handle: 'Single wood handle', sweetSpot: 'Mid',
+    finish: 'Raw bat', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 88, rating: 0, reviews: 0,
+    badges: ['Best Seller'],
+    usage: 'Soft tennis ball cricket',
+    features: [
+      'Double-wood pressed build for added strength and durability',
+      'Noticeably tougher than a single-piece blade',
+      'Even balance with a mid sweet spot',
+      'Sri Lankan wood, raw finish'
+    ]
+  },
+  {
+    id: 'srilankan-pro',
+    name: 'Srilankan PRO',
+    tagline: 'Smooth varnish, easy to play',
+    price: 1650, mrp: null,
+    wood: 'srilankan', profile: 'standard',
+    ball: ['soft'], level: 'serious', style: ['quick-hands', 'attacker'],
+    weight: [650, 850], height: [35, 36],
+    handle: 'Single wood handle', sweetSpot: 'Mid to high',
+    finish: 'Smooth varnished', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 94, rating: 0, reviews: 0,
+    badges: ['Best Seller', 'Value'],
+    usage: 'Soft tennis ball cricket, local tournaments',
+    features: [
+      'Smooth varnished finish with a balanced, easy-playing profile',
+      'Varnish protects the blade against moisture',
+      'Suits quick hands and attacking players alike',
+      'Sri Lankan wood, single piece'
+    ]
+  },
+  {
+    id: 'alpha-bat',
+    name: 'Alpha Bat',
+    tagline: 'Flat face, solid and balanced',
+    price: 1250, mrp: null,
+    wood: 'kashmir', profile: 'flat',
+    ball: ['soft'], level: 'serious', style: ['classic'],
+    weight: [730, 900], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Standard', spine: false, edge: 'Standard',
+    tier: 'entry', popularity: 70, rating: 0, reviews: 0,
+    badges: [],
+    usage: 'Soft tennis ball cricket',
+    features: [
+      'Flat-profile Kashmir Willow bat',
+      'Solid and balanced feel through the shot',
+      'Full flat face gives a large hitting area',
+      'Even balance with a mid sweet spot'
+    ]
+  },
+  {
+    id: 'alpha-bat-lite',
+    name: 'Alpha Bat Lite',
+    tagline: 'The affordable flat bat',
+    price: 900, mrp: null,
+    wood: 'poplar', profile: 'flat',
+    ball: ['soft'], level: 'beginner', style: ['classic'],
+    weight: [730, 900], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Standard', spine: false, edge: 'Standard',
+    tier: 'entry', popularity: 88, rating: 0, reviews: 0,
+    badges: ['Best Seller'],
+    usage: 'Soft tennis ball cricket — street and practice',
+    features: [
+      'Affordable flat bat with an easy-to-handle profile',
+      'Poplar wood keeps the price down',
+      'Built for beginners still finding their shots',
+      'Even balance with a mid sweet spot'
+    ]
+  },
+  {
+    id: 'customised-scoop-lite',
+    name: 'Customised Scoop Lite',
+    tagline: 'Scooped back, serious feel',
+    price: 2150, mrp: null,
+    wood: 'srilankan', profile: 'scoop',
+    ball: ['soft'], level: 'serious', style: ['quick-hands', 'classic'],
+    weight: [650, 750], height: [35, 36],
+    handle: 'Single wood handle', sweetSpot: 'Mid to high',
+    finish: 'Standard', spine: true, edge: 'Good edge',
+    tier: 'mid', popularity: 88, rating: 0, reviews: 0,
+    badges: ['Best Seller'],
+    usage: 'Soft tennis ball cricket, street cricket, local matches',
+    features: [
+      'Scoop design for more balance with a serious playing feel',
+      'Wood removed from the back holds the pickup at 650–750g',
+      'Big hitting area for the weight',
+      'Sri Lankan wood, single piece'
+    ]
+  },
+  {
+    id: 'mongoose-feather',
+    name: 'Mongoose Feather',
+    tagline: 'Short blade, long handle, no mercy',
+    price: 1900, mrp: null,
     wood: 'srilankan', profile: 'mongoose',
-    ball: ['soft', 'medium'],
-    weight: [650, 850], height: [34, 36],
-    handle: 'Single wood, extended handle', sweetSpot: 'Higher and larger',
+    ball: ['soft'], level: 'serious', style: ['attacker'],
+    weight: [650, 800], height: [35, 36],
+    handle: 'Extended mongoose handle', sweetSpot: 'Low to mid',
     finish: 'Standard', spine: true, edge: 'Standard',
-    tier: 'mid', popularity: 71, rating: 4.3, reviews: 88,
-    usage: 'Local matches, aggressive hitting',
+    tier: 'mid', popularity: 82, rating: 0, reviews: 0,
+    badges: ['Exclusive'],
+    usage: 'Soft tennis ball cricket, aggressive hitting',
     features: [
-      'Single-piece Sri Lankan wood',
-      'Short blade with extended handle',
-      'Higher and larger sweet spot for slog play',
-      'Built for aggressive, T20-style batting'
+      'Mongoose profile for aggressive play',
+      'Short blade and long handle for maximum bat speed',
+      'Bottom weight with a low-mid sweet spot',
+      'Sri Lankan wood, single piece'
+    ]
+  },
+  {
+    id: 'power-x-feather',
+    name: 'Power X Feather',
+    tagline: 'The lightest bat we make',
+    price: 3000, mrp: null,
+    wood: 'srilankan', profile: 'standard',
+    ball: ['soft'], level: 'tournament', style: ['quick-hands'],
+    weight: [650, 700], height: [35, 36],
+    handle: 'Science-induced handle guard', sweetSpot: 'Mid to high',
+    finish: 'Hand crafted', spine: true, edge: 'Standard',
+    tier: 'premium', popularity: 94, rating: 0, reviews: 0,
+    badges: ['Best Seller', 'Must Try'],
+    usage: 'Tournament soft tennis ball cricket',
+    features: [
+      'Ultra-light tournament bat built for speed and quick shots',
+      'The narrowest weight band in the range — 650–700g',
+      'Top-light balance with a mid-high sweet spot',
+      'Part of the Toss Power X tournament family'
+    ]
+  },
+  {
+    id: 'power-x-mercury',
+    name: 'Power X Mercury',
+    tagline: 'Fast hands, controlled power',
+    price: 3000, mrp: null,
+    wood: 'srilankan', profile: 'standard',
+    ball: ['soft'], level: 'tournament', style: ['attacker'],
+    weight: [700, 770], height: [35, 36],
+    handle: 'Science-induced handle guard', sweetSpot: 'Low to mid',
+    finish: 'Hand crafted', spine: true, edge: 'Standard',
+    tier: 'premium', popularity: 84, rating: 0, reviews: 0,
+    badges: ['Must Try'],
+    usage: 'Tournament soft tennis ball cricket',
+    features: [
+      'Lightweight tournament bat designed for fast and controlled stroke play',
+      'Bottom weight with a low-mid sweet spot',
+      'Sits between the Feather and the Sixit in the Power X family',
+      'Hand crafted Sri Lankan wood'
     ]
   },
 
-  /* ---------- KASHMIR WILLOW / POPLAR ---------- */
+  /* ============================================================
+     02 — MEDIUM TENNIS  (75g – 85g ball)
+     Balance meets power. Tournaments, turf and club cricket.
+     ============================================================ */
   {
-    id: 'kw-full-scoop',
-    name: 'Kashmir Willow Full Scoop',
-    tagline: 'A+ willow, full scooped back',
-    price: 1800, mrp: 2200,
-    wood: 'kashmir', profile: 'scoop',
-    ball: ['soft', 'medium'],
-    weight: [750, 900], height: [34.5, 36],
-    handle: 'Cane handle with rubber grip', sweetSpot: 'Mid to low-middle',
-    finish: 'Polished', spine: true, edge: 'Standard',
-    tier: 'mid', popularity: 80, rating: 4.5, reviews: 143,
-    badges: ['A+ Grade'],
-    usage: 'Street cricket, tennis-ball tournaments',
+    id: 'ys-big-edge',
+    name: 'YS Big Edge',
+    tagline: 'Thick edges, balanced weight',
+    price: 2300, mrp: null,
+    wood: 'srilankan', profile: 'bigedge',
+    ball: ['medium'], level: 'serious', style: ['classic'],
+    weight: [700, 830], height: [34.5, 34.5],
+    handle: 'Single wood handle', sweetSpot: 'Mid',
+    finish: 'Standard', spine: true, edge: 'Big edge',
+    tier: 'premium', popularity: 82, rating: 0, reviews: 0,
+    badges: ['Exclusive'],
+    usage: 'Medium tennis ball cricket',
     features: [
-      'A+ grade Kashmir Willow, single blade',
-      'Full scoop at the back for lighter pickup',
-      'Faster bat swing and easier lofted shots',
-      'Short handle (SH) full size',
-      'Durable build for regular play'
-    ]
-  },
-  {
-    id: 'poplar-full-scoop',
-    name: 'Poplar Full Scoop',
-    tagline: 'Full scoop feel, half the price',
-    price: 1500, mrp: 1800,
-    wood: 'poplar', profile: 'scoop',
-    ball: ['soft', 'medium'],
-    weight: [750, 900], height: [34, 36],
-    handle: 'Normal handle', sweetSpot: 'Mid to low',
-    finish: 'Standard', spine: true, edge: 'Standard',
-    tier: 'entry', popularity: 69, rating: 4.1, reviews: 112,
-    usage: 'Recreational play, soft and medium tennis ball',
-    features: [
-      'Poplar wood, single blade, full scoop back',
-      'Lightweight and easy to swing',
-      'Good for beginners and casual players',
-      'More affordable than Kashmir Willow'
-    ]
-  },
-  {
-    id: 'flat-kw-spine',
-    name: 'Flat Bat — Kashmir Willow',
-    tagline: 'Retro flat, high spine',
-    price: 1250, mrp: 1500,
-    wood: 'kashmir', profile: 'flat',
-    ball: ['soft', 'medium'],
-    weight: [800, 950], height: [34, 36],
-    handle: 'Short handle (SH)', sweetSpot: 'Mid to low',
-    finish: 'Standard', spine: true, edge: 'Standard',
-    tier: 'entry', popularity: 72, rating: 4.2, reviews: 126,
-    badges: ['Retro'],
-    usage: 'Soft and medium tennis ball',
-    features: [
-      'A grade Kashmir Willow',
-      'High spine for extra punch',
-      'Lightweight pickup with good balance',
-      'Beginner friendly, retro flat look'
-    ]
-  },
-  {
-    id: 'flat-poplar-spine',
-    name: 'Flat Bat — Poplar',
-    tagline: 'Cheapest way into a flat bat',
-    price: 1100, mrp: 1350,
-    wood: 'poplar', profile: 'flat',
-    ball: ['soft', 'medium'],
-    weight: [800, 950], height: [34, 36],
-    handle: 'Short handle (SH)', sweetSpot: 'Mid to low',
-    finish: 'Standard', spine: true, edge: 'Standard',
-    tier: 'entry', popularity: 64, rating: 4.0, reviews: 89,
-    badges: ['Budget Pick'],
-    usage: 'Soft and medium tennis ball',
-    features: [
-      'Poplar wood, short handle',
-      'High spine profile',
-      'Lightweight pickup with good balance',
-      'Beginner friendly, retro type'
-    ]
-  },
-  {
-    id: 'flat-kw-nospine',
-    name: 'Flat Bat No-Spine — Kashmir',
-    tagline: 'Sleek and sword-like',
-    price: 1850, mrp: 2200,
-    wood: 'kashmir', profile: 'flat',
-    ball: ['soft'],
-    weight: [730, 850], height: [34, 36],
-    handle: 'Cane handle', sweetSpot: 'Mid to low',
-    finish: 'Polished', spine: false, edge: 'Flat face',
-    tier: 'mid', popularity: 83, rating: 4.6, reviews: 158,
-    badges: ['Bangalore Best Seller'],
-    usage: 'Soft tennis ball — Wilson, Mercury',
-    features: [
-      'Kashmir Willow, flat back with no spine',
-      'Sleek, sword-like look',
-      'Balanced and lightweight feel',
-      'Faster swing, durable build',
-      'Best seller in Bangalore'
-    ]
-  },
-  {
-    id: 'flat-poplar-nospine',
-    name: 'Flat Bat No-Spine — Poplar',
-    tagline: 'The sword, on a budget',
-    price: 1550, mrp: 1850,
-    wood: 'poplar', profile: 'flat',
-    ball: ['soft'],
-    weight: [730, 850], height: [34, 36],
-    handle: 'Normal handle', sweetSpot: 'Mid to low',
-    finish: 'Standard', spine: false, edge: 'Flat face',
-    tier: 'mid', popularity: 70, rating: 4.2, reviews: 104,
-    badges: ['Bangalore Best Seller'],
-    usage: 'Soft tennis ball',
-    features: [
-      'Poplar wood, flat back with no spine',
-      'Sleek and sword look',
-      'Balanced and lightweight feel',
-      'Faster swing'
-    ]
-  },
-
-  /* ---------- SRI LANKAN MID / PREMIUM ---------- */
-  {
-    id: 'sl-varnished',
-    name: 'Varnished Sri Lankan',
-    tagline: 'Glossy armour against the weather',
-    price: 1600, mrp: 1950,
-    wood: 'srilankan', profile: 'standard',
-    ball: ['soft', 'medium'],
-    weight: [650, 850], height: [34, 36],
-    handle: 'Single wood handle', sweetSpot: 'Mid to low',
-    finish: 'Glossy varnished', spine: true, edge: 'Standard', width: '5 inch',
-    toeGuard: true,
-    tier: 'mid', popularity: 76, rating: 4.4, reviews: 137,
-    usage: 'Soft and medium tennis ball cricket',
-    features: [
-      'Good Sri Lankan wood, single blade',
-      'Glossy varnish protects the wood surface',
-      'Reinforced toe protection',
-      '5 inch breadth, smooth flat face',
-      'Lightweight and balanced pickup'
-    ]
-  },
-  {
-    id: 'sl-furnished',
-    name: 'Sri Lankan Furnished',
-    tagline: 'Stickers, gutting, the full treatment',
-    price: 1750, mrp: 2100,
-    wood: 'srilankan', profile: 'standard',
-    ball: ['soft', 'medium'],
-    weight: [650, 850], height: [34, 36],
-    handle: 'Single wood handle', sweetSpot: 'Mid to low',
-    finish: 'Furnished and polished', spine: true, edge: 'Standard',
-    tier: 'mid', popularity: 79, rating: 4.5, reviews: 149,
-    usage: 'Soft and medium tennis ball',
-    features: [
-      'Premium Sri Lankan wood, single blade',
-      'Finished with stickers and gutting work',
-      'Strong toe, smooth finished face',
-      'Lightweight and well balanced',
-      'Enhanced strength for long-lasting performance'
+      'Big-edge profile offering a powerful hitting area with balanced weight',
+      'Thick edges without the weight penalty',
+      'Even balance with a mid sweet spot',
+      'Sri Lankan wood, single piece'
     ]
   },
   {
     id: 'cws',
     name: 'CWS',
-    tagline: 'Sri Lankan blade. Indian handle.',
-    price: 2200, mrp: 2650,
+    tagline: 'Hybrid build, tournament punch',
+    price: 2200, mrp: null,
     wood: 'srilankan', profile: 'standard',
-    ball: ['soft', 'medium'],
-    weight: [770, 880], height: [34, 36],
-    handle: 'Normal Indian handle (hybrid)', sweetSpot: 'Mid to low',
-    finish: 'Smooth polished', spine: true, edge: 'Standard', width: '4.7 – 4.9 inch',
-    toeGuard: true,
-    tier: 'premium', popularity: 92, rating: 4.7, reviews: 268,
-    badges: ['Best Seller in Toss'],
-    usage: 'Soft and medium tennis ball',
+    ball: ['medium'], level: 'tournament', style: ['attacker'],
+    weight: [800, 900], height: [35, 36],
+    handle: 'Hybrid Indian handle', sweetSpot: 'Low to mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 94, rating: 0, reviews: 0,
+    badges: ['Best Seller', 'Must Try'],
+    usage: 'Medium tennis ball cricket, tournaments',
     features: [
-      'Premium Sri Lankan blade with Indian handle',
-      'Better control, comfort and durability',
-      'Rock base toe',
-      'Balanced and comfortable pickup',
-      'The bat Toss sells the most of'
+      'Hybrid Indian handle with Sri Lankan albizia blade',
+      'Combines strength with a powerful hitting profile',
+      'Built to last a full tournament season',
+      'Bottom weight with a low-mid sweet spot'
     ]
   },
   {
-    id: 'custom-scoop',
+    id: 'power-x-sixit',
+    name: 'Power X Sixit',
+    tagline: 'Built for one thing — six',
+    price: 3000, mrp: null,
+    wood: 'srilankan', profile: 'bigedge',
+    ball: ['medium'], level: 'tournament', style: ['attacker'],
+    weight: [800, 850], height: [35, 36],
+    handle: 'Science-induced handle guard', sweetSpot: 'Low to mid',
+    finish: 'Hand crafted', spine: true, edge: 'Big edge',
+    tier: 'premium', popularity: 94, rating: 0, reviews: 0,
+    badges: ['Best Seller', 'Must Try'],
+    usage: 'Tournament medium tennis ball cricket',
+    features: [
+      'Tournament-ready build designed for powerful six-hitting',
+      'The heaviest bat in the Power X family',
+      'Bottom weight with a low-mid sweet spot',
+      'Hand crafted Sri Lankan wood'
+    ]
+  },
+  {
+    id: 'customized-scoop',
     name: 'Customized Scoop',
-    tagline: 'Pick your colour. Pick your finish.',
-    price: 2400, mrp: 2900,
+    tagline: 'Power, balance and looks',
+    price: 2400, mrp: null,
     wood: 'srilankan', profile: 'scoop',
-    ball: ['soft', 'medium'],
-    weight: [780, 880], height: [34, 36],
-    handle: 'Indian handle', sweetSpot: 'Mid to low',
-    finish: 'Polished / Varnished / Painted colours', spine: true, edge: 'Standard', width: '5 inch',
-    toeGuard: true, customizable: true,
-    tier: 'premium', popularity: 87, rating: 4.6, reviews: 201,
-    badges: ['Best Seller', 'Customizable'],
-    usage: 'Soft and medium tennis ball',
-    features: [
-      'Hybrid Sri Lankan bat with middle scoop',
-      'Less weight and better overall balance',
-      'Toe guard fixed as standard',
-      'Paint finish colours available',
-      'Powerful hitting, faster bat speed, easy pickup'
-    ]
-  },
-  {
-    id: 'cs-pro',
-    name: 'CS PRO — Scoop + Thick Edges',
-    tagline: 'Maximum power build',
-    price: 2500, mrp: 3000,
-    wood: 'srilankan', profile: 'scoop',
-    ball: ['soft', 'medium'],
-    weight: [800, 950], height: [34, 36],
-    handle: 'Premium Indian handle', sweetSpot: 'Mid to low',
-    finish: 'Polished / Varnished / Painted colours', spine: true, edge: 'Thick edges',
-    customizable: true,
-    tier: 'premium', popularity: 85, rating: 4.7, reviews: 176,
+    ball: ['medium'], level: 'tournament', style: ['classic', 'attacker'],
+    weight: [800, 900], height: [35, 36],
+    handle: 'Hybrid Indian handle', sweetSpot: 'Mid',
+    finish: 'Standard', spine: true, edge: 'Good edge',
+    tier: 'premium', popularity: 88, rating: 0, reviews: 0,
     badges: ['Best Seller'],
-    usage: 'Soft and medium tennis ball cricket',
+    usage: 'Medium tennis ball cricket, tournaments',
     features: [
-      'Premium Sri Lankan wood, scoop profile',
-      'Thick edges for maximum power',
-      'Premium Indian handle',
-      'Lightweight feel with powerful balance',
-      'Attractive paint colours available'
+      'Customized scoop profile offering power with improved balance and looks',
+      'Hybrid handle construction for strength',
+      'Suits classic and attacking players alike',
+      'Sri Lankan wood'
     ]
   },
   {
-    id: 'ys-bat',
-    name: 'YS Bat',
-    tagline: 'Three-split handle. Thick edges.',
-    price: 2300, mrp: 2800,
-    wood: 'srilankan', profile: 'bigedge',
-    ball: ['soft', 'medium'],
-    weight: [750, 850], height: [34.5, 34.5],
-    handle: 'Strong handle with 3 split', sweetSpot: 'Mid to low',
-    finish: 'Polished', spine: true, edge: 'Thick edges',
-    customizable: true,
-    tier: 'premium', popularity: 89, rating: 4.7, reviews: 223,
-    badges: ['Best Selling Sri Lankan'],
-    usage: 'Tennis ball cricket, street cricket, tournament matches',
-    features: [
-      'Strong handle with 3 split construction',
-      'Thick edges for maximum power',
-      'Lightweight pickup with powerful hitting',
-      'Well balanced for easy shots',
-      'Weight customizable 750g – 850g'
-    ]
-  },
-  {
-    id: 'big-edge-varnish-pro',
-    name: 'Big Edge Varnish Pro',
-    tagline: 'Made to clear the rope',
-    price: 2250, mrp: 2700,
-    wood: 'srilankan', profile: 'bigedge',
-    ball: ['soft', 'medium'],
-    weight: [780, 900], height: [35, 36],
-    handle: 'Joint handle, 2 piece', sweetSpot: 'Extended',
-    finish: 'Varnished glossy', spine: true, edge: 'Massive big edge',
-    tier: 'premium', popularity: 86, rating: 4.6, reviews: 187,
-    usage: 'Aggressive batsmen and boundary hitters',
-    features: [
-      'Premium Sri Lankan hardwood',
-      'Big edge with extended sweet spot',
-      'Joint handle, 2 piece construction',
-      'Excellent rebound and power transfer',
-      'Durable varnished glossy finish'
-    ]
-  },
-  {
-    id: 'sl-mongoose-joint',
-    name: 'Sri Lankan Mongoose Joint Handle',
-    tagline: 'Short blade. Long handle. No mercy.',
-    price: 2200, mrp: 2650,
-    wood: 'srilankan', profile: 'mongoose',
-    ball: ['soft', 'medium'],
-    weight: [750, 900], height: [34.5, 36],
-    handle: 'Joint handle, 3 piece', sweetSpot: 'Larger, higher',
-    finish: 'Natural, fully furnished, anti-scuff ready', spine: true, edge: 'Standard',
-    tier: 'premium', popularity: 81, rating: 4.5, reviews: 132,
-    usage: 'Soft and medium tennis ball power hitting and slogs',
-    features: [
-      'Premium Sri Lankan willow',
-      'Short blade with long handle',
-      'Larger sweet spot and faster bat speed',
-      'Slightly curved face',
-      'Lightweight with excellent bat speed'
-    ]
-  },
-  {
-    id: 'swagger',
-    name: 'Swagger',
-    tagline: 'Burnt finish destroyer',
-    price: 2250, mrp: 2700,
-    wood: 'srilankan', profile: 'bigedge',
-    ball: ['soft', 'medium'],
-    weight: [780, 900], height: [35, 36],
-    handle: 'Joint handle', sweetSpot: 'Mid to low',
-    finish: 'Burnt finish', spine: true, edge: 'Thick edges',
-    tier: 'premium', popularity: 84, rating: 4.6, reviews: 165,
-    badges: ['Great Reviews'],
-    usage: 'Soft tennis, medium weight tennis',
-    features: [
-      'A+ Sri Lankan wood',
-      'Distinctive burnt finish',
-      'Joint handle construction',
-      'Light weight and perfect balance',
-      'Shipping available across India'
-    ]
-  },
-  {
-    id: 'power-x',
-    name: 'Toss Power X',
-    tagline: '3 years of research. One bat.',
-    price: 2999, mrp: 3599,
-    wood: 'srilankan', profile: 'bigedge',
-    ball: ['soft', 'medium'],
-    weight: [650, 860], height: [34, 36],
-    handle: 'Science-induced handle guard', sweetSpot: 'Extended',
-    finish: 'Hand crafted, water resistant', spine: true, edge: 'Big edge',
-    toeGuard: true, flagship: true, warranty: '3 months assured warranty',
-    variants: [
-      { id: 'feather', name: 'Feather Edition', weight: [650, 699], note: 'Fastest pickup' },
-      { id: 'mercury', name: 'Mercury Plus Edition', weight: [700, 760], note: 'Balanced' },
-      { id: 'sixit',   name: 'Sixit Edition', weight: [790, 860], note: 'Maximum power' }
-    ],
-    tier: 'premium', popularity: 96, rating: 4.9, reviews: 341,
-    badges: ['Flagship', '3 Month Warranty'],
-    usage: 'Every format of tennis ball cricket',
-    features: [
-      'Molecules packed powerful bat',
-      'Triple hard seasoned',
-      'Science induced rock toe and handle guard',
-      '3 months assured warranty',
-      '3 years of research behind the build',
-      'Water resistant',
-      'Feather feel balance with big edge for slogs',
-      'Hand crafted — made with love and passion'
-    ]
-  },
-
-  /* ---------- FOUR & SIXIT ---------- */
-  {
-    id: 'four-six-scoop-kw',
-    name: 'Four & Sixit Scoop — Kashmir',
-    tagline: '4 and 6 scoop, A+ willow',
-    price: 1750, mrp: 2100,
+    id: 'kerala-scoop',
+    name: 'Kerala Scoop',
+    tagline: 'Tournament-level scoop',
+    price: 2250, mrp: null,
     wood: 'kashmir', profile: 'scoop',
-    ball: ['soft', 'medium'],
-    weight: [750, 900], height: [34, 36],
-    handle: 'Single cane handle', sweetSpot: 'Powerful, mid',
-    finish: 'Premium polished', spine: true, edge: 'Thick edges',
-    tier: 'mid', popularity: 82, rating: 4.5, reviews: 154,
-    badges: ['A+ Grade'],
-    usage: 'Soft and medium tennis balls, wind balls',
+    ball: ['medium'], level: 'tournament', style: ['classic'],
+    weight: [770, 900], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'premium', popularity: 88, rating: 0, reviews: 0,
+    badges: ['Best Seller'],
+    usage: 'Tournament medium tennis ball cricket',
     features: [
-      'Premium A+ grade Kashmir Willow',
-      '4 and 6 scoop design for spine and power',
-      'Cane handle for shock absorption and flex',
-      'Thick edges with scooped back profile',
-      'Quick bat swing and control on lofted shots'
+      'Powerful Kerala scoop design built for tournament-level play',
+      'Kashmir Willow blade',
+      'Scooped back keeps the weight down for the size',
+      'Even balance with a mid sweet spot'
     ]
   },
   {
-    id: 'four-six-scoop-poplar',
-    name: 'Four & Sixit Scoop — Poplar',
-    tagline: 'Affordable edition',
-    price: 1350, mrp: 1650,
+    id: 'kerala-scoop-lite',
+    name: 'Kerala Scoop Lite',
+    tagline: 'The affordable Kerala scoop',
+    price: 1800, mrp: null,
     wood: 'poplar', profile: 'scoop',
-    ball: ['soft', 'medium'],
-    weight: [750, 900], height: [34, 36],
-    handle: 'Normal handle', sweetSpot: 'Mid',
-    finish: 'Premium polished with stickers', spine: true, edge: 'Thick edges',
-    tier: 'entry', popularity: 68, rating: 4.1, reviews: 96,
-    badges: ['Budget Pick'],
-    usage: 'Soft and medium tennis balls, turf cricket',
+    ball: ['medium'], level: 'serious', style: ['classic'],
+    weight: [770, 900], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 70, rating: 0, reviews: 0,
+    badges: [],
+    usage: 'Medium tennis ball cricket',
     features: [
-      'Poplar willow, affordable edition',
-      '4 / 6 scoop for spine and powerful hits',
-      'Thick edges with balanced weight distribution',
-      'Lightweight feel with excellent balance',
-      'Premium polished finish with attractive stickers'
+      'Affordable Kerala scoop profile offering easy handling',
+      'Lighter build than the full Kerala Scoop',
+      'Poplar wood keeps the price down',
+      'Even balance with a mid sweet spot'
+    ]
+  },
+  {
+    id: 'glossy-premium',
+    name: 'Glossy Premium',
+    tagline: 'Premium finish, medium-weight power',
+    price: 2500, mrp: null,
+    wood: 'kashmir', profile: 'standard',
+    ball: ['medium'], level: 'tournament', style: ['classic', 'attacker'],
+    weight: [800, 900], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Premium glossy', spine: true, edge: 'Standard',
+    tier: 'premium', popularity: 94, rating: 0, reviews: 0,
+    badges: ['Best Seller', 'Must Try'],
+    usage: 'Tournament medium tennis ball cricket',
+    features: [
+      'Premium glossy finish with a powerful medium-weight profile',
+      'Kashmir Willow blade',
+      'Suits classic and attacking players alike',
+      'Gloss coat protects against moisture'
+    ]
+  },
+  {
+    id: 'four-scoop',
+    name: 'Four Scoop',
+    tagline: 'Less weight, same hitting profile',
+    price: 1850, mrp: null,
+    wood: 'kashmir', profile: 'scoop',
+    ball: ['medium'], level: 'serious', style: ['classic'],
+    weight: [770, 900], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 78, rating: 0, reviews: 0,
+    badges: ['Value'],
+    usage: 'Medium tennis ball cricket',
+    features: [
+      'Scoop design reduces weight while maintaining a strong hitting profile',
+      'Four-scoop back for a lighter pickup',
+      'Kashmir Willow blade',
+      'Even balance with a mid sweet spot'
+    ]
+  },
+  {
+    id: 'four-scoop-lite',
+    name: 'Four Scoop Lite',
+    tagline: 'Entry-level scoop',
+    price: 1500, mrp: null,
+    wood: 'poplar', profile: 'scoop',
+    ball: ['medium'], level: 'beginner', style: ['classic'],
+    weight: [770, 900], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 70, rating: 0, reviews: 0,
+    badges: [],
+    usage: 'Medium tennis ball cricket',
+    features: [
+      'Lightweight scoop profile offering easy handling',
+      'Entry-level price for a medium-ball bat',
+      'Poplar wood build',
+      'Even balance with a mid sweet spot'
+    ]
+  },
+  {
+    id: 'mongoose-pro',
+    name: 'Mongoose PRO',
+    tagline: 'Strong handle, aggressive intent',
+    price: 2200, mrp: null,
+    wood: 'srilankan', profile: 'mongoose',
+    ball: ['medium'], level: 'serious', style: ['attacker'],
+    weight: [800, 900], height: [35, 36],
+    handle: 'Extended mongoose handle', sweetSpot: 'Low to mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 82, rating: 0, reviews: 0,
+    badges: ['Exclusive'],
+    usage: 'Medium tennis ball cricket, aggressive hitting',
+    features: [
+      'Mongoose-style profile with a strong handle for aggressive play',
+      'Short blade and long handle for bat speed',
+      'Bottom weight with a low-mid sweet spot',
+      'Sri Lankan wood, single piece'
     ]
   },
 
-  /* ---------- MULTI BLADE ---------- */
+  /* ============================================================
+     03 — HARD TENNIS + STUMPER  (95g – 130g ball)
+     Built for impact. Hard tennis and rubber-ball cricket.
+     ============================================================ */
   {
-    id: 'kerala-scoop-furnished',
-    name: 'Kerala Scoop Double Blade — Furnished',
-    tagline: 'Popular across TN and Kerala',
-    price: 2250, mrp: 2700,
-    wood: 'kashmir', profile: 'multi',
-    ball: ['soft', 'medium'],
-    weight: [780, 900], height: [34, 36],
-    handle: 'Single cane handle with premium grip', sweetSpot: 'Mid',
-    finish: 'Premium furnished', spine: true, edge: 'Thick edges', blades: 2,
-    tier: 'premium', popularity: 83, rating: 4.6, reviews: 171,
-    badges: ['Double Blade'],
-    usage: 'Tournament and turf cricket',
+    id: 'hard-scoop',
+    name: 'Hard Scoop',
+    tagline: 'Hard-ball power at an accessible price',
+    price: 1350, mrp: null,
+    wood: 'poplar', profile: 'scoop',
+    ball: ['hard'], level: 'beginner', style: ['quick-hands'],
+    weight: [950, 1050], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid to high',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'entry', popularity: 70, rating: 0, reviews: 0,
+    badges: [],
+    usage: 'Hard tennis and stumper ball cricket',
     features: [
-      'Double blade structure for added strength',
-      'Scoop design for faster bat swing',
-      'Thick edges for better power transfer',
-      'Premium furnished finishing',
-      'Popular in Tamil Nadu and Kerala'
+      'Solid hard-scoop profile offering power at an accessible price',
+      'The cheapest way into hard-ball cricket',
+      'Scooped back keeps the pickup manageable',
+      'Poplar wood build'
     ]
   },
   {
-    id: 'kerala-scoop-unfurnished',
-    name: 'Kerala Scoop Double Blade — Raw',
-    tagline: 'Unfurnished. Pure wood.',
-    price: 2050, mrp: 2450,
-    wood: 'kashmir', profile: 'multi',
-    ball: ['medium'],
-    weight: [780, 900], height: [34, 36],
-    handle: 'Premium cane handle with strong binding', sweetSpot: 'Mid',
-    finish: 'Unfurnished, raw', spine: true, edge: 'Standard', blades: 2,
-    tier: 'premium', popularity: 74, rating: 4.4, reviews: 118,
-    badges: ['Double Blade'],
-    usage: 'Medium tennis ball',
+    id: 'hard-scoop-plus',
+    name: 'Hard Scoop PLUS',
+    tagline: 'Heavier, stronger, more aggressive',
+    price: 1550, mrp: null,
+    wood: 'poplar', profile: 'scoop',
+    ball: ['hard'], level: 'beginner', style: ['classic'],
+    weight: [950, 1050], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 70, rating: 0, reviews: 0,
+    badges: [],
+    usage: 'Hard tennis and stumper ball cricket',
     features: [
-      'Kashmir Willow, raw unfurnished finish',
-      'Double blade construction for durability',
-      'Premium cane handle with strong binding',
-      'Powerful hitting performance',
-      'Good balance between pickup and punch'
+      'Heavy hard-scoop bat designed for strong and aggressive play',
+      'More blade behind the ball than the standard Hard Scoop',
+      'Even balance with a mid sweet spot',
+      'Poplar wood build'
     ]
   },
   {
-    id: 'poplar-double-blade',
-    name: 'Poplar Double Blade — Furnished',
-    tagline: 'Strong build, honest price',
-    price: 1950, mrp: 2350,
-    wood: 'poplar', profile: 'multi',
-    ball: ['soft', 'medium'],
-    weight: [780, 950], height: [34, 36],
-    handle: 'Single cane handle with premium grip', sweetSpot: 'Large and extended',
-    finish: 'Fully furnished premium', spine: true, edge: 'Thick edges', blades: 2,
-    tier: 'mid', popularity: 73, rating: 4.3, reviews: 121,
-    badges: ['Double Blade'],
-    usage: 'Medium tennis, soft tennis, turf matches',
+    id: 'hard-scoop-pro',
+    name: 'Hard Scoop PRO',
+    tagline: 'Kashmir Willow, serious level',
+    price: 1800, mrp: null,
+    wood: 'kashmir', profile: 'scoop',
+    ball: ['hard'], level: 'serious', style: ['classic'],
+    weight: [950, 1050], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 70, rating: 0, reviews: 0,
+    badges: [],
+    usage: 'Hard tennis and stumper ball cricket',
     features: [
-      'Premium poplar wood, double blade',
-      'Thick edges with full body profile',
-      'Large and extended sweet spot',
-      'Flat face for maximum power transfer',
-      'Suitable for front-foot and back-foot shots'
+      'Strong Kashmir Willow scoop profile for serious players',
+      'A step up in timber from the Poplar hard scoops',
+      'Even balance with a mid sweet spot',
+      'Built to take repeated hard-ball impact'
     ]
   },
   {
-    id: 'poplar-triple-blade',
-    name: 'Poplar Triple Blade — Cane Handle',
-    tagline: 'Triple laminated, affordable',
-    price: 2150, mrp: 2550,
-    wood: 'poplar', profile: 'multi',
-    ball: ['soft', 'medium'],
-    weight: [780, 900], height: [34, 36],
-    handle: 'Cane handle', sweetSpot: 'Mid',
-    finish: 'Premium furnished', spine: true, edge: 'Thick edges', blades: 3,
-    tier: 'premium', popularity: 71, rating: 4.3, reviews: 103,
-    badges: ['Triple Blade'],
-    usage: 'Medium and soft tennis ball',
+    id: 'hard-scoop-elite',
+    name: 'Hard Scoop ELITE',
+    tagline: 'Tournament-level hard-ball power',
+    price: 2250, mrp: null,
+    wood: 'kashmir', profile: 'scoop',
+    ball: ['hard'], level: 'tournament', style: ['attacker', 'classic'],
+    weight: [950, 1050], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Low to mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'premium', popularity: 88, rating: 0, reviews: 0,
+    badges: ['Best Seller'],
+    usage: 'Tournament hard tennis and stumper ball cricket',
     features: [
-      'Premium quality poplar wood',
-      'Triple blade with thick edges',
-      'Cane handle for better shock absorption',
-      'Well-balanced weight distribution',
-      'Affordable edition'
+      'Kashmir Willow hard-scoop bat built for tournament-level power',
+      'The top of the Hard Scoop line',
+      'Suits attacking and classic players alike',
+      'Scooped back keeps the swing quick for the weight'
     ]
   },
   {
-    id: 'kw-triple-blade',
-    name: 'Kashmir Willow Triple Blade',
-    tagline: 'Top of the willow range',
-    price: 2450, mrp: 2950,
-    wood: 'kashmir', profile: 'multi',
-    ball: ['soft', 'medium'],
-    weight: [780, 900], height: [34, 36],
-    handle: 'Cane handle', sweetSpot: 'Mid',
-    finish: 'Professional furnished, smooth polished', spine: true, edge: 'Thick edges', blades: 3,
-    tier: 'premium', popularity: 79, rating: 4.6, reviews: 139,
-    badges: ['A+ Grade', 'Triple Blade'],
-    usage: 'Tournament and competitive tennis ball cricket',
+    id: 'mri-srilankan',
+    name: 'MRI Srilankan',
+    tagline: 'Raw Sri Lankan, serious hitting',
+    price: 1800, mrp: null,
+    wood: 'srilankan', profile: 'standard',
+    ball: ['hard'], level: 'serious', style: ['classic'],
+    weight: [950, 1050], height: [35, 36],
+    handle: 'Single wood handle', sweetSpot: 'Mid',
+    finish: 'Raw bat', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 88, rating: 0, reviews: 0,
+    badges: ['Best Seller'],
+    usage: 'Hard tennis and stumper ball cricket',
     features: [
-      'Premium A+ grade Kashmir Willow',
-      'Triple blade with thick edges',
-      'Cane handle reduces vibration',
-      'Well-balanced pickup with powerful stroke play',
-      'Strong, long-lasting construction'
+      'Raw Sri Lankan hard bat designed for serious-level hitting',
+      'No finish — all timber, nothing hidden',
+      'Even balance with a mid sweet spot',
+      'Dense Sri Lankan grain for hard-ball impact'
+    ]
+  },
+  {
+    id: 'glossy-premium-hard',
+    name: 'Glossy Premium Hard',
+    tagline: 'Heavy, glossy, tournament-ready',
+    price: 2850, mrp: null,
+    wood: 'kashmir', profile: 'standard',
+    ball: ['hard'], level: 'tournament', style: ['classic', 'attacker'],
+    weight: [950, 1050], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Premium glossy', spine: true, edge: 'Standard',
+    tier: 'premium', popularity: 94, rating: 0, reviews: 0,
+    badges: ['Best Seller', 'Must Try'],
+    usage: 'Tournament hard tennis and stumper ball cricket',
+    features: [
+      'Premium glossy aesthetic finish with a heavy, powerful tournament profile',
+      'Kashmir Willow blade',
+      'Suits classic and attacking players alike',
+      'Gloss coat protects against moisture'
+    ]
+  },
+  {
+    id: 'black-mamba',
+    name: 'Black Mamba',
+    tagline: 'Unmistakable, and it hits',
+    price: 2300, mrp: null,
+    wood: 'kashmir', profile: 'standard',
+    ball: ['hard'], level: 'tournament', style: ['attacker'],
+    weight: [950, 1100], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Low to mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'premium', popularity: 94, rating: 0, reviews: 0,
+    badges: ['Best Seller', 'Exclusive'],
+    usage: 'Tournament hard tennis and stumper ball cricket',
+    features: [
+      'Unique Kashmir Willow bat built for powerful hard-hitting',
+      'Bottom weight with a low-mid sweet spot',
+      'Goes up to 1100g for maximum power transfer',
+      'A Toss exclusive you will not find elsewhere'
+    ]
+  },
+  {
+    id: 'graphix-premium-hard',
+    name: 'Graphix Premium Hard',
+    tagline: 'The loudest bat in the unit',
+    price: 4000, mrp: null,
+    wood: 'kashmir', profile: 'standard',
+    ball: ['hard'], level: 'tournament', style: ['classic', 'attacker'],
+    weight: [950, 1100], height: [35, 36],
+    handle: 'Standard handle', sweetSpot: 'Mid',
+    finish: 'Graphic print, striking finish', spine: true, edge: 'Standard',
+    tier: 'premium', popularity: 82, rating: 0, reviews: 0,
+    badges: ['Exclusive'],
+    usage: 'Tournament hard tennis and stumper ball cricket',
+    features: [
+      'Premium high-end build with a crazy graphic aesthetic',
+      'Striking finish — the most distinctive bat we make',
+      'Kashmir Willow blade up to 1100g',
+      'Suits classic and attacking players alike'
+    ]
+  },
+  {
+    id: 'srilankan-hard-monster',
+    name: 'Srilankan Hard Monster (SHT)',
+    tagline: 'Toss exclusive. Heavy duty.',
+    price: 2350, mrp: null,
+    wood: 'srilankan', profile: 'standard',
+    ball: ['hard'], level: 'tournament', style: ['attacker'],
+    weight: [950, 1100], height: [35, 36],
+    handle: 'Single wood handle', sweetSpot: 'Low to mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'premium', popularity: 94, rating: 0, reviews: 0,
+    badges: ['Best Seller', 'Must Try', 'Toss Exclusive'],
+    usage: 'Tournament hard tennis and stumper ball cricket',
+    features: [
+      'Toss exclusive heavy-duty hard tennis bat',
+      'Built for aggressive tournament play',
+      'Bottom weight with a low-mid sweet spot',
+      'Goes up to 1100g of dense Sri Lankan wood'
+    ]
+  },
+  {
+    id: 'mongoose-core',
+    name: 'Mongoose CORE',
+    tagline: 'The lightest hard-ball bat we make',
+    price: 2200, mrp: null,
+    wood: 'kashmir', profile: 'mongoose',
+    ball: ['hard'], level: 'serious', style: ['attacker'],
+    weight: [850, 950], height: [35, 36],
+    handle: 'Extended mongoose handle', sweetSpot: 'Low to mid',
+    finish: 'Standard', spine: true, edge: 'Standard',
+    tier: 'mid', popularity: 82, rating: 0, reviews: 0,
+    badges: ['Exclusive'],
+    usage: 'Hard tennis and stumper ball cricket, aggressive hitting',
+    features: [
+      'Mongoose-style profile with a strong handle for aggressive play',
+      'At 850–950g the lightest bat in the hard-ball range',
+      'Short blade and long handle for bat speed',
+      'Kashmir Willow blade'
     ]
   }
 ];
 
 /* ---------- derived helpers ---------- */
-const BALL_LABEL = { soft: 'Soft Tennis', medium: 'Medium Tennis' };
+const BALL_LABEL = { soft: 'Soft Tennis', medium: 'Medium Tennis', hard: 'Hard Tennis' };
+const BALL_NOTE  = {
+  soft:   '65g – 70g ball',
+  medium: '75g – 85g ball',
+  hard:   '95g – 130g ball, including stumper and rubber'
+};
 const TIER_LABEL = { entry: 'Under ₹1500', mid: '₹1500 – ₹2200', premium: '₹2200+' };
+const LEVEL_LABEL = { beginner: 'Beginner', serious: 'Serious', tournament: 'Tournament' };
+const STYLE_LABEL = { attacker: 'Attacker', classic: 'Classic', 'quick-hands': 'Quick Hands' };
+
+/* WHERE "LIGHT" SITS DEPENDS ENTIRELY ON THE BALL.
+   A 950g bat is the lightest hard-tennis bat we make and heavier than
+   every soft-tennis bat in the range. Judging weight on absolute grams
+   is what would make the bat finder return nothing at all the moment
+   somebody picked a hard ball and said they wanted something light —
+   the two answers would contradict each other and the quiz would dead-end.
+
+   So each ball type gets its own pair of split points, taken from the
+   catalogue's own weight bands, and every weight judgement on the site
+   runs through them. Compared against a bat's MIDPOINT weight, since
+   that is where the model actually sits when you pick it up. */
+const BALL_SPLIT = { soft: [730, 790], medium: [820, 845], hard: [950, 1010] };
+
+function ballOf(p)     { return (p.ball && p.ball[0]) || 'soft'; }
+function midWeight(p)  {
+  const w = p.weight || [];
+  return (w.length === 2 && w[0] != null && w[1] != null) ? (w[0] + w[1]) / 2 : null;
+}
+
+/* 'light' | 'medium' | 'heavy', relative to the bat's own ball type — or null
+   for anything with no weight on it at all, which is a ball, a glove, or a
+   half-finished bat somebody is still writing up in the Maze Room. Returning
+   a band for those would put a cricket ball in the "Heavy bats" filter. */
+function weightBand(p) {
+  const m = midWeight(p);
+  if (m === null) return null;
+  const s = BALL_SPLIT[ballOf(p)] || BALL_SPLIT.soft;
+  return m < s[0] ? 'light' : m < s[1] ? 'medium' : 'heavy';
+}
 
 function priceOf(p) { return p.price; }
 function hasPrice(p) { return typeof p.price === 'number'; }

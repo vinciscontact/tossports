@@ -160,7 +160,8 @@ const SVC = {
           .map(v => ({ v, label: v })) },
       { k: 'ball', g: 'How you play', t: 'radios', label: 'Which ball?', req: true, opts: () => [
         { v: 'soft', label: 'Soft tennis ball' },
-        { v: 'medium', label: 'Medium / hard tennis ball' } ] },
+        { v: 'medium', label: 'Medium tennis ball' },
+          { v: 'hard',   label: 'Hard tennis / stumper ball' } ] },
       { k: 'handle', g: 'The shape', t: 'select', label: 'Handle',
         opts: () => ['Single piece', 'Joint handle', 'Cane handle', 'Whatever suits the spec']
           .map(v => ({ v, label: v })) },
