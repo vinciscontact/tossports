@@ -149,58 +149,86 @@ function contactPage(deps) {
     reaches the people who actually make them. We answer fastest on WhatsApp.</p>
 
   <div class="contact-grid">
-    <div class="contact-col">
-      <h2>Business details</h2>
-      <table class="contact-tbl">
-        <tr><th>Business name</th><td>${esc(BUSINESS.legalName)}</td></tr>
-        <tr><th>Registered address</th><td>${addr(BUSINESS.main)}</td></tr>
-        <tr><th>Phone</th><td><a href="tel:${PHONE}">${PHONE}</a></td></tr>
-        <tr><th>Email</th><td><a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></td></tr>
-        <tr><th>WhatsApp</th><td><a href="https://wa.me/${BUSINESS.whatsapp}" rel="noopener" target="_blank">${WA_PHONE}</a></td></tr>
-        <tr><th>Hours</th><td>Monday to Saturday, 10am to 8pm IST</td></tr>
-      </table>
 
-      <h2>Where to find us</h2>
-      <p><b>Workshop and store</b><br>${addr(BUSINESS.main)}<br>
-        <a href="tel:${PHONE}">${PHONE}</a></p>
-      <p><b>${esc(BUSINESS.turf.name)}</b><br>${addr(BUSINESS.turf)}<br>
-        <a href="tel:${TURF_PHONE}">${TURF_PHONE}</a></p>
-    </div>
+    <!-- Second in the source, first on a desktop: a phone should meet the
+         form before the reference details. -->
+    <section class="contact-card contact-card--form" aria-labelledby="cuH">
+      <h2 id="cuH">Send us a message</h2>
+      <p class="contact-sub">We reply the same day, Monday to Saturday.</p>
 
-    <div class="contact-col">
-      <h2>Send us a message</h2>
       <form class="contact-form" id="cuForm" novalidate>
-        <label for="cuName">Your name <span class="req" aria-hidden="true">*</span></label>
-        <input id="cuName" name="name" type="text" required maxlength="120" autocomplete="name">
+        <div class="contact-row">
+          <div class="contact-field">
+            <label for="cuName">Your name <span class="req" aria-hidden="true">*</span></label>
+            <input id="cuName" name="name" type="text" required maxlength="120" autocomplete="name">
+          </div>
+          <div class="contact-field">
+            <label for="cuPhone">Phone</label>
+            <input id="cuPhone" name="phone" type="tel" maxlength="32" autocomplete="tel"
+                   inputmode="tel" placeholder="So we can call you back">
+          </div>
+        </div>
 
-        <label for="cuPhone">Phone</label>
-        <input id="cuPhone" name="phone" type="tel" maxlength="32" autocomplete="tel"
-               inputmode="tel" placeholder="So we can call you back">
+        <div class="contact-row">
+          <div class="contact-field">
+            <label for="cuEmail">Email</label>
+            <input id="cuEmail" name="email" type="email" maxlength="160" autocomplete="email"
+                   placeholder="you@example.com">
+          </div>
+          <div class="contact-field">
+            <label for="cuSubject">What is it about?</label>
+            <select id="cuSubject" name="subject">
+              <option>General enquiry</option>
+              <option>About an order</option>
+              <option>Warranty or replacement claim</option>
+              <option>Bat repair (Bat Doctor)</option>
+              <option>Custom or bulk order</option>
+              <option>Turf booking</option>
+            </select>
+          </div>
+        </div>
 
-        <label for="cuEmail">Email</label>
-        <input id="cuEmail" name="email" type="email" maxlength="160" autocomplete="email">
-
-        <label for="cuSubject">What is it about?</label>
-        <select id="cuSubject" name="subject">
-          <option>General enquiry</option>
-          <option>About an order</option>
-          <option>Warranty or replacement claim</option>
-          <option>Bat repair (Bat Doctor)</option>
-          <option>Custom or bulk order</option>
-          <option>Turf booking</option>
-        </select>
-
-        <label for="cuMsg">Message <span class="req" aria-hidden="true">*</span></label>
-        <textarea id="cuMsg" name="message" required maxlength="4000" rows="6"
-          placeholder="Tell us what you need. If it is about an order, include the order number."></textarea>
+        <div class="contact-field">
+          <label for="cuMsg">Message <span class="req" aria-hidden="true">*</span></label>
+          <textarea id="cuMsg" name="message" required maxlength="4000" rows="6"
+            placeholder="Tell us what you need. If it is about an order, include the order number."></textarea>
+          <span class="hint">Leave a phone number or an email above, or we have no way to reply.</span>
+        </div>
 
         <button type="submit" class="btn-seo" id="cuSend">Send message</button>
         <p class="contact-msg" id="cuMsgOut" role="status" aria-live="polite"></p>
-        <p class="contact-alt">Prefer to talk? <a href="https://wa.me/${BUSINESS.whatsapp}"
-          rel="noopener" target="_blank">Message us on WhatsApp</a> or call the workshop on
-          <a href="tel:${PHONE}">${PHONE}</a>.</p>
+
+        <p class="contact-alt">Prefer to talk?
+          <a href="https://wa.me/${BUSINESS.whatsapp}" rel="noopener" target="_blank">Message us on WhatsApp</a>
+          or call the workshop on <a href="tel:${PHONE}">${PHONE}</a>.</p>
       </form>
-    </div>
+    </section>
+
+    <section class="contact-card contact-card--info" aria-labelledby="cuD">
+      <h2 id="cuD">Business details</h2>
+      <p class="contact-sub">The registered details for ${esc(BUSINESS.legalName)}.</p>
+
+      <dl class="contact-dl">
+        <div><dt>Business</dt><dd>${esc(BUSINESS.legalName)}</dd></div>
+        <div><dt>Address</dt><dd>${addr(BUSINESS.main)}</dd></div>
+        <div><dt>Phone</dt><dd><a href="tel:${PHONE}">${PHONE}</a></dd></div>
+        <div><dt>WhatsApp</dt><dd><a href="https://wa.me/${BUSINESS.whatsapp}" rel="noopener" target="_blank">${WA_PHONE}</a></dd></div>
+        <div><dt>Email</dt><dd><a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></dd></div>
+        <div><dt>Hours</dt><dd>Monday to Saturday, 10am to 8pm IST</dd></div>
+      </dl>
+
+      <div class="contact-places">
+        <div class="contact-place">
+          <b>Workshop and store</b>
+          <p>${addr(BUSINESS.main)}<br><a href="tel:${PHONE}">${PHONE}</a></p>
+        </div>
+        <div class="contact-place">
+          <b>${esc(BUSINESS.turf.name)}</b>
+          <p>${addr(BUSINESS.turf)}<br><a href="tel:${TURF_PHONE}">${TURF_PHONE}</a></p>
+        </div>
+      </div>
+    </section>
+
   </div>
 
 <script>${script}</script>`;

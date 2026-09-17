@@ -111,6 +111,20 @@ const CSS_V = (function () {
   } catch (e) { return '1'; }
 })();
 
+/* seo.css was pinned at ?v=1 for the life of the site while the file itself
+   kept changing, so every returning visitor held a stale copy — which is why
+   the contact form first shipped with no styling at all on a browser that had
+   ever seen these pages before. Hashing the file means the version moves
+   whenever the bytes move, and nobody has to remember. */
+const SEO_CSS_V = (function () {
+  try {
+    return require('crypto')
+      .createHash('sha1')
+      .update(fs.readFileSync(path.join(ROOT, 'css/seo.css')))
+      .digest('hex').slice(0, 8);
+  } catch (e) { return '1'; }
+})();
+
 /* ---------- helpers ---------- */
 const esc = s => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -310,7 +324,7 @@ ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords.join(', '))}">` 
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="${o.depth}css/styles.css?v=${CSS_V}">
-<link rel="stylesheet" href="${o.depth}css/seo.css?v=1">
+<link rel="stylesheet" href="${o.depth}css/seo.css?v=${SEO_CSS_V}">
 <link rel="icon" href="${o.depth}images/logo/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="${o.depth}images/logo/favicon-180.png">
 ${jsonld({ '@context': 'https://schema.org', '@graph': graph })}

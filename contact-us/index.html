@@ -29,7 +29,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/styles.css?v=149">
-<link rel="stylesheet" href="../css/seo.css?v=1">
+<link rel="stylesheet" href="../css/seo.css?v=1ee9d3fd">
 <link rel="icon" href="../images/logo/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="../images/logo/favicon-180.png">
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":["Organization","Brand"],"@id":"https://tossports.com/#organization","name":"Toss Sports","url":"https://tossports.com","logo":"https://tossports.com/images/logo/toss-mark-192.png","image":"https://tossports.com/images/logo/toss-mark-192.png","email":"tossports@gmail.com","telephone":"+918939981055","foundingDate":"2020","description":"Handcrafted tennis ball cricket bats made in Chennai. Sri Lankan wood, Kashmir Willow and Poplar, shaped to order.","sameAs":["https://www.instagram.com/toss_sportz"],"address":{"@type":"PostalAddress","streetAddress":"69, Kavignar Kannadasan Nagar 5th St, Kannadasan Nagar, Nesapakkam, Ramapuram","addressLocality":"Chennai","addressRegion":"Tamil Nadu","postalCode":"600078","addressCountry":"IN"},"areaServed":{"@type":"Country","name":"India"}},{"@type":"WebSite","@id":"https://tossports.com/#website","url":"https://tossports.com","name":"Toss Sports","publisher":{"@id":"https://tossports.com/#organization"},"inLanguage":"en-IN","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://tossports.com/#/shop?q={search_term_string}"},"query-input":"required name=search_term_string"}},{"@type":"ContactPage","@id":"https://tossports.com/contact-us/#page","url":"https://tossports.com/contact-us/","name":"Contact Toss Sports","about":{"@id":"https://tossports.com/#organization"}}]}</script>
@@ -60,58 +60,86 @@
     reaches the people who actually make them. We answer fastest on WhatsApp.</p>
 
   <div class="contact-grid">
-    <div class="contact-col">
-      <h2>Business details</h2>
-      <table class="contact-tbl">
-        <tr><th>Business name</th><td>Toss Sports</td></tr>
-        <tr><th>Registered address</th><td>69, Kavignar Kannadasan Nagar 5th St, Kannadasan Nagar, Nesapakkam, Ramapuram, Chennai, Tamil Nadu 600078, India</td></tr>
-        <tr><th>Phone</th><td><a href="tel:+918939981055">+918939981055</a></td></tr>
-        <tr><th>Email</th><td><a href="mailto:tossports@gmail.com">tossports@gmail.com</a></td></tr>
-        <tr><th>WhatsApp</th><td><a href="https://wa.me/919176995707" rel="noopener" target="_blank">+919176995707</a></td></tr>
-        <tr><th>Hours</th><td>Monday to Saturday, 10am to 8pm IST</td></tr>
-      </table>
 
-      <h2>Where to find us</h2>
-      <p><b>Workshop and store</b><br>69, Kavignar Kannadasan Nagar 5th St, Kannadasan Nagar, Nesapakkam, Ramapuram, Chennai, Tamil Nadu 600078, India<br>
-        <a href="tel:+918939981055">+918939981055</a></p>
-      <p><b>Toss The Turf — Kolathur</b><br>Avenue, Plot Number 4, Kanchi Nagar, Vinayakapuram, Kolathur, Chennai, Tamil Nadu 600099, India<br>
-        <a href="tel:+919176995707">+919176995707</a></p>
-    </div>
+    <!-- Second in the source, first on a desktop: a phone should meet the
+         form before the reference details. -->
+    <section class="contact-card contact-card--form" aria-labelledby="cuH">
+      <h2 id="cuH">Send us a message</h2>
+      <p class="contact-sub">We reply the same day, Monday to Saturday.</p>
 
-    <div class="contact-col">
-      <h2>Send us a message</h2>
       <form class="contact-form" id="cuForm" novalidate>
-        <label for="cuName">Your name <span class="req" aria-hidden="true">*</span></label>
-        <input id="cuName" name="name" type="text" required maxlength="120" autocomplete="name">
+        <div class="contact-row">
+          <div class="contact-field">
+            <label for="cuName">Your name <span class="req" aria-hidden="true">*</span></label>
+            <input id="cuName" name="name" type="text" required maxlength="120" autocomplete="name">
+          </div>
+          <div class="contact-field">
+            <label for="cuPhone">Phone</label>
+            <input id="cuPhone" name="phone" type="tel" maxlength="32" autocomplete="tel"
+                   inputmode="tel" placeholder="So we can call you back">
+          </div>
+        </div>
 
-        <label for="cuPhone">Phone</label>
-        <input id="cuPhone" name="phone" type="tel" maxlength="32" autocomplete="tel"
-               inputmode="tel" placeholder="So we can call you back">
+        <div class="contact-row">
+          <div class="contact-field">
+            <label for="cuEmail">Email</label>
+            <input id="cuEmail" name="email" type="email" maxlength="160" autocomplete="email"
+                   placeholder="you@example.com">
+          </div>
+          <div class="contact-field">
+            <label for="cuSubject">What is it about?</label>
+            <select id="cuSubject" name="subject">
+              <option>General enquiry</option>
+              <option>About an order</option>
+              <option>Warranty or replacement claim</option>
+              <option>Bat repair (Bat Doctor)</option>
+              <option>Custom or bulk order</option>
+              <option>Turf booking</option>
+            </select>
+          </div>
+        </div>
 
-        <label for="cuEmail">Email</label>
-        <input id="cuEmail" name="email" type="email" maxlength="160" autocomplete="email">
-
-        <label for="cuSubject">What is it about?</label>
-        <select id="cuSubject" name="subject">
-          <option>General enquiry</option>
-          <option>About an order</option>
-          <option>Warranty or replacement claim</option>
-          <option>Bat repair (Bat Doctor)</option>
-          <option>Custom or bulk order</option>
-          <option>Turf booking</option>
-        </select>
-
-        <label for="cuMsg">Message <span class="req" aria-hidden="true">*</span></label>
-        <textarea id="cuMsg" name="message" required maxlength="4000" rows="6"
-          placeholder="Tell us what you need. If it is about an order, include the order number."></textarea>
+        <div class="contact-field">
+          <label for="cuMsg">Message <span class="req" aria-hidden="true">*</span></label>
+          <textarea id="cuMsg" name="message" required maxlength="4000" rows="6"
+            placeholder="Tell us what you need. If it is about an order, include the order number."></textarea>
+          <span class="hint">Leave a phone number or an email above, or we have no way to reply.</span>
+        </div>
 
         <button type="submit" class="btn-seo" id="cuSend">Send message</button>
         <p class="contact-msg" id="cuMsgOut" role="status" aria-live="polite"></p>
-        <p class="contact-alt">Prefer to talk? <a href="https://wa.me/919176995707"
-          rel="noopener" target="_blank">Message us on WhatsApp</a> or call the workshop on
-          <a href="tel:+918939981055">+918939981055</a>.</p>
+
+        <p class="contact-alt">Prefer to talk?
+          <a href="https://wa.me/919176995707" rel="noopener" target="_blank">Message us on WhatsApp</a>
+          or call the workshop on <a href="tel:+918939981055">+918939981055</a>.</p>
       </form>
-    </div>
+    </section>
+
+    <section class="contact-card contact-card--info" aria-labelledby="cuD">
+      <h2 id="cuD">Business details</h2>
+      <p class="contact-sub">The registered details for Toss Sports.</p>
+
+      <dl class="contact-dl">
+        <div><dt>Business</dt><dd>Toss Sports</dd></div>
+        <div><dt>Address</dt><dd>69, Kavignar Kannadasan Nagar 5th St, Kannadasan Nagar, Nesapakkam, Ramapuram, Chennai, Tamil Nadu 600078, India</dd></div>
+        <div><dt>Phone</dt><dd><a href="tel:+918939981055">+918939981055</a></dd></div>
+        <div><dt>WhatsApp</dt><dd><a href="https://wa.me/919176995707" rel="noopener" target="_blank">+919176995707</a></dd></div>
+        <div><dt>Email</dt><dd><a href="mailto:tossports@gmail.com">tossports@gmail.com</a></dd></div>
+        <div><dt>Hours</dt><dd>Monday to Saturday, 10am to 8pm IST</dd></div>
+      </dl>
+
+      <div class="contact-places">
+        <div class="contact-place">
+          <b>Workshop and store</b>
+          <p>69, Kavignar Kannadasan Nagar 5th St, Kannadasan Nagar, Nesapakkam, Ramapuram, Chennai, Tamil Nadu 600078, India<br><a href="tel:+918939981055">+918939981055</a></p>
+        </div>
+        <div class="contact-place">
+          <b>Toss The Turf — Kolathur</b>
+          <p>Avenue, Plot Number 4, Kanchi Nagar, Vinayakapuram, Kolathur, Chennai, Tamil Nadu 600099, India<br><a href="tel:+919176995707">+919176995707</a></p>
+        </div>
+      </div>
+    </section>
+
   </div>
 
 <script>
