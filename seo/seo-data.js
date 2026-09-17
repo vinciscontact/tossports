@@ -27,7 +27,17 @@ const BUSINESS = {
   name: 'Toss Sports',
   legalName: 'Toss Sports',
   tagline: 'Handcrafted tennis ball cricket bats, made in Chennai',
-  email: 'contact@tossports.in',
+  /* The domain moved to tossports.com; this address never did, and there is
+     no MX record on either domain, so mail to contact@tossports.in bounced
+     silently. Meta's verification emails the address it finds on the site.
+
+     Gmail is the owner's choice for now. It is a stated exception to Meta's
+     own requirement — their brief asks for an address on the site's own
+     domain rather than generic webmail — so switch this to
+     contact@tossports.com the day the Hostinger mailbox exists. The
+     storefront reads the same value from Settings → support_email, which
+     changes without a deploy; this constant is for the static pages. */
+  email: 'tossports@gmail.com',
   phones: ['+918939981055', '+919176995707'],
   whatsapp: '919176995707',
   instagram: 'https://www.instagram.com/toss_sportz',

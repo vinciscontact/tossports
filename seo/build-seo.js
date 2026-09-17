@@ -24,6 +24,7 @@ const { SITE, BUSINESS, CLUSTERS: C1, GUIDES: G1, FAQS } = require('./seo-data')
 const { TURF_PAGES, AREAS, CLUSTERS_2, GUIDES_2 } = require('./seo-data-extra');
 const { LEGAL } = require('./legal-data');
 const { loadTags, playstyleClusters } = require('./playstyle-rules');
+const { contactPage } = require('./contact-page');
 const GUIDES = G1.concat(GUIDES_2);
 
 const ROOT = path.resolve(__dirname, '..');
@@ -339,15 +340,17 @@ ${o.body}
 <footer class="seo-ftr">
   <div class="wrap">
     <div>
-      <b>${esc(BUSINESS.name)}</b>
-      <p>${esc(BUSINESS.main.street)}, ${esc(BUSINESS.main.locality)} ${esc(BUSINESS.main.postal)}</p>
-      <p><a href="tel:${BUSINESS.phones[0]}">${BUSINESS.phones[0]}</a> ·
+      <b>${esc(BUSINESS.legalName)}</b>
+      <p>${esc(BUSINESS.main.street)}, ${esc(BUSINESS.main.locality)},
+         ${esc(BUSINESS.main.region)} ${esc(BUSINESS.main.postal)}, India</p>
+      <p><a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a> ·
          <a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></p>
+      <p><a href="${o.depth}contact-us/">Contact us</a></p>
     </div>
     <div>
       <b>Toss The Turf</b>
       <p>${esc(BUSINESS.turf.street)}, ${esc(BUSINESS.turf.locality)} ${esc(BUSINESS.turf.postal)}</p>
-      <p><a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a></p>
+      <p><a href="tel:${BUSINESS.phones[0]}">${BUSINESS.phones[0]}</a></p>
     </div>
     <div>
       <b>Bats</b>
@@ -364,7 +367,7 @@ ${o.body}
     </div>
   </div>
   <div class="wrap seo-ftr-bot">
-    <span>© ${new Date().getFullYear()} Toss Sports. Handcrafted in Chennai.</span>
+    <span>© ${new Date().getFullYear()} ${esc(BUSINESS.legalName)}. Handcrafted in Chennai.</span>
     <span>Designed by <a href="https://vincisglobal.com/" target="_blank" rel="noopener">TheVincis</a></span>
   </div>
 </footer>
@@ -893,8 +896,15 @@ assertNoSlugClashes(new Set([
   ...Object.keys(CLUSTERS),
   ...Object.keys(TURF_PAGES),
   ...Object.keys(LEGAL),
-  'guides', 'cricket-bats', 'images', 'css', 'js'
+  'guides', 'cricket-bats', 'contact-us', 'images', 'css', 'js'
 ]));
+
+/* contact us — required for Meta Business Verification, and the page a
+   customer looks for when something has gone wrong. See seo/contact-page.js. */
+add('contact-us/index.html',
+    contactPage({ shell, esc, fitTitle, fitDesc, SITE, BUSINESS, ROOT }),
+    SITE + '/contact-us/', '0.7', 'monthly');
+console.log('  1 contact page');
 
 /* policy pages */
 Object.keys(LEGAL).forEach(slug => {

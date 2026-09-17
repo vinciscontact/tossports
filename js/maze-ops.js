@@ -16,15 +16,15 @@
 /* Founder-only sections sit LAST in this list on purpose — the dock draws
    them in order, so they group themselves at the right behind a divider. */
 const ROLE_NAV = {
-  founder:  ['dash','sales','fulfil','requests','qa','billing','products','tasks','sops','boards','coupons','scores','team','finance','insights','activity','branches','settings'],
-  owner:    ['dash','sales','fulfil','requests','qa','billing','products','tasks','sops','boards','coupons','scores','team','finance','insights','activity','branches','settings'],
-  manager:  ['dash','sales','fulfil','requests','qa','billing','products','tasks','sops','boards','coupons','scores'],
-  sales:    ['dash','sales','fulfil','requests','qa','tasks','sops','boards'],
+  founder:  ['dash','sales','fulfil','requests','qa','enquiries','billing','products','tasks','sops','boards','coupons','scores','team','finance','insights','activity','branches','settings'],
+  owner:    ['dash','sales','fulfil','requests','qa','enquiries','billing','products','tasks','sops','boards','coupons','scores','team','finance','insights','activity','branches','settings'],
+  manager:  ['dash','sales','fulfil','requests','qa','enquiries','billing','products','tasks','sops','boards','coupons','scores'],
+  sales:    ['dash','sales','fulfil','requests','qa','enquiries','tasks','sops','boards'],
   workshop: ['dash','requests','tasks','sops']
 };
 const NAV_LABEL = {
   dash:'Dashboard', sales:'Sales', fulfil:'Fulfilment', requests:'Requests', qa:'Questions',
-  billing:'Billing', finance:'Finance', products:'Products',
+  enquiries:'Enquiries', billing:'Billing', finance:'Finance', products:'Products',
   team:'Team', tasks:'Tasks', sops:'SOPs', boards:'Leaderboards',
   coupons:'Rewards', scores:'Game scores', insights:'Insights',
   activity:'Activity', branches:'Branches', settings:'Settings'

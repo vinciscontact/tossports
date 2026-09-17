@@ -2082,6 +2082,17 @@ body.has-annc .filter-bar{top:var(--hdr)}
 .ftr-seo li{list-style:none}
 .ftr-seo a{font-size:.8rem;color:rgba(255,255,255,.55)}
 .ftr-seo a:hover{color:var(--orange)}
+/* Registered business details. Sits above the copyright line, reads as
+   reference rather than marketing, and stays legible on the dark footer. */
+.ftr-biz{display:grid;gap:20px 30px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  border-top:1px solid rgba(255,255,255,.1);margin-top:34px;padding-top:24px;font-size:.82rem}
+.ftr-biz b{display:block;margin-bottom:6px;color:#fff;font-weight:800}
+.ftr-biz p{margin:0;color:rgba(255,255,255,.6);line-height:1.6}
+.ftr-biz a{color:rgba(255,255,255,.78);text-decoration:none;border-bottom:1px solid rgba(255,255,255,.22)}
+.ftr-biz a:hover{color:#fff;border-bottom-color:currentColor}
+/* It already provides the rule above the copyright line. */
+.ftr-biz + .ftr-bot{border-top:0;margin-top:22px}
+
 .ftr-bot{border-top:1px solid rgba(255,255,255,.1);margin-top:34px;padding-top:20px;
   display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;
   font-size:.76rem;color:rgba(255,255,255,.46)}

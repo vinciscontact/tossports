@@ -17,7 +17,8 @@ const when = t => t ? new Date(t).toLocaleString('en-IN', { dateStyle: 'medium',
 let DB = { products: [], orders: [], coupons: [], scores: [], settings: {},
            categories: [{ id: 'bats', name: 'Bats', sort: 0 }], catSynced: false,
            branches: [], stock: [], brSynced: false,
-           psGroups: [], playstyles: [], prodStyles: [], psSynced: false };
+           psGroups: [], playstyles: [], prodStyles: [], psSynced: false,
+           enquiries: [], enqSynced: false };
 
 /* Which branch the screen is showing. '' = every branch combined, which
    only a founder may choose; a manager is pinned to their own and the
@@ -375,7 +376,7 @@ async function loadAll() {
   };
   const [products, orders, coupons, scores, settings, invoices, categories,
          branches, stock, monthPL, perf, bestSeller, deadStock, loyalty,
-         psGroups, playstyles, prodStyles] = await Promise.all([
+         psGroups, playstyles, prodStyles, enquiries] = await Promise.all([
     get('products?select=*&order=sort.asc', []),
     get('orders?select=*&order=created_at.desc&limit=200', []),
     get('coupons?select=*&order=unlock_runs.asc', []),
@@ -396,12 +397,17 @@ async function loadAll() {
        reports rather than showing an empty manager that saves nothing */
     get('playstyle_groups?select=*&order=sort.asc', null),
     get('playstyles?select=*&order=sort.asc', null),
-    get('product_playstyles?select=*', null)
+    get('product_playstyles?select=*', null),
+    /* Contact-form enquiries. null means the table is missing, which the tab
+       reports rather than showing an empty inbox that looks like silence. */
+    get('enquiries?select=*&order=created_at.desc&limit=300', null)
   ]);
   DB.products = products || [];
   DB.orders   = orders   || [];
   DB.coupons  = coupons  || [];
   DB.scores   = scores   || [];
+  DB.enquiries = enquiries || [];
+  DB.enqSynced = Array.isArray(enquiries);
   DB.catSynced = Array.isArray(categories);
   DB.categories = DB.catSynced && categories.length
     ? categories : [{ id: 'bats', name: 'Bats', sort: 0 }];
@@ -451,6 +457,7 @@ const DOCK_ICON = (() => {
     dash:     s('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'),
     sales:    s('<path d="M3 20h18"/><path d="M6 20v-6M11 20V9M16 20v-9M21 20V5"/>'),
     requests: s('<path d="M4 5h16v11H8l-4 4Z"/><path d="M8 9h8M8 12.5h5"/>'),
+    enquiries: s('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/>'),
     fulfil:   s('<rect x="1.5" y="6" width="13" height="11" rx="1.5"/><path d="M14.5 9.5H19l3.5 3.5V17h-8z"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>'),
     qa:       s('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/>'),
     billing:  s('<path d="M6 2h12v20l-2-1.5L14 22l-2-1.5L10 22l-2-1.5L6 22Z"/><path d="M9 7h6M9 11h6"/>'),
@@ -741,6 +748,7 @@ function render() {
     fulfil:   [viewFulfil,    wireFulfil],
     requests: [viewRequests,  wireRequests],
     qa:       [viewQA,        wireQAAdmin],
+    enquiries:[viewEnquiries, wireEnquiries],
     finance:  [viewFinance,   wireFinance],
     products: [viewProducts,  wireProducts],
     billing:  [viewBilling,   wireBilling],
@@ -2499,4 +2507,120 @@ function openModal(title, body, onSave, saveLabel) {
     btn.disabled = false; btn.textContent = saveLabel || 'Save changes';
     if (res !== false) close();
   };
+}
+
+/* ============================================================
+   ENQUIRIES — the contact form's inbox
+
+   Every message from /contact-us/ lands here. It is a database
+   table rather than an email for one blunt reason: there is no
+   MX record on tossports.com, so anything sent to the address on
+   the site bounces. A row cannot bounce.
+
+   Three states and nothing more. "New" is the only one that
+   matters day to day — it is what the dock badge counts and what
+   the list opens on — and the other two exist so a message can
+   be got rid of honestly, by being answered or closed, rather
+   than by being scrolled past.
+   ============================================================ */
+let ENQ_FILTER = 'new';
+
+function enqRows() {
+  const all = DB.enquiries || [];
+  return ENQ_FILTER === 'all' ? all : all.filter(e => e.status === ENQ_FILTER);
+}
+
+function viewEnquiries() {
+  if (!DB.enqSynced) {
+    return `
+      <div class="head"><h2>Enquiries</h2></div>
+      <div class="panel"><div class="empty">
+        The enquiries table is not in the database yet.<br>
+        Run <b>sql/029-enquiries.sql</b> and reload — the contact form has
+        nowhere to write until you do.
+      </div></div>`;
+  }
+
+  const all = DB.enquiries || [];
+  const counts = {
+    new: all.filter(e => e.status === 'new').length,
+    replied: all.filter(e => e.status === 'replied').length,
+    closed: all.filter(e => e.status === 'closed').length,
+    all: all.length
+  };
+  const rows = enqRows();
+
+  const tab = (k, label) => `<button class="chip${ENQ_FILTER === k ? ' on' : ''}"
+    data-enq-f="${k}">${label} <b>${counts[k]}</b></button>`;
+
+  return `
+    <div class="head">
+      <h2>Enquiries</h2>
+      <span class="muted">From the contact form on the website</span>
+    </div>
+
+    <div class="panel">
+      <div class="chips" style="margin-bottom:14px">
+        ${tab('new', 'New')}${tab('replied', 'Replied')}${tab('closed', 'Closed')}${tab('all', 'All')}
+      </div>
+
+      ${!rows.length ? `<div class="empty">Nothing ${
+        ENQ_FILTER === 'all' ? 'here yet' : 'in ' + ENQ_FILTER}.</div>` : `
+      <div class="enq-list">
+        ${rows.map(e => `
+          <article class="enq" data-enq="${e.id}">
+            <div class="enq-top">
+              <div>
+                <b>${esc(e.name)}</b>
+                <span class="pill ${esc(e.status)}">${esc(e.status)}</span>
+              </div>
+              <span class="muted">${when(e.created_at)}</span>
+            </div>
+            <div class="enq-meta">
+              ${esc(e.subject || 'General enquiry')}
+              ${e.phone ? ` · <a href="tel:${esc(e.phone)}">${esc(e.phone)}</a>` : ''}
+              ${e.email ? ` · <a href="mailto:${esc(e.email)}">${esc(e.email)}</a>` : ''}
+            </div>
+            <p class="enq-msg">${esc(e.message)}</p>
+            <div class="enq-act">
+              ${e.phone ? `<a class="btn ghost sm" target="_blank" rel="noopener"
+                 href="https://wa.me/${esc(String(e.phone).replace(/[^0-9]/g, '').replace(/^0+/, '').replace(/^(?!91)/, '91'))}">
+                 Reply on WhatsApp</a>` : ''}
+              ${e.email ? `<a class="btn ghost sm"
+                 href="mailto:${esc(e.email)}?subject=${encodeURIComponent('Re: ' + (e.subject || 'your enquiry') + ' — Toss Sports')}">
+                 Reply by email</a>` : ''}
+              ${e.status !== 'replied' ? `<button class="btn ghost sm" data-enq-set="replied" data-id="${e.id}">Mark replied</button>` : ''}
+              ${e.status !== 'closed'  ? `<button class="btn ghost sm" data-enq-set="closed"  data-id="${e.id}">Close</button>` : ''}
+              ${e.status !== 'new'     ? `<button class="btn ghost sm" data-enq-set="new"     data-id="${e.id}">Reopen</button>` : ''}
+            </div>
+          </article>`).join('')}
+      </div>`}
+    </div>`;
+}
+
+function wireEnquiries() {
+  $$('[data-enq-f]').forEach(b => b.onclick = () => {
+    ENQ_FILTER = b.dataset.enqF; render();
+  });
+
+  $$('[data-enq-set]').forEach(b => b.onclick = async () => {
+    const id = Number(b.dataset.id), status = b.dataset.enqSet;
+    b.disabled = true;
+    try {
+      await supa('enquiries?id=eq.' + id, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: { status }
+      });
+      /* Keep the copy in memory in step rather than refetching the lot —
+         the same rule the orders list follows. */
+      const row = (DB.enquiries || []).find(e => e.id === id);
+      if (row) row.status = status;
+      toast('Marked ' + status);
+      render();
+    } catch (err) {
+      b.disabled = false;
+      toast('Could not update: ' + err.message, true);
+    }
+  });
 }

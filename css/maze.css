@@ -766,3 +766,19 @@ body.printing .inv{max-width:760px;margin:0 auto}
    it stays in the DOM so the label keeps working and so does the keyboard. */
 .ps-chip input{position:absolute;opacity:0;width:0;height:0}
 .ps-chip:focus-within{outline:2px solid var(--orange);outline-offset:2px}
+
+/* ---------- enquiries ----------
+   The contact form's inbox. Reads as a stack of messages rather than a
+   spreadsheet row, because what matters is what the person wrote. */
+.enq-list{display:grid;gap:12px}
+.enq{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff}
+.enq-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.enq-top b{margin-right:8px}
+.enq-meta{margin-top:4px;font-size:.78rem;color:var(--ink-60)}
+.enq-msg{margin:10px 0 0;font-size:.88rem;line-height:1.6;white-space:pre-wrap;
+  overflow-wrap:anywhere}
+.enq-act{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+
+.pill.new{background:rgba(255,138,30,.16);color:#a85800}
+.pill.replied{background:rgba(40,199,111,.16);color:#148a4e}
+.pill.closed{background:rgba(0,0,0,.07);color:var(--ink-60)}

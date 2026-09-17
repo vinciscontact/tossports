@@ -61,7 +61,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/styles.css?v=148">
+<link rel="stylesheet" href="css/styles.css?v=149">
 <link rel="stylesheet" href="css/view-transition.css?v=4">
 <link rel="icon" href="images/logo/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="images/logo/favicon-180.png">
@@ -248,6 +248,7 @@
            that a customer looks for before paying. Real crawlable URLs, not
            hash routes, so they can be linked from anywhere. -->
       <ul class="ftr-legal">
+        <li><a href="contact-us/">Contact Us</a></li>
         <li><a href="privacy-policy/">Privacy Policy</a></li>
         <li><a href="terms/">Terms &amp; Conditions</a></li>
         <li><a href="refund-policy/">Refund &amp; Returns</a></li>
@@ -255,6 +256,37 @@
         <li><a href="shipping-policy/">Shipping Policy</a></li>
       </ul>
     </nav>
+
+    <!-- ===== registered business details =====
+         Static HTML, not rendered by the app, and deliberately so. This is
+         what a Meta Business Verification reviewer and a payment gateway
+         look for, and both read the page before any JavaScript has run — a
+         footer the app paints is a footer they may never see.
+
+         Every value here matches /contact-us/ and the static page footers
+         character for character. If one changes, all of them change: that
+         match is the whole point of the check. -->
+    <div class="ftr-biz" id="ftrBiz">
+      <div>
+        <b>Toss Sports</b>
+        <p>Workshop &amp; store<br>
+          69, Kavignar Kannadasan Nagar 5th St, Kannadasan Nagar,<br>
+          Nesapakkam, Ramapuram, Chennai, Tamil Nadu 600078, India</p>
+      </div>
+      <div>
+        <b>Toss The Turf — Kolathur</b>
+        <p>Avenue, Plot Number 4, Kanchi Nagar,<br>
+          Vinayakapuram, Kolathur, Chennai, Tamil Nadu 600099, India</p>
+      </div>
+      <div>
+        <b>Get in touch</b>
+        <p>
+          <a href="tel:+919176995707">+91 91769 95707</a><br>
+          <a href="mailto:tossports@gmail.com">tossports@gmail.com</a><br>
+          <a href="contact-us/">Contact us</a>
+        </p>
+      </div>
+    </div>
 
     <div class="ftr-bot">
       <span>© <span id="yr"></span> Toss Sports. Handcrafted in India.</span>

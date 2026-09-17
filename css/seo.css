@@ -128,3 +128,51 @@
   .seo-main{padding-top:24px}
   .seo-nav{gap:12px;font-size:.84rem;width:100%;margin-left:0}
 }
+
+/* ---------- contact us ----------
+   The one page on these static templates that takes input rather than just
+   presenting text, so it needs real form styling. Two columns on a desktop —
+   the business details a Meta reviewer is checking beside the form a customer
+   is filling in — collapsing to one on a phone. */
+.contact-grid{display:grid;gap:34px;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));
+  align-items:start;margin-top:26px}
+.contact-col h2{margin-top:0}
+.contact-col h2 + h2,.contact-col table + h2{margin-top:30px}
+
+.contact-tbl{width:100%;border-collapse:collapse;font-size:.93rem}
+.contact-tbl th,.contact-tbl td{text-align:left;vertical-align:top;padding:9px 0;
+  border-bottom:1px solid rgba(255,255,255,.1);line-height:1.5}
+.contact-tbl th{width:38%;color:rgba(255,255,255,.55);font-weight:600;padding-right:14px}
+.contact-tbl td{color:#EDEEF6}
+
+.contact-form{display:grid;gap:6px;background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:20px}
+.contact-form label{font-size:.84rem;font-weight:600;color:rgba(255,255,255,.72);margin-top:10px}
+.contact-form label:first-of-type{margin-top:0}
+.contact-form .req{color:#FF8A1E}
+.contact-form input,.contact-form select,.contact-form textarea{
+  width:100%;box-sizing:border-box;font:inherit;font-size:.94rem;color:#EDEEF6;
+  background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.16);border-radius:9px;
+  padding:11px 12px}
+.contact-form textarea{resize:vertical;min-height:120px}
+.contact-form input:focus,.contact-form select:focus,.contact-form textarea:focus{
+  outline:none;border-color:#FF8A1E;box-shadow:0 0 0 3px rgba(255,138,30,.18)}
+/* The native dropdown paints its options with the OS palette, so the closed
+   control has to stay legible on the dark panel without relying on it. */
+.contact-form select option{background:#151530;color:#EDEEF6}
+
+.btn-seo{display:inline-block;margin-top:16px;padding:12px 22px;border:0;border-radius:999px;
+  background:#FF8A1E;color:#12121F!important;font:inherit;font-weight:800;font-size:.95rem;
+  cursor:pointer;text-decoration:none!important;text-align:center}
+.btn-seo:hover{background:#ffa047}
+.btn-seo:disabled{opacity:.55;cursor:default}
+
+.contact-msg{margin:12px 0 0;font-size:.88rem;line-height:1.5;min-height:1em}
+.contact-msg.good{color:#7FE3A2}
+.contact-msg.bad{color:#FF9B9B}
+.contact-wa{display:block;margin-top:12px}
+.contact-alt{margin:14px 0 0;font-size:.85rem;color:rgba(255,255,255,.6);line-height:1.5}
+
+@media (max-width:600px){
+  .contact-tbl th{width:44%}
+}
