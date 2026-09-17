@@ -11,6 +11,34 @@ let FREE_SHIP_OVER = 1500;
 let SHIP_FEE = 99;
 let STORE_NOTE = '';
 
+/* Months of warranty every Toss bat carries as standard.
+   Null until it is set in Maze Room → Settings → Standard warranty months.
+
+   Null is deliberately not zero. The warranty terms say the period is the one
+   printed on the warranty card, so with no number set the site says exactly
+   that and claims nothing — rather than a hardcoded "3-month warranty" badge
+   sitting on the homepage that no product data backs up, which is what it
+   used to do. Setting the number here makes it appear on every product page,
+   in the hero badge, and in the checkout line, all at once and with no deploy. */
+let WARRANTY_MONTHS = null;
+
+/* The one place the terms live, so a link never goes stale in three files. */
+const WARRANTY_URL = '/warranty-policy/';
+const RETURN_DAYS = 10;
+
+/* "3-month warranty" when the number is known, and the honest fallback when it
+   is not. Everything customer-facing asks this rather than hardcoding a span. */
+function warrantyLabel() {
+  return WARRANTY_MONTHS
+    ? WARRANTY_MONTHS + '-month warranty'
+    : 'Warranty on every bat';
+}
+function warrantyLine() {
+  return WARRANTY_MONTHS
+    ? `Covered by a ${WARRANTY_MONTHS}-month warranty against manufacturing defects.`
+    : 'Covered by the warranty period printed on the card supplied with your bat.';
+}
+
 /* Set the live key in Maze Room → Settings → Razorpay key id. */
 let RAZORPAY_KEY = 'rzp_test_REPLACE_WITH_YOUR_KEY';
 
@@ -113,10 +141,18 @@ function cartCount() { return cart.reduce((n, i) => n + i.qty, 0); }
 const WARRANTY = () => (SERVICES.warranty && SERVICES.warranty.enabled)
   ? SERVICES.warranty.plans : [];
 
-/** Months of cover a bat already comes with. 0 for most of them. */
+/** Months of cover a bat already comes with.
+
+    Reads the bat's own `warranty` field first, then falls back to the standard
+    period every Toss bat carries. The fallback is what stops the paid plans
+    being sold on top of cover the customer already has: the 2026 catalogue
+    carries no per-bat warranty text at all, so without it freeWarrantyMonths
+    returned 0 for all 31 bats and the 3-month plan was offered to people who
+    already had three months included. */
 function freeWarrantyMonths(p) {
   const m = String((p && p.warranty) || '').match(/(\d+)\s*month/i);
-  return m ? Number(m[1]) : 0;
+  if (m) return Number(m[1]);
+  return WARRANTY_MONTHS || 0;
 }
 
 /** The plans worth offering on this bat, with the months they actually add. */
@@ -366,6 +402,11 @@ function orderWaText(o) {
     if (info.notes) t += `\nNote: ${info.notes}`;
   }
   t += '\n\nPlease confirm and share tracking.';
+  /* One line, at the end, on the message the customer sends themselves. It
+     puts the terms in a thread both sides keep, timestamped, next to the
+     order number — which is worth more in a dispute than a page either of us
+     could have edited since. */
+  t += `\n\n_Warranty & ${RETURN_DAYS}-day returns: https://tossports.com${WARRANTY_URL}_`;
   return t;
 }
 
@@ -1061,7 +1102,7 @@ function viewHome() {
           <ul class="nhero-badges">
             <li>${ICON.hammer}<span>Made in our unit</span></li>
             <li>${ICON.truck}<span>Free over ₹1,500</span></li>
-            <li>${ICON.shield}<span>3-month warranty</span></li>
+            <li>${ICON.shield}<span>${warrantyLabel()}</span></li>
           </ul>
 
           <!-- Icon-only and unfilled on purpose, so they read as "also
@@ -1135,7 +1176,7 @@ function viewHome() {
       <div class="trust-i">${ICON.hammer}<div><b>We make it, so we answer for it</b><span>Shaped in our own unit — never resold</span></div></div>
       <div class="trust-i">${ICON.whatsapp}<div><b>Not sure? Ask before you pay</b><span>Message us first — no sign-in, no card</span></div></div>
       <div class="trust-i">${ICON.truck}<div><b>Delivered across India</b><span>Free over ₹1,500 · 3–6 days</span></div></div>
-      <div class="trust-i">${ICON.shield}<div><b>Breaks in 3 months? We replace it</b><span>Warranty on Toss Power X</span></div></div>
+      <div class="trust-i">${ICON.shield}<div><b>A real defect is our problem</b><span>Warranty &amp; ${RETURN_DAYS}-day returns · <a href="${WARRANTY_URL}">terms</a></span></div></div>
     </div>
   </section>
 
@@ -2077,7 +2118,7 @@ function viewProduct(id) {
           <div class="pdp-assure">
             <span>${ICON.hammer}<b>Made by us</b><i>Never resold</i></span>
             <span>${ICON.truck}<b>${p.price >= FREE_SHIP_OVER ? 'Free shipping' : 'Ships India-wide'}</b><i>3–6 days</i></span>
-            <span>${ICON.shield}<b>${p.warranty ? '3 month warranty' : 'Defect cover'}</b><i>We replace it</i></span>
+            <span>${ICON.shield}<b>${warrantyLabel()}</b><i>Defects, after inspection</i></span>
             <span>${ICON.check}<b>Weight to order</b><i>Tell us yours</i></span>
           </div>
 
@@ -2119,6 +2160,15 @@ function viewProduct(id) {
               ? `<button class="btn btn-primary btn-block" id="addBtn">${ICON.cart} Add to Bag</button>
                  <button class="btn btn-dark btn-block" id="buyBtn">Buy now</button>`
               : `<button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Ask price on WhatsApp</button>`}
+          </div>
+
+          <!-- Directly under the decision, because this is where somebody
+               hesitates: "what if it breaks, what if it's wrong". Three lines
+               and a link beat a policy page nobody finds. -->
+          <div class="pdp-terms">
+            <span>${ICON.shield}${warrantyLabel()}</span>
+            <span>${ICON.truck}${RETURN_DAYS}-day return if unused</span>
+            <a href="${WARRANTY_URL}">Warranty &amp; returns ${ICON.arrow}</a>
           </div>
 
           ${reviewCard(p)}
@@ -2166,14 +2216,24 @@ function viewProduct(id) {
             </div>
           </details>
 
+          <!-- Summarised, never paraphrased into a promise. The full terms are
+               one link away and they are what a claim is judged against; this
+               block exists so nobody has to read them to know the shape of it. -->
           <details>
             <summary><b>Warranty</b><span class="acc-i"></span></summary>
             <div class="acc-b">
-              <p>${p.warranty
-                ? esc(p.warranty) + ' from the date of delivery.'
-                : 'Covered against manufacturing defects — wood splitting on its own, or a handle coming loose.'}</p>
-              <p>Normal wear from playing, or damage from a wet ground or the wrong ball,
-                isn't covered. Message us with a photo and we'll sort it out.</p>
+              <p>${p.warranty ? esc(p.warranty) + ' from the date of delivery.' : warrantyLine()}</p>
+              <p>It covers manufacturing and wood defects, and abnormal structural failure
+                in normal play — including failure after a normal ball impact, once we have
+                inspected it. Keep your invoice: it is required for any claim.</p>
+              <p>It does not cover normal wear, scratches and dents, damage from misuse or
+                improper knocking in, water or heat damage, or work done on the bat outside
+                our unit. This bat is built for
+                ${p.ball.map(b => BALL_LABEL[b].toLowerCase()).join(' and ')} — using it
+                against a different ball is not a defect.</p>
+              <p>Send us a photo on WhatsApp first. If inspection confirms the fault is
+                ours, we cover what the courier charged you to send it in.</p>
+              <p><a href="${WARRANTY_URL}">Full warranty, return &amp; replacement terms ${ICON.arrow}</a></p>
             </div>
           </details>
 
@@ -2182,8 +2242,14 @@ function viewProduct(id) {
             <div class="acc-b">
               <p>We ship across India. Free over ${fmt(FREE_SHIP_OVER)}, otherwise ${fmt(SHIP_FEE)}.
                 Orders leave our unit in 1–2 days and arrive in 3–6 depending on where you are.</p>
-              <p>Every bat is checked and photographed before it's packed. If what arrives
-                isn't what you ordered, tell us on WhatsApp and we'll replace it.</p>
+              <p><b>${RETURN_DAYS}-day return.</b> Changed your mind? Tell us within
+                ${RETURN_DAYS} days of delivery. The bat has to come back unused, unplayed
+                and in its original packaging — a knocked-in or played bat can't be
+                returned on preference.</p>
+              <p><b>${RETURN_DAYS}-day replacement</b> for a wrong product, transit damage
+                or a verified manufacturing defect, after inspection and subject to
+                availability.</p>
+              <p><a href="${WARRANTY_URL}">Read the full terms ${ICON.arrow}</a></p>
             </div>
           </details>
         </div>
@@ -3000,8 +3066,13 @@ function viewCheckout() {
             <button class="btn btn-primary btn-block" id="placeBtn" style="margin-top:18px">
               ${ICON.rupee} Pay ${fmt(tot)}
             </button>
+            <!-- Shown before payment, not after. A term the customer met only
+                 on the confirmation screen is a term they never agreed to, and
+                 it is the first thing argued about in a chargeback. -->
             <p style="font-size:.74rem;color:var(--ink-50);text-align:center;margin:12px 0 0">
-              By placing this order you agree to be contacted on WhatsApp about it.
+              By placing this order you agree to be contacted on WhatsApp about it, and to
+              our <a href="${WARRANTY_URL}">warranty, return &amp; replacement terms</a> —
+              ${RETURN_DAYS}-day return on an unused bat, claims subject to inspection.
             </p>
           </div>
         </div>
@@ -3055,6 +3126,14 @@ function viewDone() {
           ${o.off > 0 ? `<div class="sum"><span>Discount (${o.coupon})</span>
              <span class="off num">− ${fmt(o.off)}</span></div>` : ''}
           <div class="sum tot"><span>Total</span><span class="num">${fmt(o.total)}</span></div>
+          <!-- Repeated here on purpose. The customer agreed to this at the pay
+               button; this is the copy they can come back to, alongside the
+               order number they would quote in a claim. -->
+          <p style="font-size:.74rem;color:var(--ink-50);margin:14px 0 0;line-height:1.55">
+            ${warrantyLine()} ${RETURN_DAYS}-day return on an unused, unplayed bat in its
+            original packaging. Keep this order number and your invoice — both are needed
+            for a claim. <a href="${WARRANTY_URL}">Warranty, return &amp; replacement terms</a>
+          </p>
         </div>
         <!-- The hand-off, and the only thing on this screen until it is done.
 

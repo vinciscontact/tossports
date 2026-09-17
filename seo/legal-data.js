@@ -25,7 +25,12 @@
      · opening hours
    ============================================================ */
 
-const RETURN_DAYS   = 7;
+/* Ten, not seven. The client's Warranty, Return & Replacement Terms
+   (September 2026) set the window at 10 days, and this constant feeds
+   every page that quotes it — so the refund policy and the warranty
+   policy cannot drift apart the way they would if the number were
+   typed out in each. */
+const RETURN_DAYS   = 10;
 const REFUND_DAYS   = '5–7';
 const DISPATCH_DAYS = '2–4';
 const DELIVERY_DAYS = '3–7';
@@ -107,8 +112,13 @@ const LEGAL = {
         <p>Custom bats, engraved bats and printed jerseys are made for you specifically
         and cannot be resold. See the Refund &amp; Return Policy for what that means.</p>`],
       ['Warranty', `
-        <p>Where a bat is sold with a stated warranty, that warranty covers manufacturing
-        defects for the stated period from delivery.</p>
+        <p>Every Toss bat is covered by our
+        <a href="../warranty-policy/">Warranty, Return &amp; Replacement Terms</a>, which
+        set out the period, what is covered, and how to make a claim. The warranty period
+        for your bat is the one printed on the warranty card and invoice supplied with
+        it.</p>
+        <p>The warranty covers manufacturing and wood defects, and abnormal structural
+        failure during normal intended play, subject to inspection.</p>
         <p>It does not cover normal wear, damage from use with a ball the bat was not made
         for, water damage, damage from misuse or accident, or a bat that has been repaired
         or altered by someone else. Tennis ball bats are built for tennis balls; using one
@@ -146,7 +156,13 @@ const LEGAL = {
         ordered, we will repair it, replace it, or refund it. Which of those depends on
         the bat and on what you would prefer — we will discuss it with you rather than
         decide for you.</p>
-        <p>Where a bat has to come back to us, we pay the return shipping.</p>`],
+        <p>Where a bat has to come back to us for inspection, send it and tell us what the
+        courier charged: once inspection confirms the fault is ours, we reimburse that cost
+        along with the repair, replacement or refund. You are not out of pocket for our
+        mistake.</p>
+        <p>What the warranty covers, what it excludes, and how a claim is inspected are set
+        out in full in our
+        <a href="../warranty-policy/">Warranty, Return &amp; Replacement Terms</a>.</p>`],
       ['What cannot be returned', `
         <p>Some things genuinely cannot be taken back, because nobody else can use them:</p>
         <ul>
@@ -157,7 +173,9 @@ const LEGAL = {
               manufacturing defect, which is covered regardless</li>
         </ul>
         <p>This does not affect a manufacturing defect. A custom bat with a genuine fault
-        is still our problem to fix.</p>`],
+        is still our problem to fix — a used bat with a defect is a
+        <a href="../warranty-policy/">warranty claim</a> rather than a return, and the
+        ${RETURN_DAYS}-day window does not limit it.</p>`],
       ['Changed your mind', `
         <p>If a stock bat is unused, unmarked and still in its wrapping, tell us within
         <b>${RETURN_DAYS} days</b> of delivery and we will take it back. Return shipping
@@ -177,6 +195,108 @@ const LEGAL = {
         91769 95707</a>, or email
         <a href="mailto:contact@tossports.in">contact@tossports.in</a> with your order
         number.</p>`]
+    ]
+  },
+
+  /* ------------------------------------------------------------
+     The client's own Warranty, Return & Replacement Terms, September
+     2026, reproduced as supplied. Two things are added rather than
+     invented, both decided by the owner:
+
+       · the standing confirmation that Toss covers the inspection
+         freight on a confirmed manufacturing defect. Their clause
+         already says charges sit with the customer "unless otherwise
+         confirmed by TOSSPORTS" — this is that confirmation, written
+         down once so it does not have to be granted case by case.
+
+       · a short section explaining the paid extended warranty sold at
+         checkout, because a customer cannot otherwise tell what the
+         100 rupees buys them on top of the cover they already have.
+
+     Everything else is the client's wording. Do not paraphrase it:
+     it is the document a claim will be judged against.
+     ------------------------------------------------------------ */
+  'warranty-policy': {
+    h1: 'Warranty, Return & Replacement Terms',
+    title: 'Warranty, Return & Replacement Terms',
+    desc: `What the Toss warranty covers, what it does not, and how to make a return, replacement or warranty claim.`,
+    updated: 'These terms apply to purchases made on or after 18 September 2026.',
+    body: [
+      ['Service warranty', `
+        <ul>
+          <li>Warranty period is as specified on the warranty card and invoice supplied
+              with your bat, for the respective model.</li>
+          <li>Applicable only to TOSS Brand bats.</li>
+          <li>The original bill or invoice is mandatory for all warranty claims.</li>
+          <li>Covers manufacturing and wood defects, and abnormal structural failure
+              during normal intended play — including eligible failure following normal
+              ball impact, subject to inspection.</li>
+          <li>The bat must be used with the recommended ball for that model. Every product
+              page states which ball the bat is built for.</li>
+        </ul>`],
+
+      ['What the warranty does not cover', `
+        <ul>
+          <li>Normal wear and tear, scratches, dents or cosmetic damage.</li>
+          <li>Damage caused by misuse, excessive force, or improper knocking in and
+              preparation.</li>
+          <li>Toe, edge or handle damage caused by improper use.</li>
+          <li>Water, moisture or heat damage.</li>
+          <li>Any modification, alteration or repair carried out outside TOSSPORTS.</li>
+        </ul>`],
+
+      [`${RETURN_DAYS}-day return`, `
+        <ul>
+          <li>Return requests must be made within <b>${RETURN_DAYS} days</b> of purchase
+              or delivery.</li>
+          <li>The product must be unused, unplayed and in original condition, with its
+              original packaging and accessories.</li>
+          <li>Used, knocked, modified or damaged bats are not eligible for return on
+              grounds of change of mind or preference.</li>
+        </ul>`],
+
+      [`${RETURN_DAYS}-day replacement`, `
+        <ul>
+          <li>Applicable for a wrong product, transit damage, or a verified manufacturing
+              defect reported within <b>${RETURN_DAYS} days</b>.</li>
+          <li>The product must be submitted for TOSSPORTS inspection before a replacement
+              is approved.</li>
+          <li>Replacement is subject to product availability and applicable terms.</li>
+        </ul>`],
+
+      ['Making a claim', `
+        <ul>
+          <li>Provide the original invoice or purchase details, and submit or ship the bat
+              to us for inspection.</li>
+          <li>Applicable repair, service or replacement is determined based on that
+              inspection.</li>
+          <li>Shipping and transport charges are borne by the customer unless otherwise
+              confirmed by TOSSPORTS. <b>Where inspection confirms a manufacturing defect,
+              Toss covers the cost of sending the bat in</b> — tell us what the courier
+              charged and we will reimburse it with the repair or replacement. You are not
+              out of pocket for our mistake.</li>
+          <li>The warranty is non-transferable. It covers the person named on the invoice.</li>
+        </ul>
+        <p>Start any claim on WhatsApp at
+        <a href="https://wa.me/919176995707" rel="noopener" target="_blank">+91 91769
+        95707</a> with your order number and photographs of the problem. Photographs are
+        not a formality — they are often enough to settle a claim without the bat
+        travelling anywhere.</p>`],
+
+      ['The extended warranty sold at checkout', `
+        <p>Alongside the cover above, you can add extended warranty to a bat when you buy
+        it — a longer period of the same cover, for the same defects, on the same terms.
+        It changes the length of your warranty and nothing else: what is covered and what
+        is excluded stay exactly as set out on this page.</p>
+        <p>If a bat already includes a warranty period, the plans offered on it are priced
+        as what they add on top, and any plan shorter than the cover you already have is
+        not offered at all.</p>`],
+
+      ['In short', `
+        <p>All warranty, return and replacement claims are subject to inspection and to our
+        applicable <a href="../terms/">Terms &amp; Conditions</a>. For how money is
+        returned once a claim is settled, see the
+        <a href="../refund-policy/">Refund &amp; Return Policy</a>.</p>`]
     ]
   },
 

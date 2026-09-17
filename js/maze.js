@@ -2374,6 +2374,8 @@ const SETTING_FIELDS = [
   ['free_ship_over', 'Free shipping over (₹)', 'number', 'Orders at or above this ship free'],
   ['ship_fee',       'Shipping fee (₹)', 'number', 'Charged below the free-shipping threshold'],
   ['razorpay_key',   'Razorpay key id', 'text',   'Starts rzp_live_ or rzp_test_. Blank disables online payment.'],
+  ['warranty_months', 'Standard warranty (months)', 'number',
+    'Months of cover every bat carries, as printed on the warranty card. Leave blank and the site says "the period printed on your card" instead of naming a number. It also stops the paid extended warranty being sold on top of cover the customer already has.'],
   ['gstin',            'GSTIN', 'text', 'Leave blank if not registered — bills are then issued without any tax, which is the correct document.'],
   ['legal_name',       'Registered business name', 'text', 'Exactly as registered. Printed on every bill.'],
   ['business_address', 'Business address', 'text', 'Required on a tax invoice.'],

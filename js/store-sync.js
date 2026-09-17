@@ -91,6 +91,12 @@ async function syncSettings() {
        from settings is what stops the shown total and the recorded total
        drifting apart the day someone changes the price. */
     if (s.engraving_price != null) SERVICES.engraving.price = Number(s.engraving_price);
+    /* Standard warranty months. Guarded against 0 and nonsense so that clearing
+       the field in the Maze Room returns the site to "the period on your card"
+       rather than advertising a zero-month warranty. */
+    if (s.warranty_months != null && Number(s.warranty_months) > 0) {
+      WARRANTY_MONTHS = Number(s.warranty_months);
+    }
     LIVE.settings = true;
     return true;
   } catch (e) { console.warn('settings sync:', e.message); return false; }

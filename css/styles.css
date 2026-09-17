@@ -1767,6 +1767,18 @@ body.has-annc .filter-bar{top:var(--hdr)}
 .opt:hover{border-color:var(--ink-50)}
 
 .buy-row{display:grid;gap:10px;margin:22px 0}
+
+/* One line under the buy buttons pointing at the terms. Deliberately NOT
+   .pdp-assure — that class is the four-tile grid above, and reusing it here
+   silently restyled all four tiles. */
+.pdp-terms{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;
+  margin:-10px 0 20px;font-size:.78rem;color:var(--ink-60);line-height:1.45}
+.pdp-terms span{display:inline-flex;align-items:center;gap:6px}
+.pdp-terms svg{width:14px;height:14px;flex:none;opacity:.7}
+.pdp-terms a{display:inline-flex;align-items:center;gap:4px;
+  color:var(--ink);font-weight:700;text-decoration:none;border-bottom:1px solid var(--line)}
+.pdp-terms a:hover{border-bottom-color:currentColor}
+.pdp-terms a svg{width:12px;height:12px;opacity:1}
 .assure{display:grid;gap:10px;margin:24px 0;padding:18px;background:var(--paper-alt);
   border-radius:var(--r);border:1px solid var(--line)}
 .assure div{display:flex;gap:10px;align-items:flex-start;font-size:.84rem;font-weight:600}
