@@ -343,14 +343,15 @@ ${o.body}
       <b>${esc(BUSINESS.legalName)}</b>
       <p>${esc(BUSINESS.main.street)}, ${esc(BUSINESS.main.locality)},
          ${esc(BUSINESS.main.region)} ${esc(BUSINESS.main.postal)}, India</p>
-      <p><a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a> ·
-         <a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></p>
+      <p>Workshop <a href="tel:${BUSINESS.phones[0]}">${BUSINESS.phones[0]}</a> ·
+         WhatsApp <a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a></p>
+      <p><a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></p>
       <p><a href="${o.depth}contact-us/">Contact us</a></p>
     </div>
     <div>
       <b>Toss The Turf</b>
       <p>${esc(BUSINESS.turf.street)}, ${esc(BUSINESS.turf.locality)} ${esc(BUSINESS.turf.postal)}</p>
-      <p><a href="tel:${BUSINESS.phones[0]}">${BUSINESS.phones[0]}</a></p>
+      <p><a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a></p>
     </div>
     <div>
       <b>Bats</b>

@@ -52,18 +52,21 @@ function contactPage(deps) {
   const addr = a =>
     `${esc(a.street)}, ${esc(a.locality)}, ${esc(a.region)} ${esc(a.postal)}, India`;
 
-  /* phones[1] is the WhatsApp number the whole site already publishes, so it
-     is the one a customer is most likely to already have. phones[0] belongs
-     to the turf. */
-  const PHONE = BUSINESS.phones[1];
-  const TURF_PHONE = BUSINESS.phones[0];
+  /* phones[0] is the workshop and registered business line; phones[1] is the
+     WhatsApp number the shop publishes everywhere and the turf's own line.
+     Both are printed and both are labelled — picking one and calling it "the"
+     number would have meant guessing which of two real lines a reviewer
+     should match against Meta Business Manager. */
+  const PHONE = BUSINESS.phones[0];
+  const WA_PHONE = BUSINESS.phones[1];
+  const TURF_PHONE = BUSINESS.phones[1];
 
   const script = `
 (function () {
   var URL = ${JSON.stringify(SUPA.url)};
   var KEY = ${JSON.stringify(SUPA.key)};
   var WA  = ${JSON.stringify(BUSINESS.whatsapp)};
-  var PH  = ${JSON.stringify(PHONE)};
+  var PH  = ${JSON.stringify(WA_PHONE)};
   var f = document.getElementById('cuForm');
   if (!f) return;
   var out = document.getElementById('cuMsgOut');
@@ -153,7 +156,7 @@ function contactPage(deps) {
         <tr><th>Registered address</th><td>${addr(BUSINESS.main)}</td></tr>
         <tr><th>Phone</th><td><a href="tel:${PHONE}">${PHONE}</a></td></tr>
         <tr><th>Email</th><td><a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></td></tr>
-        <tr><th>WhatsApp</th><td><a href="https://wa.me/${BUSINESS.whatsapp}" rel="noopener" target="_blank">${PHONE}</a></td></tr>
+        <tr><th>WhatsApp</th><td><a href="https://wa.me/${BUSINESS.whatsapp}" rel="noopener" target="_blank">${WA_PHONE}</a></td></tr>
         <tr><th>Hours</th><td>Monday to Saturday, 10am to 8pm IST</td></tr>
       </table>
 
@@ -194,7 +197,7 @@ function contactPage(deps) {
         <button type="submit" class="btn-seo" id="cuSend">Send message</button>
         <p class="contact-msg" id="cuMsgOut" role="status" aria-live="polite"></p>
         <p class="contact-alt">Prefer to talk? <a href="https://wa.me/${BUSINESS.whatsapp}"
-          rel="noopener" target="_blank">Message us on WhatsApp</a> or call
+          rel="noopener" target="_blank">Message us on WhatsApp</a> or call the workshop on
           <a href="tel:${PHONE}">${PHONE}</a>.</p>
       </form>
     </div>
