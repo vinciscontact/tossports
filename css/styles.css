@@ -391,6 +391,11 @@ body.has-annc .hdr{top:34px}
   background:rgba(255,255,255,.045);border:1.5px solid rgba(255,255,255,.12);
   color:#fff;transition:.2s var(--ease)}
 .q-opt:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.3);transform:translateY(-3px)}
+/* An answer the catalogue has no bat for, given the earlier answers — medium
+   ball plus Quick Hands is the real case. Shown, so the gap is honest, but
+   plainly not clickable, and without the hover lift that invites a click. */
+.q-opt.dead,.q-opt.dead:hover{opacity:.4;cursor:not-allowed;transform:none;
+  background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.1)}
 .q-opt.on{border-color:var(--orange);background:rgba(255,138,30,.14)}
 .q-opt.on::after{content:'✓';position:absolute;top:12px;right:14px;color:var(--orange);
   font-weight:900;font-size:.9rem}
@@ -1694,6 +1699,18 @@ body.has-annc .filter-bar{top:var(--hdr)}
   border:solid var(--navy-900);border-width:0 2.4px 2.4px 0;transform:rotate(43deg)}
 .chk span.n{margin-left:auto;font-size:.74rem;color:var(--ink-50);font-weight:700}
 .chk:hover{color:var(--orange-700)}
+/* A second line under an option: the ball's weight, or the catalogue's own
+   description of a style. Aligned to the label, not the box. */
+.chk{align-items:flex-start}
+.chk input{margin-top:1px}
+.chk small{display:block;margin-top:2px;font-size:.74rem;font-weight:500;
+  color:var(--ink-50);line-height:1.35}
+/* An option that would leave nothing to look at. Still readable — so people
+   can see the catalogue simply has no such bat — but plainly not an action. */
+.chk.dead{opacity:.42;cursor:not-allowed}
+.chk.dead:hover{color:inherit}
+.chk.dead input{cursor:not-allowed}
+.fnote{margin:-6px 0 10px;font-size:.76rem;line-height:1.45;color:var(--ink-50)}
 
 .pills{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
 .pill{display:inline-flex;align-items:center;gap:6px;background:var(--navy-800);color:#fff;

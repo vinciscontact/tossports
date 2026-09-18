@@ -74,8 +74,17 @@ const Bot = (function () {
     if (/kashmir/.test(s)) c.wood = 'kashmir';
     if (/poplar/.test(s)) c.wood = 'poplar';
     if (/sri ?lankan|srilankan|lankan/.test(s)) c.wood = 'srilankan';
-    if (/\blight\b|light ?weight|fast pickup/.test(s)) c.light = true;
-    if (/\bheavy\b|power|slog|six/.test(s)) c.power = true;
+    /* The catalogue's own words for who a bat is for. "power" alone is not
+       one of them: it also appears in "Power X", and someone asking about
+       that bat by name is not asking for an attacker's bat. */
+    if (/attack|big hit|slog|six hit|sixes/.test(s)) c.style = 'attacker';
+    else if (/\bclassic\b|all.?round|balanced/.test(s)) c.style = 'classic';
+    else if (/quick hands?|quick|fast hands|light pickup|fast pickup/.test(s)) c.style = 'quick-hands';
+    if (/beginner|first bat|starting out|new to/.test(s)) c.level = 'beginner';
+    else if (/tournament|league|competition/.test(s)) c.level = 'tournament';
+    else if (/\bserious\b|every week|weekly/.test(s)) c.level = 'serious';
+    if (/\blight\b|light ?weight/.test(s)) c.light = true;
+    if (/\bheavy\b/.test(s)) c.power = true;
     return c;
   }
 
@@ -85,6 +94,12 @@ const Bot = (function () {
     if (c.profile) list = list.filter(p => p.profile === c.profile);
     if (c.wood)    list = list.filter(p => p.wood === c.wood);
     if (c.ball)    list = list.filter(p => (p.ball || []).includes(c.ball));
+    /* Style and level narrow the same way the shop's filters do, but only if
+       something is left — "a quick hands bat for medium ball" has no answer in
+       the catalogue, and the nearest real bats beat "nothing matches". */
+    const narrow = test => { const n = list.filter(test); if (n.length) list = n; };
+    if (c.style) narrow(p => (p.style || []).includes(c.style));
+    if (c.level) narrow(p => p.level === c.level);
     if (!list.length) return [];
     list = list.slice().sort((a, b) => {
       let sa = a.popularity || 0, sb = b.popularity || 0;
@@ -109,6 +124,9 @@ const Bot = (function () {
       if (c.budget) bits.push('under ' + fmt(c.budget));
       if (c.ball) bits.push(c.ball + ' tennis ball');
       if (c.profile) bits.push(c.profile);
+      if (c.style) bits.push({ attacker: 'an attacker', classic: 'a classic batter',
+                               'quick-hands': 'quick hands' }[c.style]);
+      if (c.level) bits.push(c.level + ' level');
       if (c.wood) bits.push(c.wood.replace('srilankan', 'Sri Lankan'));
       return {
         say: pick(ACK) + (bits.length ? ' For ' + bits.join(', ') + " — here's what I'd back:" : " Here's what I'd back:"),
@@ -297,7 +315,7 @@ const Bot = (function () {
     if (strong) { const r = answer(strong, text); if (r) return say(r); }
 
     const c = constraints(text);
-    if (c.wood || c.profile || c.ball || c.budget) {
+    if (c.wood || c.profile || c.ball || c.budget || c.style || c.level) {
       const hits = recommend(c, 3);
       if (hits.length) {
         const bits = [];

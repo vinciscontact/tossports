@@ -26,6 +26,17 @@ let WARRANTY_MONTHS = null;
 const WARRANTY_URL = '/warranty-policy/';
 const RETURN_DAYS = 10;
 
+/* How many bats, and what the cheapest costs — worked out from the catalogue
+   rather than typed into sentences. "29 bats … from ₹950" sat in the hero long
+   after the range became 31 bats from ₹900, because nothing connected the copy
+   to the data it described. */
+const batCount   = () => PRODUCTS.filter(p => prodCat(p) === 'bats').length;
+const priceFloor = () => {
+  const ps = PRODUCTS.filter(p => prodCat(p) === 'bats' && hasPrice(p)).map(p => p.price);
+  return ps.length ? Math.min(...ps) : null;
+};
+const fromPrice  = () => priceFloor() ? 'From ' + fmt(priceFloor()) + '.' : '';
+
 /* "3-month warranty" when the number is known, and the honest fallback when it
    is not. Everything customer-facing asks this rather than hardcoding a span. */
 function warrantyLabel() {
@@ -52,7 +63,7 @@ try { cart = JSON.parse(localStorage.getItem('toss_cart') || '[]'); } catch (e) 
 const saveCart = () => localStorage.setItem('toss_cart', JSON.stringify(cart));
 
 let filters = { wood: [], profile: [], ball: [], tier: [], division: [],
-                level: [], style: [], weight: [], sort: 'pop', cat: 'bats', q: '' };
+                level: [], style: [], weight: [], badge: [], sort: 'pop', cat: 'bats', q: '' };
 
 /* Who a bat is for. The printed catalogue answers this directly — every bat
    carries a level and one or two styles — so this reads the product itself
@@ -437,6 +448,42 @@ function division(p) {
   return (b.includes('medium') || b.includes('hard')) ? 'pro' : 'gully';
 }
 
+/* One test per filter group. OR within a group, AND across groups: "attacker
+   or classic, tournament level, soft ball" is what someone means when they
+   tick four boxes.
+
+   Kept in one table because TWO things ask it the same question: the results
+   grid, and the panel deciding which options would come back empty. When
+   those were separate the panel promised six Quick Hands bats while the grid,
+   with Medium Tennis ticked, showed none — the catalogue has no medium-ball
+   Quick Hands bat, and only one of the two pieces of code knew it.
+
+   profile, division and weight are not in the printed catalogue and are no
+   longer offered in the panel. Their tests stay so that links already out in
+   the world — footers, landing pages, bookmarks — still filter correctly. */
+const FILTER_TEST = {
+  ball:     (p, v) => v.some(b => (p.ball || []).includes(b)),
+  style:    (p, v) => v.some(x => stylesOf(p).includes(x)),
+  level:    (p, v) => v.includes(p.level),
+  wood:     (p, v) => v.includes(p.wood),
+  badge:    (p, v) => v.some(x => badgeKeys(p).includes(x)),
+  tier:     (p, v) => v.includes(p.tier),
+  profile:  (p, v) => v.includes(p.profile),
+  division: (p, v) => v.includes(division(p)),
+  weight:   (p, v) => v.includes(weightBand(p))
+};
+
+/* Does p pass every active group — except, optionally, `skip`, and with
+   `extra` values standing in for that group? That second form is how the
+   panel asks "if I ticked this too, would anything be left?" */
+function passesFilters(p, skip, extra) {
+  for (const g in FILTER_TEST) {
+    const vals = g === skip ? extra : filters[g];
+    if (vals && vals.length && !FILTER_TEST[g](p, vals)) return false;
+  }
+  return true;
+}
+
 function filtered() {
   /* ------------------------------------------------------------
      A text query from the search panel's "See all N products".
@@ -467,18 +514,7 @@ function filtered() {
 
   let list = PRODUCTS.filter(p => prodCat(p) === filters.cat);
   /* the spec filters describe bats — other categories are a plain grid */
-  if (filters.cat === 'bats') list = list.filter(p =>
-    (!filters.wood.length    || filters.wood.includes(p.wood)) &&
-    (!filters.profile.length || filters.profile.includes(p.profile)) &&
-    (!filters.ball.length    || filters.ball.some(b => (p.ball || []).includes(b))) &&
-    (!filters.tier.length    || filters.tier.includes(p.tier)) &&
-    (!filters.division.length || filters.division.includes(division(p))) &&
-    /* OR within a group, AND across groups: "attacker or classic, tournament
-       level, and light" is what a person means when they tick four chips. */
-    (!filters.level.length  || filters.level.includes(p.level)) &&
-    (!filters.style.length  || filters.style.some(v => stylesOf(p).includes(v))) &&
-    (!filters.weight.length || filters.weight.includes(weightBand(p)))
-  );
+  if (filters.cat === 'bats') list = list.filter(p => passesFilters(p));
   const s = filters.sort;
   /* "price on request" items always sink to the bottom, whichever way we sort */
   const lo = p => (p.price == null ?  Infinity : p.price);
@@ -507,10 +543,11 @@ function activeChips() {
   filters.level.forEach(v  => out.push({ g: 'level',  v, l: facetLabel(v) }));
   filters.style.forEach(v  => out.push({ g: 'style',  v, l: facetLabel(v) }));
   filters.weight.forEach(v => out.push({ g: 'weight', v, l: facetLabel(v) }));
+  filters.badge.forEach(v  => out.push({ g: 'badge',  v, l: (BADGE[v] || {}).label || v }));
   return out;
 }
 /* filter state lives in the URL so filtered views are shareable and Back works */
-const FKEYS = ['wood', 'profile', 'ball', 'tier', 'division', 'level', 'style', 'weight'];
+const FKEYS = ['wood', 'profile', 'ball', 'tier', 'division', 'level', 'style', 'weight', 'badge'];
 
 function shopURL() {
   const q = [];
@@ -713,56 +750,58 @@ function cardHTML(p) {
   </article>`;
 }
 
+/* The filter panel, in the order the printed catalogue asks its questions:
+   "FIND YOUR BAT BY BALL TYPE", then YOUR STYLE, then the bat. Level, wood,
+   the catalogue's own highlights and price follow.
+
+   No counts beside the options — the owner asked for shoppers not to be shown
+   numbers. The count is still worked out, though, because it answers the
+   question that matters: would ticking this leave anything at all? An option
+   that would empty the grid is greyed out rather than offered as a dead end.
+   An option already ticked is never disabled, so it can always be unticked. */
 function filterPanelHTML() {
-  const count = (g, v) => PRODUCTS.filter(p => prodCat(p) === 'bats' &&
-    (g === 'ball'     ? (p.ball || []).includes(v)
-     : g === 'division' ? division(p) === v
-     : g === 'style'  ? stylesOf(p).includes(v)
-     : g === 'weight' ? weightBand(p) === v
-     : p[g] === v)).length;
-  const grp = (title, g, opts) => `
+  const bats = PRODUCTS.filter(p => prodCat(p) === 'bats');
+  /* How many bats would remain if v were added to group g, given everything
+     else already ticked. OR within a group, so a ticked sibling counts too. */
+  const wouldLeave = (g, v) => {
+    const vals = filters[g].includes(v) ? filters[g] : filters[g].concat(v);
+    return bats.filter(p => passesFilters(p, g, vals)).length;
+  };
+  const grp = (title, g, opts, note) => `
     <div class="fgroup">
       <b>${title}</b>
-      ${opts.map(o => `
-        <label class="chk">
-          <input type="checkbox" data-f="${g}" value="${o.v}" ${filters[g].includes(o.v) ? 'checked' : ''}>
-          <span>${o.l}</span><span class="n">${count(g, o.v)}</span>
-        </label>`).join('')}
+      ${note ? `<p class="fnote">${note}</p>` : ''}
+      ${opts.map(o => {
+        const on = filters[g].includes(o.v);
+        const dead = !on && wouldLeave(g, o.v) === 0;
+        return `
+        <label class="chk${dead ? ' dead' : ''}"${dead ? ' title="No bats match this with your other choices"' : ''}>
+          <input type="checkbox" data-f="${g}" value="${o.v}" ${on ? 'checked' : ''} ${dead ? 'disabled' : ''}>
+          <span>${o.l}${o.sub ? `<small>${o.sub}</small>` : ''}</span>
+        </label>`;
+      }).join('')}
     </div>`;
-  /* The three facets the printed catalogue sorts by — level, style and how
-     the bat picks up. Built from the catalogue constants rather than from the
-     play-style tables, because those can only answer once Supabase has
-     replied and this panel has to render on a cold, offline first paint too.
-     The old version simply rendered nothing when the database was slow.
 
-     The Maze Room still tags bats, and sql/027 keeps product_playstyles equal
-     to these same fields, so the two never disagree. */
-  const facetGroups =
-    grp('Level',    'level', Object.values(LEVEL).map(l => ({ v: l.key, l: l.label }))) +
-    grp('Best for', 'style', Object.values(STYLE).map(s => ({ v: s.key, l: s.label }))) +
-    /* Light and heavy mean different grams for different balls — a 950g bat
-       is the lightest hard bat we make. weightBand() resolves that per ball,
-       so these three chips stay meaningful across all three ranges. */
-    grp('Weight feel', 'weight', [
-      { v: 'light', l: 'Light' }, { v: 'medium', l: 'Medium' }, { v: 'heavy', l: 'Heavy' }
-    ]);
+  /* Style carries the catalogue's own description, and — once exactly one
+     ball is chosen — that ball's weight band for the style, straight off the
+     catalogue's "YOUR BALL · YOUR STYLE · YOUR BAT" table. With no ball or
+     several chosen there is no single right number, so it says none. */
+  const oneBall = filters.ball.length === 1 ? filters.ball[0] : null;
+  const styleOpts = Object.values(STYLE).map(st => ({
+    v: st.key, l: st.label,
+    sub: (oneBall && STYLE_BANDS[oneBall] ? STYLE_BANDS[oneBall][st.key] + ' · ' : '') + st.blurb
+  }));
 
   return (
-    facetGroups +
-    grp('Division', 'division',
-      Object.keys(DIVISION).map(k => ({ v: k, l: DIVISION[k].label }))) +
+    grp('Ball type', 'ball',
+      Object.keys(BALL_LABEL).map(k => ({ v: k, l: BALL_LABEL[k], sub: BALL_NOTE[k] })),
+      'Start here — the ball decides how strong the bat must be.') +
+    grp('Your style', 'style', styleOpts,
+      oneBall ? null : 'Pick one ball type to see the right weight for each style.') +
+    grp('Level', 'level', Object.values(LEVEL).map(l => ({ v: l.key, l: l.label }))) +
     grp('Wood', 'wood', Object.values(WOOD).map(w => ({ v: w.key, l: w.label }))) +
-    grp('Profile', 'profile', Object.values(PROFILE).map(w => ({ v: w.key, l: w.label }))) +
-    grp('Ball Type', 'ball',
-      Object.keys(BALL_LABEL).map(k => ({ v: k, l: BALL_LABEL[k] }))) +
-    `<div class="fgroup"><b>Price</b>
-      ${['entry','mid','premium'].map(t => `
-        <label class="chk">
-          <input type="checkbox" data-f="tier" value="${t}" ${filters.tier.includes(t) ? 'checked' : ''}>
-          <span>${TIER_LABEL[t]}</span>
-          <span class="n">${PRODUCTS.filter(p => p.tier === t).length}</span>
-        </label>`).join('')}
-    </div>`
+    grp('Highlights', 'badge', Object.values(BADGE).map(b => ({ v: b.key, l: b.label }))) +
+    grp('Price', 'tier', ['entry', 'mid', 'premium'].map(t => ({ v: t, l: TIER_LABEL[t] })))
   );
 }
 
@@ -1079,8 +1118,8 @@ function viewHome() {
       <div class="nhero-copy">
         <p class="eyebrow">Handmade in Chennai</p>
         <h1 class="d1">Bats made by hand.<span class="hl-2">Never resold.</span></h1>
-        <p class="lede">29 bats shaped in our own unit — Sri Lankan wood, Kashmir
-          Willow and Poplar. From ₹950.</p>
+        <p class="lede">${batCount()} bats shaped in our own unit — Sri Lankan wood, Kashmir
+          Willow and Poplar. ${fromPrice()}</p>
         <!-- Two buttons, one decision. The social icons used to sit in this
              row and gave it three different shapes to parse — a filled pill,
              an outlined pill and two bare circles — which is what made the
@@ -1301,7 +1340,7 @@ function viewHome() {
       </div>
 
       <div class="mk-foot rv">
-        <span>29 models come off this line — from ₹950, direct price, no middleman.</span>
+        <span>${batCount()} models come off this line — ${fromPrice().toLowerCase().replace(/\.$/, '')}, direct price, no middleman.</span>
         <a class="btn btn-primary btn-sm" href="#/shop?profile=scoop">Customise yours ${ICON.arrow}</a>
       </div>
     </div>
@@ -2282,15 +2321,18 @@ const QUIZ = [
       {v:'hard',   e:'🥎', b:'Hard tennis ball',   s:'Hard tennis, stumper and rubber ball'},
       {v:'any',    e:'🤷', b:'Not sure yet',       s:'Show me the whole range'}
     ]},
-  { key:'style', q:'How do you bat?', sub:'Be honest — it changes the profile we suggest.',
+  /* The catalogue's own second question, YOUR STYLE. Options are built by
+     styleOpts() so each can quote the weight the catalogue gives that style
+     for the ball just chosen — a quick-hands soft-ball bat is 650–730g, a
+     quick-hands hard-ball bat 950–1000g, and the same word means both. */
+  { key:'style', q:'How do you bat?', sub:'Straight from our catalogue — pick the one that sounds like you.' },
+  { key:'level', q:'What level do you play at?', sub:'This decides how much bat you need, not how good you are.',
     opts:[
-      {v:'power',   e:'💥', b:'I go for the boundary', s:'Big edges and thick profiles'},
-      {v:'balance', e:'⚖️', b:'All-round, I rotate strike', s:'Balanced pickup, mid sweet spot'},
-      {v:'speed',   e:'⚡', b:'Fast hands, quick swing', s:'Lighter scoop and mongoose builds'},
-      {v:'new',     e:'🌱', b:"I'm just starting", s:'Simple, forgiving, affordable'}
+      {v:'beginner',   e:'🌱', b:'Beginner',   s:'Your first proper bat'},
+      {v:'serious',    e:'🏏', b:'Serious',    s:'You play every week'},
+      {v:'tournament', e:'🏆', b:'Tournament', s:'Built for the weekend that counts'},
+      {v:'any',        e:'🤷', b:'Not sure',   s:'Show me every level'}
     ]},
-  /* No fixed options: see weightOpts() — the grams depend on the ball. */
-  { key:'weight', q:'What weight feels right?', sub:'Heavier hits harder. Lighter swings faster.' },
   { key:'budget', q:"What's your budget?", sub:'Every price band has a good bat in it.',
     opts:[
       {v:'entry',   e:'💸', b:'Under ₹1500',   s:'Solid starter bats'},
@@ -2301,69 +2343,60 @@ const QUIZ = [
 ];
 let quizStep = 0, quizAns = {};
 
-/* The weight question has to be asked in the grams of the ball they just
-   picked. "Light — under 750g" is meaningless to somebody buying a hard-ball
-   bat, where the lightest thing we make is 850g: they would answer "light",
-   nothing would match, and the finder would dead-end on its own last step
-   having eliminated the entire catalogue. Before they have chosen a ball —
-   or if they answered "not sure" — the options carry no grams at all rather
-   than a number that would only be right for one third of the range. */
-function weightOpts(ans) {
-  const s = BALL_SPLIT[(ans || {}).ball] || null;
-  const g = n => n + 'g';
+/* Style options, quoting the catalogue's weight band for the chosen ball.
+   With no ball chosen there is no single right number, so none is shown —
+   a figure that is only true for one ball in three is worse than none. */
+function styleOpts(ans) {
+  const band = STYLE_BANDS[(ans || {}).ball];
+  const line = k => (band ? band[k] + ' · ' : '') + STYLE[k].blurb;
   return [
-    { v:'light', e:'🪶', b: s ? 'Light — under ' + g(s[0]) : 'Light',
-      s:'Fast swing, easier control' },
-    { v:'medium', e:'🎯', b: s ? 'Medium — ' + g(s[0]) + ' to ' + g(s[1]) : 'Medium',
-      s:'The most popular range' },
-    { v:'heavy', e:'🔨', b: s ? 'Heavy — ' + g(s[1]) + ' plus' : 'Heavy',
-      s:'Maximum power transfer' },
-    { v:'any',   e:'🤷', b:"Don't mind", s:'Show me everything' }
+    { v:'attacker',    e:'💥', b:'Attacker',    s: line('attacker') },
+    { v:'classic',     e:'⚖️', b:'Classic',     s: line('classic') },
+    { v:'quick-hands', e:'⚡', b:'Quick Hands', s: line('quick-hands') },
+    { v:'any',         e:'🤷', b:'Not sure',    s:'Show me every style' }
   ];
 }
-const quizOpts = step => step.opts || weightOpts(quizAns);
+const quizOpts = step => step.opts || styleOpts(quizAns);
 
-function scoreProduct(p) {
-  let s = p.popularity / 20;
-  if (quizAns.ball && quizAns.ball !== 'any') { if (p.ball.includes(quizAns.ball)) s += 30; else s -= 40; }
-  /* The catalogue's own style word is the strongest signal there is — it is
-     the workshop's judgement on who the bat is for. Shape still scores
-     behind it, because a player who says "boundary" and a bat the catalogue
-     calls an attacker should agree most of the time, but not always. */
-  if (quizAns.style === 'power')   s += (p.style || []).includes('attacker') ? 24 : 0;
-  if (quizAns.style === 'speed')   s += (p.style || []).includes('quick-hands') ? 24 : 0;
-  if (quizAns.style === 'balance') s += (p.style || []).includes('classic') ? 24 : 0;
-  if (quizAns.style === 'power')   s += (p.profile === 'bigedge' ? 14 : 0) + (/thick|big/i.test(p.edge||'') ? 8 : 0) + (p.profile === 'multi' ? 6 : 0);
-  if (quizAns.style === 'speed')   s += (p.profile === 'scoop' ? 12 : 0) + (p.profile === 'mongoose' ? 10 : 0);
-  if (quizAns.style === 'balance') s += (p.profile === 'standard' ? 10 : 0) + (p.profile === 'scoop' ? 6 : 0);
-  if (quizAns.style === 'new')     s += (p.level === 'beginner' ? 26 : 0) + (p.tier === 'entry' ? 10 : 0);
-  /* Judged per ball, so "light" means light FOR A HARD BAT when that is
-     what they are buying. */
-  if (quizAns.weight && quizAns.weight !== 'any') {
-    s += weightBand(p) === quizAns.weight ? 20 : -16;
-  }
-  if (quizAns.budget && quizAns.budget !== 'any') s += p.tier === quizAns.budget ? 26 : -20;
-  if (!hasPrice(p)) s -= 12;
-  return s;
+/* Every answer is a real constraint, and all four are the catalogue's own
+   terms: ball, style, level, price. That is only safe because the finder
+   never OFFERS an answer that would leave nothing — see quizDead() — so
+   narrowing cannot run out of bats. The old finder had to treat style as a
+   mere preference precisely because it could not promise that. */
+const QUIZ_TEST = {
+  ball:   (p, v) => (p.ball || []).includes(v),
+  style:  (p, v) => (p.style || []).includes(v),
+  level:  (p, v) => p.level === v,
+  budget: (p, v) => p.tier === v
+};
+function quizCandidates(ans) {
+  return PRODUCTS.filter(p => prodCat(p) === 'bats').filter(p =>
+    Object.keys(QUIZ_TEST).every(k =>
+      !ans[k] || ans[k] === 'any' || QUIZ_TEST[k](p, ans[k])));
+}
+const stillMatching = () => quizCandidates(quizAns);
+
+/* Would this answer, on top of the ones already given, leave no bat at all?
+   Medium ball + Quick Hands is the real example — the catalogue has no such
+   bat — and offering it would lead someone into an empty verdict. */
+function quizDead(key, v) {
+  if (v === 'any') return false;
+  const before = {};
+  for (const st of QUIZ) { if (st.key === key) break; before[st.key] = quizAns[st.key]; }
+  before[key] = v;
+  return quizCandidates(before).length === 0;
 }
 
-/* Bats that genuinely still fit the answers so far.
-   Ball, budget and weight are real compatibility constraints, so they filter.
-   Batting style is a preference, not a constraint — a power player CAN use a
-   standard bat — so it ranks in scoreProduct() rather than eliminating here.
-   Keeping style out is also what stops the count collapsing to zero, which
-   would both discourage people and contradict the shortlist they end up with. */
-function stillMatching() {
-  return PRODUCTS.filter(p => prodCat(p) === 'bats').filter(p => {
-    const a = quizAns;
-    if (a.ball && a.ball !== 'any' && !p.ball.includes(a.ball)) return false;
-    if (a.budget && a.budget !== 'any' && p.tier !== a.budget) return false;
-    /* Per-ball bands, for the same reason weightOpts() shows per-ball grams:
-       absolute thresholds would eliminate every hard-ball bat the moment
-       somebody asked for something light. */
-    if (a.weight && a.weight !== 'any' && weightBand(p) !== a.weight) return false;
-    return true;
-  });
+/* Ranking among bats that already fit every answer. Popularity comes from
+   the catalogue's own badges, so a Best Seller leads a plain listing. */
+function scoreProduct(p) {
+  let s = (p.popularity || 0) / 10;
+  for (const k in QUIZ_TEST) {
+    const v = quizAns[k];
+    if (v && v !== 'any') s += QUIZ_TEST[k](p, v) ? 30 : -40;
+  }
+  if (!hasPrice(p)) s -= 12;
+  return s;
 }
 
 /* A soft tennis ball really does look different from a medium one — that is
@@ -2381,8 +2414,8 @@ function ballArt(fill, shade, seam) {
 
 /* Each option shows the kind of bat it leads to, using the real renderer. */
 const OPT_BAT = {
-  style:  { power:'ys-big-edge', balance:'cws', speed:'customised-scoop-lite', new:'regular-srilankan' },
-  weight: { light:'power-x-feather', mid:'kerala-scoop', heavy:'hard-scoop-elite' },
+  style:  { attacker:'black-mamba', classic:'kerala-scoop', 'quick-hands':'power-x-feather' },
+  level:  { beginner:'regular-srilankan', serious:'four-scoop', tournament:'glossy-premium' },
   budget: { entry:'regular-srilankan', mid:'four-scoop', premium:'glossy-premium' }
 };
 
@@ -2397,7 +2430,7 @@ function optArt(key, v) {
   }
   const id = (OPT_BAT[key] || {})[v];
   const p = id && byId(id);
-  return p ? `<span class="opt-bat">${batSVG(p, { glow: false, trueScale: key === 'weight' })}</span>`
+  return p ? `<span class="opt-bat">${batSVG(p, { glow: false })}</span>`
            : `<span class="opt-any">ANY</span>`;
 }
 
@@ -2409,20 +2442,20 @@ function fitReasons(p) {
   else if (a.ball === 'medium') r.push('Strong enough for the heavier medium ball');
   else if (a.ball === 'hard')   r.push('Built to take a hard tennis or stumper ball');
   else                          r.push('Picked from across the whole range');
+  const band = STYLE_BANDS[a.ball] && STYLE_BANDS[a.ball][a.style];
   const style = {
-    power:   p.profile === 'bigedge' ? 'Thick edges to carry your boundary swing'
-                                     : 'Real meat behind the ball for big hitting',
-    balance: 'Balanced pickup for rotating the strike',
-    speed:   'Light swing weight for your fast hands',
-    new:     'Forgiving and simple — right for starting out'
+    attacker:      'Bottom weight with a low-mid sweet spot, for your big hitting',
+    classic:       'Even balance with a mid sweet spot, for all-round batting',
+    'quick-hands': 'Top-light with a mid-high sweet spot, for your fast hands'
   }[a.style];
-  if (style) r.push(style);
-  const mid = Math.round((p.weight[0] + p.weight[1]) / 2);
-  r.push(`~${mid}g pickup — ${
-    a.weight === 'light' ? 'in the light range you wanted'
-    : a.weight === 'heavy' ? 'the heavy hitter you asked for'
-    : a.weight === 'mid' ? 'right in your preferred range'
-    : 'an easy middle weight'}`);
+  if (style) r.push(style + (band ? ' — our catalogue puts that at ' + band : ''));
+  const level = {
+    beginner:   'A beginner’s bat — forgiving, and priced for a first proper bat',
+    serious:    'Built for someone who plays every week',
+    tournament: 'A tournament build, for the matches that count'
+  }[a.level];
+  if (level) r.push(level);
+  r.push(p.weight[0] + '–' + p.weight[1] + 'g, ' + WOOD_OF(p).label);
   if (a.budget && a.budget !== 'any' && hasPrice(p)) r.push(`${fmt(p.price)} — inside your budget`);
   return r;
 }
@@ -2435,7 +2468,12 @@ function fitReasons(p) {
 function viewFinder() {
   if (quizStep >= QUIZ.length) {
     /* the finder is a bat fitter — other categories never enter the ranking */
-    const ranked = PRODUCTS.filter(p => prodCat(p) === 'bats')
+    /* Only bats that fit every answer. The finder never offered an answer
+       that would leave none, so this is never empty — the fallback is for a
+       catalogue that changed underneath someone mid-quiz. */
+    const fit = stillMatching();
+    const pool = fit.length ? fit : PRODUCTS.filter(p => prodCat(p) === 'bats');
+    const ranked = pool
       .map(p => ({ p, s: scoreProduct(p) }))
       .sort((a, b) => b.s - a.s).map(x => x.p);
     const win = ranked[0], backups = ranked.slice(1, 3);
@@ -2477,7 +2515,7 @@ function viewFinder() {
   const left = stillMatching();
   const lead = left.slice().sort((a, b) => scoreProduct(b) - scoreProduct(a))[0] || PRODUCTS[0];
   const answered = Object.keys(quizAns).length > 0;
-  const SPEC_LABEL = { ball: 'Ball', style: 'Style', weight: 'Weight', budget: 'Budget' };
+  const SPEC_LABEL = { ball: 'Ball', style: 'Style', level: 'Level', budget: 'Budget' };
 
   return `
   <!-- Same drawing sheet as the home hero. The finder is where somebody
@@ -2524,12 +2562,16 @@ function viewFinder() {
         <p class="lede">${q.sub}</p>
 
         <div class="q-opts n${qOpts.length}">
-          ${qOpts.map(o => `
-            <button class="q-opt${quizAns[q.key] === o.v ? ' on' : ''}" data-q="${o.v}">
+          ${qOpts.map(o => {
+            const dead = quizDead(q.key, o.v);
+            return `
+            <button class="q-opt${quizAns[q.key] === o.v ? ' on' : ''}${dead ? ' dead' : ''}" data-q="${o.v}"
+                    ${dead ? 'disabled aria-disabled="true"' : ''}>
               <span class="q-art">${optArt(q.key, o.v)}</span>
               <b>${o.b}</b>
-              <span class="q-sub">${o.s}</span>
-            </button>`).join('')}
+              <span class="q-sub">${dead ? 'Not in our catalogue with your earlier answers' : o.s}</span>
+            </button>`;
+          }).join('')}
         </div>
 
         <div class="quiz-nav">
@@ -3845,7 +3887,12 @@ function mount(page, parts) {
 
   if (page === 'finder') {
     $$('.q-opt').forEach(b => b.onclick = () => {
+      if (b.disabled) return;
       quizAns[QUIZ[quizStep].key] = b.dataset.q;
+      /* Answers after this one were given against a different earlier answer
+         — going Back and switching ball could otherwise leave "Quick Hands"
+         standing against a medium ball, which no bat satisfies. */
+      QUIZ.slice(quizStep + 1).forEach(st => { delete quizAns[st.key]; });
       quizStep++;
       route(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });

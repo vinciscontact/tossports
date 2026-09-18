@@ -77,6 +77,33 @@ const STYLE = {
   'quick-hands': { key: 'quick-hands', label: 'Quick Hands', blurb: 'Top-light, mid-high sweet spot' }
 };
 
+/* The catalogue's "YOUR BALL · YOUR STYLE · YOUR BAT" table: for each ball,
+   what weight each style of player should be swinging. Printed on its cover
+   and again at the head of each ball section, and it is how the catalogue
+   expects a customer to choose — ball first, then style, then the bat.
+
+   One conflict in the source: medium-ball Attacker reads 850–920g on the
+   cover and 880–920g on the section page. The cover's figure is used,
+   because it is the one that joins up with Classic's 800–850g; the other
+   leaves an 850–880g gap no player falls into. */
+const STYLE_BANDS = {
+  soft:   { attacker: '780–820g',  classic: '730–800g',   'quick-hands': '650–730g' },
+  medium: { attacker: '850–920g',  classic: '800–850g',   'quick-hands': '750–800g' },
+  hard:   { attacker: '1050g+',    classic: '1000–1050g', 'quick-hands': '950–1000g' }
+};
+
+/* The four highlights printed on the catalogue's cards. "TOSS EXCLUSIVE"
+   appears once, in the Hard Monster's description rather than as a pill; it
+   is the same claim, so it files under Exclusive. */
+const BADGE = {
+  'best-seller': { key: 'best-seller', label: 'Best Seller', match: ['Best Seller'] },
+  'must-try':    { key: 'must-try',    label: 'Must Try',    match: ['Must Try'] },
+  'exclusive':   { key: 'exclusive',   label: 'Exclusive',   match: ['Exclusive', 'Toss Exclusive'] },
+  'value':       { key: 'value',       label: 'Value',       match: ['Value'] }
+};
+const badgeKeys = p => Object.values(BADGE)
+  .filter(b => (p.badges || []).some(x => b.match.includes(x))).map(b => b.key);
+
 const PRODUCTS = [
 
   /* ============================================================
@@ -93,14 +120,14 @@ const PRODUCTS = [
     weight: [650, 750], height: [34.5, 35.5],
     handle: 'Single wood handle', sweetSpot: 'Mid to high',
     finish: 'Raw bat', spine: true, edge: 'Standard',
-    tier: 'entry', popularity: 88, rating: 0, reviews: 0,
-    badges: ['Best Seller'],
+    tier: 'entry', popularity: 70, rating: 0, reviews: 0,
+    badges: [],
     usage: 'Soft tennis ball cricket — street, gully and practice',
     features: [
       'Sri Lankan wood in a raw, unfinished build',
       'Light 650–750g pickup for quick hands',
       'Lightweight and easy to handle — ideal for beginners',
-      'The most affordable bat in the Toss range'
+      'The most affordable Sri Lankan wood bat in the range'
     ]
   },
   {
@@ -113,8 +140,8 @@ const PRODUCTS = [
     weight: [650, 750], height: [34.5, 35],
     handle: 'Single wood handle', sweetSpot: 'Mid to high',
     finish: 'Finished', spine: true, edge: 'Standard',
-    tier: 'entry', popularity: 78, rating: 0, reviews: 0,
-    badges: ['Value'],
+    tier: 'entry', popularity: 88, rating: 0, reviews: 0,
+    badges: ['Best Seller'],
     usage: 'Soft tennis ball cricket',
     features: [
       'Upgraded look with better durability',
@@ -133,8 +160,8 @@ const PRODUCTS = [
     weight: [650, 850], height: [35, 36],
     handle: 'Single wood handle', sweetSpot: 'Mid',
     finish: 'Raw bat', spine: true, edge: 'Standard',
-    tier: 'entry', popularity: 70, rating: 0, reviews: 0,
-    badges: [],
+    tier: 'entry', popularity: 78, rating: 0, reviews: 0,
+    badges: ['Value'],
     usage: 'Soft tennis ball cricket',
     features: [
       'Best value pick — better durability for the money',
@@ -153,8 +180,8 @@ const PRODUCTS = [
     weight: [650, 850], height: [35, 36],
     handle: 'Single wood handle', sweetSpot: 'Mid',
     finish: 'Raw bat', spine: true, edge: 'Standard',
-    tier: 'mid', popularity: 88, rating: 0, reviews: 0,
-    badges: ['Best Seller'],
+    tier: 'mid', popularity: 70, rating: 0, reviews: 0,
+    badges: [],
     usage: 'Soft tennis ball cricket',
     features: [
       'Double-wood pressed build for added strength and durability',
@@ -193,8 +220,8 @@ const PRODUCTS = [
     weight: [730, 900], height: [35, 36],
     handle: 'Standard handle', sweetSpot: 'Mid',
     finish: 'Standard', spine: false, edge: 'Standard',
-    tier: 'entry', popularity: 70, rating: 0, reviews: 0,
-    badges: [],
+    tier: 'entry', popularity: 88, rating: 0, reviews: 0,
+    badges: ['Best Seller'],
     usage: 'Soft tennis ball cricket',
     features: [
       'Flat-profile Kashmir Willow bat',
@@ -213,8 +240,8 @@ const PRODUCTS = [
     weight: [730, 900], height: [35, 36],
     handle: 'Standard handle', sweetSpot: 'Mid',
     finish: 'Standard', spine: false, edge: 'Standard',
-    tier: 'entry', popularity: 88, rating: 0, reviews: 0,
-    badges: ['Best Seller'],
+    tier: 'entry', popularity: 70, rating: 0, reviews: 0,
+    badges: [],
     usage: 'Soft tennis ball cricket — street and practice',
     features: [
       'Affordable flat bat with an easy-to-handle profile',
@@ -293,8 +320,8 @@ const PRODUCTS = [
     weight: [700, 770], height: [35, 36],
     handle: 'Science-induced handle guard', sweetSpot: 'Low to mid',
     finish: 'Hand crafted', spine: true, edge: 'Standard',
-    tier: 'premium', popularity: 84, rating: 0, reviews: 0,
-    badges: ['Must Try'],
+    tier: 'premium', popularity: 94, rating: 0, reviews: 0,
+    badges: ['Best Seller', 'Must Try'],
     usage: 'Tournament soft tennis ball cricket',
     features: [
       'Lightweight tournament bat designed for fast and controlled stroke play',
