@@ -106,7 +106,7 @@ function assertNoSlugClashes(reserved) {
 const CSS_V = (function () {
   try {
     const m = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
-      .match(/styles\.css\?v=(\d+)/);
+      .match(/styles\.css\?v=([A-Za-z0-9]+)/);   /* hex since tools/stamp-assets.js */
     return m ? m[1] : '1';
   } catch (e) { return '1'; }
 })();
