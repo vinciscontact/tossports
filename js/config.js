@@ -138,7 +138,7 @@ const DELIVERY = {
    script get injected.
    ------------------------------------------------------------ */
 const ANALYTICS = {
-  ga4:  '',   // G-XXXXXXXXXX
+  ga4:  'G-3B1127E5V5',   // GA4 property 485016158 (tossports.com)
   meta: ''    // Meta pixel id
 };
 
