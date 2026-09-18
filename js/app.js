@@ -3386,6 +3386,23 @@ function completeOrder(method, info, extra) {
      on it. The difference is that the answer, when it comes, is allowed to
      reach the screen. `recorded` is null while in flight, true once the
      database has it, false when it refused — and viewDone() says so. */
+  /* The number the owner will actually look at. `purchase` only when money
+     moved on the site; a WhatsApp order is an intention, recorded as a lead,
+     so revenue in the report is revenue that exists. */
+  if (typeof trackEvent === 'function') {
+    const items = (lastOrder.items || []).map(i => {
+      const p = byId(i.id) || {};
+      return { item_id: i.id, item_name: p.name || i.id, price: p.price || 0, quantity: i.qty };
+    });
+    if (method === 'online') {
+      trackEvent('purchase', { transaction_id: lastOrder.id, value: lastOrder.total,
+        currency: 'INR', shipping: lastOrder.shipping, coupon: lastOrder.coupon || undefined, items });
+    } else {
+      trackEvent('generate_lead', { value: lastOrder.total, currency: 'INR',
+        lead_source: 'whatsapp_order', items });
+    }
+  }
+
   lastOrder.recorded = null;
   /* Already saved as `pending` before the payment — see payOnline(). Writing
      it again would collide on the id and take the stock a second time, so the
@@ -3591,6 +3608,14 @@ function route(keepScroll) {
 
   if (!keepScroll) window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   if (typeof trackPage === 'function') trackPage();
+  /* Which bats get looked at, not just bought — the gap between the two is
+     where a price or a photo is losing people. */
+  if (page === 'product' && typeof trackEvent === 'function' && !keepScroll) {
+    const vp = byId(parts[1]);
+    if (vp) trackEvent('view_item', { currency: 'INR', value: vp.price || 0,
+      items: [{ item_id: vp.id, item_name: vp.name, price: vp.price || 0,
+                item_category: (vp.ball || [])[0] || 'bats' }] });
+  }
   mount(page, parts);
   observeReveal();
   onScroll();

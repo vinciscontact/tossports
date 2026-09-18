@@ -22,7 +22,25 @@ const fs = require('fs');
 const path = require('path');
 const { SITE, BUSINESS, CLUSTERS: C1, GUIDES: G1, FAQS } = require('./seo-data');
 const { TURF_PAGES, AREAS, CLUSTERS_2, GUIDES_2 } = require('./seo-data-extra');
-const { LEGAL } = require('./legal-data');
+const { LEGAL, ANALYTICS_SECTION } = require('./legal-data');
+
+/* The Google Analytics ID, read from js/config.js — the same place the shop
+   reads it — so pasting it once switches on BOTH the shop and these static
+   pages. These are the pages Google search actually sends people to; without
+   a tag here the report would have started counting only after a visitor
+   clicked through into the shop, missing every first landing. */
+const GA4 = (function () {
+  try {
+    /* __dirname, not ROOT: this runs before ROOT is declared, and the catch below
+       used to swallow that ReferenceError and quietly build with no tag at all. */
+    const m = /ga4:\s*'([^']*)'/.exec(fs.readFileSync(path.join(__dirname, '..', 'js/config.js'), 'utf8'));
+    const id = m ? m[1].trim() : '';
+    return /^G-[A-Z0-9]{4,}$/.test(id) ? id : '';
+  } catch (e) { return ''; }
+})();
+if (GA4) {
+  LEGAL['privacy-policy'].body.splice(-1, 0, ANALYTICS_SECTION);
+}
 const { loadTags, playstyleClusters } = require('./playstyle-rules');
 const { contactPage } = require('./contact-page');
 const GUIDES = G1.concat(GUIDES_2);
@@ -301,6 +319,8 @@ function shell(o) {
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0B0B24">
 <title>${esc(o.title)}</title>
+${GA4 ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${GA4}"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${GA4}');</script>` : ''}
 <meta name="description" content="${esc(o.desc)}">
 ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords.join(', '))}">` : ''}
 <link rel="canonical" href="${url}">

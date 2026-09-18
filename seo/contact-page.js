@@ -114,6 +114,9 @@ function contactPage(deps) {
     }).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var subject = f.elements.subject.value;
+      if (typeof window.gtag === 'function') {
+        window.gtag('event', 'generate_lead', { lead_source: 'contact_form', subject: subject });
+      }
       f.reset();
       say('Thank you \\u2014 your message has reached us. We usually reply the same day.');
 

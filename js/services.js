@@ -1251,11 +1251,23 @@ function loadAnalytics() {
   }
 }
 
+/* GA4 drops everything after '#' when it reports which page was seen, and
+   this shop lives entirely after the '#'. Sent as-is, every product, the
+   shop, checkout and the finder would all have been counted as "/", and the
+   report would have said the whole site is one page. So the hash route is
+   turned into a path — #/product/black-mamba reports as /product/black-mamba.
+
+   And only when the address actually changes. route() also runs to redraw
+   the page it is already on — each finder answer, each filter tick — and
+   counting those would have inflated page views several times over. */
+let _lastTracked = null;
 function trackPage() {
   if (typeof gtag !== 'function') return;
+  const route = location.hash.replace(/^#/, '') || '/';
+  if (route === _lastTracked) return;
+  _lastTracked = route;
   gtag('event', 'page_view', {
-    page_location: location.href,
-    page_path: location.hash.replace(/^#/, '') || '/',
+    page_location: location.origin + (route.startsWith('/') ? route : '/' + route),
     page_title: document.title
   });
 }

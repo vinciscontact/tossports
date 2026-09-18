@@ -338,4 +338,16 @@ const LEGAL = {
   }
 };
 
-module.exports = { LEGAL, RETURN_DAYS, REFUND_DAYS, DISPATCH_DAYS, DELIVERY_DAYS };
+/* Added to the privacy policy by the build ONLY when a Google Analytics ID is
+   configured. A policy that claims analytics the site does not run is as
+   wrong as one that hides analytics it does. */
+const ANALYTICS_SECTION = ['Visitor statistics (Google Analytics)', `
+  <p>We use Google Analytics to understand how people use this site — which pages
+  are visited, how visitors arrive, and whether they go on to buy. It uses cookies
+  and receives your IP address, browser and device type, and the pages you view.
+  We do not send Google your name, phone number, address or payment details.</p>
+  <p>We use this only to improve the shop. You can block it with any tracker
+  blocker, or with Google's opt-out add-on at
+  <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener" target="_blank">tools.google.com/dlpage/gaoptout</a>.</p>`];
+
+module.exports = { LEGAL, RETURN_DAYS, REFUND_DAYS, DISPATCH_DAYS, DELIVERY_DAYS, ANALYTICS_SECTION };
