@@ -199,7 +199,7 @@ const ORG = {
   logo: SITE + '/images/logo/toss-mark-192.png',
   image: SITE + '/images/logo/toss-mark-192.png',
   email: BUSINESS.email,
-  telephone: BUSINESS.phones[0],
+  telephone: BUSINESS.phone,
   foundingDate: BUSINESS.founded,
   description: 'Handcrafted tennis ball cricket bats made in Chennai. Sri Lankan wood, Kashmir Willow and Poplar, shaped to order.',
   sameAs: [BUSINESS.instagram],
@@ -215,8 +215,9 @@ const STORE = {
   parentOrganization: { '@id': SITE + '/#organization' },
   url: SITE + '/cricket-bat-shop-chennai/',
   image: SITE + '/images/logo/toss-mark-192.png',
-  telephone: BUSINESS.phones[0],
+  telephone: BUSINESS.phone,
   email: BUSINESS.email,
+  openingHours: BUSINESS.openingHours,
   priceRange: '₹₹',
   currenciesAccepted: 'INR',
   paymentAccepted: 'Cash, UPI, Card',
@@ -242,7 +243,7 @@ const TURF = {
   name: BUSINESS.turf.name,
   parentOrganization: { '@id': SITE + '/#organization' },
   url: SITE + '/cricket-bat-shop-chennai/',
-  telephone: BUSINESS.phones[1],
+  telephone: BUSINESS.phone,
   address: addressOf(BUSINESS.turf),
   geo: { '@type': 'GeoCoordinates',
          latitude: BUSINESS.turf.lat, longitude: BUSINESS.turf.lng },
@@ -357,15 +358,15 @@ ${o.body}
       <b>${esc(BUSINESS.legalName)}</b>
       <p>${esc(BUSINESS.main.street)}, ${esc(BUSINESS.main.locality)},
          ${esc(BUSINESS.main.region)} ${esc(BUSINESS.main.postal)}, India</p>
-      <p>Workshop <a href="tel:${BUSINESS.phones[0]}">${BUSINESS.phones[0]}</a> ·
-         WhatsApp <a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a></p>
+      <p>Phone &amp; WhatsApp <a href="tel:${BUSINESS.phone}">${BUSINESS.phone}</a></p>
+      <p>${esc(BUSINESS.hoursShort)}</p>
       <p><a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></p>
       <p><a href="${o.depth}contact-us/">Contact us</a></p>
     </div>
     <div>
       <b>Toss The Turf</b>
       <p>${esc(BUSINESS.turf.street)}, ${esc(BUSINESS.turf.locality)} ${esc(BUSINESS.turf.postal)}</p>
-      <p><a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a></p>
+      <p><a href="tel:${BUSINESS.phone}">${BUSINESS.phone}</a></p>
     </div>
     <div>
       <b>Bats</b>
@@ -643,14 +644,14 @@ function chennaiBody() {
       <h3>The workshop — Nesapakkam</h3>
       <p>${esc(BUSINESS.main.street)}<br>${esc(BUSINESS.main.locality)},
          ${esc(BUSINESS.main.region)} ${esc(BUSINESS.main.postal)}</p>
-      <p><a href="tel:${BUSINESS.phones[0]}">${BUSINESS.phones[0]}</a></p>
+      <p><a href="tel:${BUSINESS.phone}">${BUSINESS.phone}</a></p>
       <p>Where the bats are actually made. Come and pick your weight.</p>
     </div>
     <div>
       <h3>Toss The Turf — Kolathur</h3>
       <p>${esc(BUSINESS.turf.street)}<br>${esc(BUSINESS.turf.locality)},
          ${esc(BUSINESS.turf.region)} ${esc(BUSINESS.turf.postal)}</p>
-      <p><a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a></p>
+      <p><a href="tel:${BUSINESS.phone}">${BUSINESS.phone}</a></p>
       <p>Our cricket turf on the north side — book the ground, and buy a bat while you are there.</p>
     </div>
   </div>`;
@@ -757,7 +758,7 @@ function turfPage(slug, t) {
     <a class="seo-btn" href="https://wa.me/${BUSINESS.whatsapp}?text=${
       encodeURIComponent('Hi, I want to book a slot at Toss The Turf')}"
       rel="nofollow">Book on WhatsApp</a>
-    <a class="seo-btn ghost" href="tel:${BUSINESS.phones[1]}">Call ${BUSINESS.phones[1]}</a>
+    <a class="seo-btn ghost" href="tel:${BUSINESS.phone}">Call ${BUSINESS.phone}</a>
   </div>
 
   ${t.sections.map(([h, p]) => `<h2>${esc(h)}</h2><p>${esc(p)}</p>`).join('')}
@@ -1016,7 +1017,7 @@ triple blade. ${PRODUCTS.length} models.
 ## Where we are
 Workshop and store: ${BUSINESS.main.street}, ${BUSINESS.main.locality} ${BUSINESS.main.postal}.
 Cricket turf and store: ${BUSINESS.turf.street}, ${BUSINESS.turf.locality} ${BUSINESS.turf.postal}.
-Phone ${BUSINESS.phones[0]} · WhatsApp ${BUSINESS.phones[1]} · ${BUSINESS.email}
+Phone & WhatsApp ${BUSINESS.phone} · ${BUSINESS.email} · ${BUSINESS.hours}
 
 ## Guides
 ${GUIDES.map(g => `- [${g.h1}](${SITE}/guides/${g.slug}/): ${g.answer}`).join('\n')}

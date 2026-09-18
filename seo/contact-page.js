@@ -57,9 +57,10 @@ function contactPage(deps) {
      Both are printed and both are labelled — picking one and calling it "the"
      number would have meant guessing which of two real lines a reviewer
      should match against Meta Business Manager. */
-  const PHONE = BUSINESS.phones[0];
-  const WA_PHONE = BUSINESS.phones[1];
-  const TURF_PHONE = BUSINESS.phones[1];
+  const PHONE = BUSINESS.phone;          /* primary — also the WhatsApp line */
+  const WA_PHONE = BUSINESS.phone;
+  const TURF_PHONE = BUSINESS.phone;
+  const ALT_PHONE = BUSINESS.altPhone;
 
   const script = `
 (function () {
@@ -154,7 +155,7 @@ function contactPage(deps) {
          form before the reference details. -->
     <section class="contact-card contact-card--form" aria-labelledby="cuH">
       <h2 id="cuH">Send us a message</h2>
-      <p class="contact-sub">We reply the same day, Monday to Saturday.</p>
+      <p class="contact-sub">We reply the same day, seven days a week.</p>
 
       <form class="contact-form" id="cuForm" novalidate>
         <div class="contact-row">
@@ -211,10 +212,11 @@ function contactPage(deps) {
       <dl class="contact-dl">
         <div><dt>Business</dt><dd>${esc(BUSINESS.legalName)}</dd></div>
         <div><dt>Address</dt><dd>${addr(BUSINESS.main)}</dd></div>
-        <div><dt>Phone</dt><dd><a href="tel:${PHONE}">${PHONE}</a></dd></div>
-        <div><dt>WhatsApp</dt><dd><a href="https://wa.me/${BUSINESS.whatsapp}" rel="noopener" target="_blank">${WA_PHONE}</a></dd></div>
+        <div><dt>Phone &amp; WhatsApp</dt><dd><a href="tel:${PHONE}">${PHONE}</a> ·
+          <a href="https://wa.me/${BUSINESS.whatsapp}" rel="noopener" target="_blank">WhatsApp</a></dd></div>
+        ${ALT_PHONE ? `<div><dt>Alternate</dt><dd><a href="tel:${ALT_PHONE}">${ALT_PHONE}</a></dd></div>` : ''}
         <div><dt>Email</dt><dd><a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></dd></div>
-        <div><dt>Hours</dt><dd>Monday to Saturday, 10am to 8pm IST</dd></div>
+        <div><dt>Hours</dt><dd>${esc(BUSINESS.hours)}</dd></div>
       </dl>
 
       <div class="contact-places">

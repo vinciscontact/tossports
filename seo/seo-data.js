@@ -37,8 +37,24 @@ const BUSINESS = {
      contact@tossports.com the day the Hostinger mailbox exists. The
      storefront reads the same value from Settings → support_email, which
      changes without a deploy; this constant is for the static pages. */
-  email: 'tossports@gmail.com',
-  phones: ['+918939981055', '+919176995707'],
+  email: 'tossturf@gmail.com',
+
+  /* ONE primary number, named as such. It used to be phones[0] and phones[1],
+     with the meaning of each held only in which index a template happened to
+     use — so "the workshop number" and "the WhatsApp number" drifted apart
+     across pages. The owner set the primary as +91 91769 95707; it is also
+     the WhatsApp number, so one line answers both. The other line stays as a
+     listed alternate rather than disappearing, because it is a real number
+     customers may already have saved. */
+  phone:    '+919176995707',
+  altPhone: '+918939981055',
+  phones: ['+919176995707', '+918939981055'],   /* kept for any older template */
+
+  /* Open every day. Written once here so the contact page, the footer and
+     the structured data search engines read cannot disagree. */
+  hours: 'Monday to Sunday, 10am to 9pm IST',
+  hoursShort: 'Open every day, 10am – 9pm',
+  openingHours: 'Mo-Su 10:00-21:00',
   whatsapp: '919176995707',
   instagram: 'https://www.instagram.com/toss_sportz',
   founded: '2020',

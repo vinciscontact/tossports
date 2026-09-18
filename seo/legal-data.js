@@ -79,8 +79,8 @@ const LEGAL = {
         placed by a parent or guardian. We do not knowingly collect information directly
         from a child.</p>`],
       ['Contact', `
-        <p>Email <a href="mailto:contact@tossports.in">contact@tossports.in</a> or call
-        <a href="tel:+918939981055">+91 89399 81055</a>.</p>`]
+        <p>Email <a href="mailto:tossturf@gmail.com">tossturf@gmail.com</a> or call
+        <a href="tel:+919176995707">+91 91769 95707</a>.</p>`]
     ]
   },
 
@@ -193,7 +193,7 @@ const LEGAL = {
       ['How to reach us', `
         <p>WhatsApp <a href="https://wa.me/919176995707" rel="noopener" target="_blank">+91
         91769 95707</a>, or email
-        <a href="mailto:contact@tossports.in">contact@tossports.in</a> with your order
+        <a href="mailto:tossturf@gmail.com">tossturf@gmail.com</a> with your order
         number.</p>`]
     ]
   },
