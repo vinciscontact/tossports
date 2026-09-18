@@ -2802,6 +2802,14 @@ body.pdp-open .fab{bottom:82px}
   .buybar{bottom:calc(58px + env(safe-area-inset-bottom,0px))}
   .bot-fab{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
   .bot-panel{bottom:calc(58px + env(safe-area-inset-bottom,0px))}
+
+  /* The body padding above clears the tab bar, but the chat button floats
+     ABOVE the tab bar — 70px up, about 54px tall — so even scrolled right to
+     the end, the last ~65px of the page stayed under it. That is exactly
+     where the footer's bottom row sits, and the Maze Room link on its right
+     was the one thing a phone could not reach. The footer is always the
+     last thing on a page, so giving it the extra room fixes every page. */
+  .ftr{padding-bottom:calc(28px + 76px)}
 }
 
 /* ============================================================
