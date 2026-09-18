@@ -391,6 +391,11 @@ body.has-annc .hdr{top:34px}
   background:rgba(255,255,255,.045);border:1.5px solid rgba(255,255,255,.12);
   color:#fff;transition:.2s var(--ease)}
 .q-opt:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.3);transform:translateY(-3px)}
+/* An answer the catalogue has no bat for, given the earlier answers — medium
+   ball plus Quick Hands is the real case. Shown, so the gap is honest, but
+   plainly not clickable, and without the hover lift that invites a click. */
+.q-opt.dead,.q-opt.dead:hover{opacity:.4;cursor:not-allowed;transform:none;
+  background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.1)}
 .q-opt.on{border-color:var(--orange);background:rgba(255,138,30,.14)}
 .q-opt.on::after{content:'✓';position:absolute;top:12px;right:14px;color:var(--orange);
   font-weight:900;font-size:.9rem}
@@ -1583,6 +1588,12 @@ canvas.gp-cv{display:block;width:100%;height:auto;image-rendering:pixelated;
   border-radius:var(--r-sm);padding:11px 10px;text-align:center}
 .edition b{display:block;font-size:.78rem;font-weight:800;color:#fff}
 .edition span{font-size:.68rem;color:rgba(255,255,255,.52);font-variant-numeric:tabular-nums}
+/* Each edition is its own product now, so the chip is a link. It has to lose
+   the underline it inherits and gain a hover state, or it reads as three
+   dead labels sitting next to a live button. */
+a.edition{display:block;text-decoration:none;transition:background .18s,border-color .18s}
+a.edition:hover,a.edition:focus-visible{background:rgba(255,255,255,.12);
+  border-color:rgba(255,255,255,.3)}
 
 /* ---------- finder CTA ---------- */
 .finder-cta{background:linear-gradient(120deg,var(--orange),#FFB259);color:var(--navy-900);
@@ -1688,6 +1699,18 @@ body.has-annc .filter-bar{top:var(--hdr)}
   border:solid var(--navy-900);border-width:0 2.4px 2.4px 0;transform:rotate(43deg)}
 .chk span.n{margin-left:auto;font-size:.74rem;color:var(--ink-50);font-weight:700}
 .chk:hover{color:var(--orange-700)}
+/* A second line under an option: the ball's weight, or the catalogue's own
+   description of a style. Aligned to the label, not the box. */
+.chk{align-items:flex-start}
+.chk input{margin-top:1px}
+.chk small{display:block;margin-top:2px;font-size:.74rem;font-weight:500;
+  color:var(--ink-50);line-height:1.35}
+/* An option that would leave nothing to look at. Still readable — so people
+   can see the catalogue simply has no such bat — but plainly not an action. */
+.chk.dead{opacity:.42;cursor:not-allowed}
+.chk.dead:hover{color:inherit}
+.chk.dead input{cursor:not-allowed}
+.fnote{margin:-6px 0 10px;font-size:.76rem;line-height:1.45;color:var(--ink-50)}
 
 .pills{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
 .pill{display:inline-flex;align-items:center;gap:6px;background:var(--navy-800);color:#fff;
@@ -1761,6 +1784,18 @@ body.has-annc .filter-bar{top:var(--hdr)}
 .opt:hover{border-color:var(--ink-50)}
 
 .buy-row{display:grid;gap:10px;margin:22px 0}
+
+/* One line under the buy buttons pointing at the terms. Deliberately NOT
+   .pdp-assure — that class is the four-tile grid above, and reusing it here
+   silently restyled all four tiles. */
+.pdp-terms{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;
+  margin:-10px 0 20px;font-size:.78rem;color:var(--ink-60);line-height:1.45}
+.pdp-terms span{display:inline-flex;align-items:center;gap:6px}
+.pdp-terms svg{width:14px;height:14px;flex:none;opacity:.7}
+.pdp-terms a{display:inline-flex;align-items:center;gap:4px;
+  color:var(--ink);font-weight:700;text-decoration:none;border-bottom:1px solid var(--line)}
+.pdp-terms a:hover{border-bottom-color:currentColor}
+.pdp-terms a svg{width:12px;height:12px;opacity:1}
 .assure{display:grid;gap:10px;margin:24px 0;padding:18px;background:var(--paper-alt);
   border-radius:var(--r);border:1px solid var(--line)}
 .assure div{display:flex;gap:10px;align-items:flex-start;font-size:.84rem;font-weight:600}
@@ -2064,6 +2099,17 @@ body.has-annc .filter-bar{top:var(--hdr)}
 .ftr-seo li{list-style:none}
 .ftr-seo a{font-size:.8rem;color:rgba(255,255,255,.55)}
 .ftr-seo a:hover{color:var(--orange)}
+/* Registered business details. Sits above the copyright line, reads as
+   reference rather than marketing, and stays legible on the dark footer. */
+.ftr-biz{display:grid;gap:20px 30px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  border-top:1px solid rgba(255,255,255,.1);margin-top:34px;padding-top:24px;font-size:.82rem}
+.ftr-biz b{display:block;margin-bottom:6px;color:#fff;font-weight:800}
+.ftr-biz p{margin:0;color:rgba(255,255,255,.6);line-height:1.6}
+.ftr-biz a{color:rgba(255,255,255,.78);text-decoration:none;border-bottom:1px solid rgba(255,255,255,.22)}
+.ftr-biz a:hover{color:#fff;border-bottom-color:currentColor}
+/* It already provides the rule above the copyright line. */
+.ftr-biz + .ftr-bot{border-top:0;margin-top:22px}
+
 .ftr-bot{border-top:1px solid rgba(255,255,255,.1);margin-top:34px;padding-top:20px;
   display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;
   font-size:.76rem;color:rgba(255,255,255,.46)}
@@ -2756,6 +2802,14 @@ body.pdp-open .fab{bottom:82px}
   .buybar{bottom:calc(58px + env(safe-area-inset-bottom,0px))}
   .bot-fab{bottom:calc(70px + env(safe-area-inset-bottom,0px))}
   .bot-panel{bottom:calc(58px + env(safe-area-inset-bottom,0px))}
+
+  /* The body padding above clears the tab bar, but the chat button floats
+     ABOVE the tab bar — 70px up, about 54px tall — so even scrolled right to
+     the end, the last ~65px of the page stayed under it. That is exactly
+     where the footer's bottom row sits, and the Maze Room link on its right
+     was the one thing a phone could not reach. The footer is always the
+     last thing on a page, so giving it the extra room fixes every page. */
+  .ftr{padding-bottom:calc(28px + 76px)}
 }
 
 /* ============================================================
@@ -3852,3 +3906,89 @@ body.pdp-open .fab{bottom:82px}
 .auth-alt a{color:var(--orange);font-weight:700;white-space:nowrap}
 .auth-alt a:hover{text-decoration:underline}
 .auth-alt svg{width:14px;height:14px;vertical-align:-2px}
+
+/* ============================================================
+   THE STORY BAND (homepage → about-us/)
+
+   A trailer for the story page, and deliberately the loudest
+   thing on the homepage: full-bleed black dropped between two
+   light sections, with both founder posters pinned up at
+   angles. The old version was a paragraph on white with two
+   thirds of the row empty, which read as an unfinished section
+   rather than a link worth taking.
+
+   This is the one place the storefront's "orange is never
+   decoration" rule bends, because the band is a doorway into a
+   page that runs on those colours — and it bends inside a
+   black box that belongs to that page, not to the shop.
+   ============================================================ */
+.story-x{
+  position:relative;background:#000;color:#fff;overflow:hidden;
+  padding:clamp(54px,8vw,96px) 0;
+}
+/* two soft washes so the black is lit rather than flat */
+.story-x::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(circle at 12% 15%,rgba(74,222,48,.16),transparent 42%),
+    radial-gradient(circle at 88% 85%,rgba(255,138,30,.16),transparent 46%);
+}
+.story-x-in{
+  position:relative;z-index:2;
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.92fr);
+  gap:clamp(28px,5vw,64px);align-items:center;
+}
+
+.story-x-eyebrow{
+  display:flex;align-items:center;gap:12px;margin:0 0 16px;
+  font-size:.72rem;font-weight:800;letter-spacing:.22em;text-transform:uppercase;
+  color:rgba(255,255,255,.6);
+}
+.story-x-eyebrow::before{content:'';width:34px;height:2px;background:var(--orange)}
+
+.story-x-h{
+  font-family:var(--f-display);text-transform:uppercase;
+  font-size:clamp(2.3rem,6vw,4.6rem);line-height:.92;letter-spacing:.005em;
+  margin:0 0 18px;color:#fff;
+}
+.story-x-h .g{color:#4ADE30}
+.story-x-h .o{color:var(--orange)}
+
+.story-x-p{
+  margin:0 0 26px;max-width:46ch;font-size:clamp(.98rem,1.2vw,1.08rem);
+  line-height:1.65;color:rgba(255,255,255,.72);
+}
+.story-x-cta{margin:0}
+
+/* ---------- the pinned posters ----------
+   The frame is the link, not the image inside it. The <a> carries the
+   position, the white border and the shadow, so the whole plate is the
+   target, the focus ring traces the poster's own edge, and there is one
+   box — the printed frame — to hand to the view transition rather than a
+   bare image that would leave its own border behind mid-flight. */
+.story-x-art{position:relative;min-height:clamp(280px,34vw,430px)}
+.story-x-plate{
+  position:absolute;display:block;width:52%;
+  border:3px solid #fff;box-shadow:0 26px 60px rgba(0,0,0,.6);background:#000;
+}
+.story-x-art img{display:block;width:100%;height:auto}
+.story-x-p2{left:2%;top:6%;transform:rotate(-6deg)}
+.story-x-p1{right:2%;top:0;transform:rotate(5deg);z-index:2}
+.story-x-plate:focus-visible{outline:3px solid var(--orange);outline-offset:5px}
+
+@media (max-width:900px){
+  .story-x-in{grid-template-columns:minmax(0,1fr);gap:34px}
+  /* Stacked and side by side, the pinned-up angles stop reading as
+     casual and start reading as crooked. And the two posters are
+     different shapes, so matching their widths left them different
+     heights on two ragged lines. Angles off, height binds and the
+     width follows, both hanging from one top line. */
+  .story-x-art{
+    min-height:0;display:flex;justify-content:center;align-items:flex-start;gap:14px;
+  }
+  .story-x-plate{
+    position:static;transform:none;
+    width:auto;max-width:none;height:clamp(200px,64vw,300px);
+  }
+  .story-x-art img{height:100%;width:auto}
+}

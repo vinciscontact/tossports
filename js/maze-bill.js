@@ -396,6 +396,7 @@ function counterSale() {
     try {
       await supa('orders', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: order });
       DB.orders.unshift(Object.assign({ created_at: new Date().toISOString() }, order));
+      if (typeof ordersChanged === 'function') ordersChanged();
       const inv = await issueInvoice(order);
       render();
       if (inv) showInvoice(inv);

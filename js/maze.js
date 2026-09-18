@@ -17,7 +17,8 @@ const when = t => t ? new Date(t).toLocaleString('en-IN', { dateStyle: 'medium',
 let DB = { products: [], orders: [], coupons: [], scores: [], settings: {},
            categories: [{ id: 'bats', name: 'Bats', sort: 0 }], catSynced: false,
            branches: [], stock: [], brSynced: false,
-           psGroups: [], playstyles: [], prodStyles: [], psSynced: false };
+           psGroups: [], playstyles: [], prodStyles: [], psSynced: false,
+           enquiries: [], enqSynced: false };
 
 /* Which branch the screen is showing. '' = every branch combined, which
    only a founder may choose; a manager is pinned to their own and the
@@ -57,6 +58,113 @@ function toast(msg, bad) {
   el.className = 'toast on' + (bad ? ' bad' : '');
   clearTimeout(toastT);
   toastT = setTimeout(() => el.className = 'toast', 2600);
+}
+
+/* ---------------- order buzzer ----------------
+   The counter device keeps the Maze Room open all day; this is the shop
+   bell. A tiny poll over the same REST channel everything else uses —
+   no realtime publication to configure in Supabase, nothing that breaks
+   when project settings change. New orders ring a buzzer, drop an alert
+   card, fold into the loaded order book and refresh the open tab. */
+const BUZZ = {
+  timer: null, mark: '', ctx: null,
+  muted: localStorage.getItem('mz_buzz_off') === '1'
+};
+
+function buzzInit() {
+  if (BUZZ.timer) clearInterval(BUZZ.timer);
+  BUZZ.mark = (DB.orders[0] && DB.orders[0].created_at) || new Date().toISOString();
+  BUZZ.timer = setInterval(buzzPoll, 15000);
+}
+function buzzStop() {
+  if (BUZZ.timer) { clearInterval(BUZZ.timer); BUZZ.timer = null; }
+}
+
+async function buzzPoll() {
+  if (!SESSION) return;
+  let rows;
+  try {
+    rows = await supa('orders?select=*&status=neq.pending&created_at=gt.' +
+      encodeURIComponent(BUZZ.mark) + '&order=created_at.asc&limit=10');
+  } catch (e) { return; }                       /* offline — try again next tick */
+  if (!rows || !rows.length) return;
+  BUZZ.mark = rows[rows.length - 1].created_at;
+
+  const fresh = rows.filter(o => o.status !== 'cancelled' && !DB.orders.some(x => x.id === o.id));
+  if (!fresh.length) return;
+
+  /* newest first, same order the book is kept in */
+  fresh.slice().reverse().forEach(o => DB.orders.unshift(o));
+
+  if (!BUZZ.muted) buzzSound();
+  buzzAlert(fresh);
+  /* refresh only the tabs that display orders — never mid-edit forms */
+  if (['dash', 'sales', 'fulfil', 'finance', 'billing'].includes(TAB)) render();
+}
+
+/* Three short square-wave bursts — a shop bell, generated in the browser
+   so there is no audio file to host or fail to load. */
+function buzzSound() {
+  try {
+    BUZZ.ctx = BUZZ.ctx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = BUZZ.ctx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const t0 = ctx.currentTime + 0.02;
+    for (let i = 0; i < 3; i++) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(660, t0);
+      const t = t0 + i * 0.3;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      o.connect(g).connect(ctx.destination);
+      o.start(t); o.stop(t + 0.25);
+    }
+  } catch (e) { /* no audio device — the visual alert still shows */ }
+}
+
+/* Browsers keep audio locked until the page sees a user gesture; any click
+   after sign-in (including the sign-in itself) unlocks the bell. */
+document.addEventListener('click', () => {
+  try {
+    BUZZ.ctx = BUZZ.ctx || new (window.AudioContext || window.webkitAudioContext)();
+    if (BUZZ.ctx.state === 'suspended') BUZZ.ctx.resume();
+  } catch (e) {}
+});
+
+function buzzAlert(orders) {
+  let box = $('#buzzBox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'buzzBox';
+    document.body.appendChild(box);
+  }
+  orders.forEach(o => {
+    const c = o.customer || {};
+    const el = document.createElement('div');
+    el.className = 'buzz-card';
+    el.innerHTML = `
+      <b>🛎 New order ${esc(o.id || '')}</b>
+      <span>${esc(c.name || 'Customer')}${c.city ? ' · ' + esc(c.city) : ''}
+        — ${money(o.total)} · ${esc(o.channel || 'web')}</span>
+      <div class="buzz-act">
+        <button class="btn primary sm" data-view>Open sales</button>
+        <button class="btn ghost sm" data-x>Dismiss</button>
+        <button class="btn ghost sm" data-mute title="Applies to every future order alert">
+          ${BUZZ.muted ? '🔇' : '🔊'}</button>
+      </div>`;
+    el.querySelector('[data-view]').onclick = () => { el.remove(); goTab('sales'); };
+    el.querySelector('[data-x]').onclick = () => el.remove();
+    el.querySelector('[data-mute]').onclick = e => {
+      BUZZ.muted = !BUZZ.muted;
+      localStorage.setItem('mz_buzz_off', BUZZ.muted ? '1' : '0');
+      e.target.textContent = BUZZ.muted ? '🔇' : '🔊';
+    };
+    box.appendChild(el);
+    /* a missed alert should not sit forever on an unattended screen */
+    setTimeout(() => el.remove(), 180000);
+  });
 }
 
 /* ---------------- auth ----------------
@@ -108,6 +216,7 @@ $('#logout').onclick = async () => { await signOut(); showGate(); };
 
 function showGate() {
   USER = null; ME = null; AUTH = 'anon';
+  buzzStop();
   gateCard('login');
   const p = $('#password'); if (p) p.value = '';
 }
@@ -147,6 +256,7 @@ async function enterPanel() {
   $('#who').textContent = (USER && USER.email) || '';
   await loadAll();
   render();
+  buzzInit();
 }
 
 /* ============================================================
@@ -266,9 +376,15 @@ async function loadAll() {
   };
   const [products, orders, coupons, scores, settings, invoices, categories,
          branches, stock, monthPL, perf, bestSeller, deadStock, loyalty,
-         psGroups, playstyles, prodStyles] = await Promise.all([
+         psGroups, playstyles, prodStyles, enquiries] = await Promise.all([
     get('products?select=*&order=sort.asc', []),
-    get('orders?select=*&order=created_at.desc&limit=200', []),
+    /* `pending` is a held basket, not an order: the row exists so Razorpay
+       can be charged the price Postgres decided, and it is cancelled again
+       if nobody pays within the grace period. Excluding it here keeps the
+       Sales figures honest — every sales view filters on "not cancelled",
+       so a pending basket would otherwise be counted as revenue nobody paid.
+       It appears the moment the webhook flips it to 'new'. */
+    get('orders?select=*&status=neq.pending&order=created_at.desc&limit=200', []),
     get('coupons?select=*&order=unlock_runs.asc', []),
     get('scores?select=*&order=runs.desc&limit=50', []),
     get('settings?select=*', []),
@@ -287,12 +403,17 @@ async function loadAll() {
        reports rather than showing an empty manager that saves nothing */
     get('playstyle_groups?select=*&order=sort.asc', null),
     get('playstyles?select=*&order=sort.asc', null),
-    get('product_playstyles?select=*', null)
+    get('product_playstyles?select=*', null),
+    /* Contact-form enquiries. null means the table is missing, which the tab
+       reports rather than showing an empty inbox that looks like silence. */
+    get('enquiries?select=*&order=created_at.desc&limit=300', null)
   ]);
   DB.products = products || [];
   DB.orders   = orders   || [];
   DB.coupons  = coupons  || [];
   DB.scores   = scores   || [];
+  DB.enquiries = enquiries || [];
+  DB.enqSynced = Array.isArray(enquiries);
   DB.catSynced = Array.isArray(categories);
   DB.categories = DB.catSynced && categories.length
     ? categories : [{ id: 'bats', name: 'Bats', sort: 0 }];
@@ -342,6 +463,7 @@ const DOCK_ICON = (() => {
     dash:     s('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'),
     sales:    s('<path d="M3 20h18"/><path d="M6 20v-6M11 20V9M16 20v-9M21 20V5"/>'),
     requests: s('<path d="M4 5h16v11H8l-4 4Z"/><path d="M8 9h8M8 12.5h5"/>'),
+    enquiries: s('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/>'),
     fulfil:   s('<rect x="1.5" y="6" width="13" height="11" rx="1.5"/><path d="M14.5 9.5H19l3.5 3.5V17h-8z"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>'),
     qa:       s('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/>'),
     billing:  s('<path d="M6 2h12v20l-2-1.5L14 22l-2-1.5L10 22l-2-1.5L6 22Z"/><path d="M9 7h6M9 11h6"/>'),
@@ -426,6 +548,7 @@ function buildNav() {
       <span class="dk-tip">Account</span>
     </button>`;
 
+  wireDockTips();
   $('#dockBack').onclick = navBack;
   $$('#nav [data-tab]').forEach(b => b.onclick = () => {
     const prev = TAB;
@@ -471,6 +594,52 @@ function buildNav() {
 
 /* macOS-style magnification: icons swell as the pointer nears. Pure
    transform, mouse-only — touch and reduced-motion users get a still dock. */
+/* The dock's labels.
+
+   The name of each tab is already in the button, in a span the stylesheet
+   does not draw. It cannot be drawn there: the dock scrolls sideways, and
+   a sideways-scrolling box clips vertically too, so a label sitting above
+   the bar is cut away before it reaches the screen. This lifts the text
+   into one floating element parked at the top of the document, where
+   nothing clips it, and moves that element to whatever the pointer is on.
+
+   Pointer and keyboard only. A touchscreen has no hover to respond to, and
+   this panel is a desktop one. */
+function wireDockTips() {
+  const dock = $('#nav');
+  if (!dock || !matchMedia('(hover:hover)').matches) return;
+
+  let tip = $('#dkFloat');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'dkFloat';
+    tip.className = 'dk-float';
+    document.body.appendChild(tip);
+  }
+  tip.classList.remove('on');   /* the dock re-renders; never leave one hanging */
+
+  const hide = () => tip.classList.remove('on');
+  const show = btn => {
+    const src = btn.querySelector('.dk-tip');
+    if (!src) return;
+    tip.innerHTML = src.innerHTML;
+    const r = btn.getBoundingClientRect();
+    tip.style.left = (r.left + r.width / 2) + 'px';
+    tip.style.top  = (r.top - 10) + 'px';
+    tip.classList.add('on');
+  };
+
+  $$('.dk', dock).forEach(b => {
+    b.addEventListener('mouseenter', () => show(b));
+    b.addEventListener('mouseleave', hide);
+    b.addEventListener('focus', () => show(b));
+    b.addEventListener('blur', hide);
+    /* Opening a tab moves the page under the pointer; a label left behind
+       would be describing something that is no longer there. */
+    b.addEventListener('click', hide);
+  });
+}
+
 function wireDockMagnify() {
   const dock = $('#nav');
   if (!dock || !matchMedia('(pointer:fine)').matches
@@ -585,6 +754,7 @@ function render() {
     fulfil:   [viewFulfil,    wireFulfil],
     requests: [viewRequests,  wireRequests],
     qa:       [viewQA,        wireQAAdmin],
+    enquiries:[viewEnquiries, wireEnquiries],
     finance:  [viewFinance,   wireFinance],
     products: [viewProducts,  wireProducts],
     billing:  [viewBilling,   wireBilling],
@@ -742,6 +912,19 @@ function viewProducts() {
     ${DB.catSynced ? '' : `<p class="muted" style="margin-bottom:14px">Categories are not in the
       database yet — run <code>sql/007-categories.sql</code> once in the Supabase SQL editor
       to create and manage them.</p>`}
+    ${(() => {
+      /* A product that is not live is invisible to customers, and nothing on
+         the storefront can say so — the shop's query and the row-level policy
+         both filter it out before it is ever a result. The only place that
+         can tell anyone is here. */
+      const off = DB.products.filter(p => !p.active).length;
+      if (!off || pFilter.state === 'off') return '';
+      return `<div class="banner" style="margin-bottom:14px">
+        <b>${off} product${off === 1 ? ' is' : 's are'} not on the storefront.</b>
+        A product only reaches customers once <i>Live on the storefront</i> is ticked.
+        <button class="btn ghost sm" id="pShowOff" style="margin-left:8px">Show them</button>
+      </div>`;
+    })()}
     <div class="filters">
       <input id="pq" placeholder="Search name or id" value="${esc(pFilter.q)}">
       <select id="ptier">
@@ -786,6 +969,8 @@ function wireProducts() {
   $('#ptier').onchange = e => { pFilter.tier = e.target.value; re(); };
   $('#pstate').onchange = e => { pFilter.state = e.target.value; re(); };
   $$('.cat-chip').forEach(b => b.onclick = () => { pFilter.cat = b.dataset.cat; re(); });
+  const showOff = $('#pShowOff');
+  if (showOff) showOff.onclick = () => { pFilter.state = 'off'; re(); };
 
   /* stock valuation, which is the reason to export products at all */
   wireExport('products', 'Stock report', () => {
@@ -851,8 +1036,8 @@ function viewInsights() {
       <span class="muted">Run <code>sql/010-analytics.sql</code> in the Supabase SQL editor,
       then reload.</span></div>`;
 
-  const tabs = { profit: 'What makes money', dead: 'Stock not moving',
-                 loyal: 'Repeat customers', health: 'Health check' };
+  const tabs = { profit: 'What makes money', channels: 'Where sales come from',
+                 dead: 'Stock not moving', loyal: 'Repeat customers', health: 'Health check' };
   return `
     <div class="head"><h2>Insights</h2>
       <span class="muted">${BRANCH ? esc(branchName(BRANCH)) : 'all branches'}</span>
@@ -861,6 +1046,7 @@ function viewInsights() {
     <div class="subtabs">${Object.entries(tabs).map(([k, v]) =>
       `<button data-ins="${k}" class="${insTab === k ? 'on' : ''}">${v}</button>`).join('')}</div>
     ${insTab === 'profit' ? insProfit()
+      : insTab === 'channels' ? insChannels()
       : insTab === 'dead' ? insDead()
       : insTab === 'loyal' ? insLoyal() : insHealth()}`;
 }
@@ -878,6 +1064,13 @@ function insProfit() {
       set a cost in <b>Products → Edit</b> to make this real.</div>` : ''}
     <p class="muted" style="margin-bottom:14px">Ranked by <b>profit earned</b>, not units sold.
       A ₹950 bat selling twenty times can earn less than a ₹2,999 bat selling five.</p>
+    <div class="panel" style="margin-bottom:16px"><h3>Top earners</h3>
+      <div class="hbars">${rows.slice(0, 6).map(r => `
+        <div class="hbar">
+          <span class="hbar-name" title="${esc(r.name)}">${esc(r.name)}</span>
+          <div class="hbar-track"><i style="width:${Math.max(2, Number(r.profit) / best * 100).toFixed(1)}%"></i></div>
+          <span class="hbar-val">${money(r.profit)} · ${r.units} sold</span>
+        </div>`).join('')}</div></div>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Product</th><th class="num">Units</th><th class="num">Revenue</th>
         <th class="num">Profit</th><th class="num">Per unit</th><th>Share of profit</th></tr></thead>
@@ -891,6 +1084,27 @@ function insProfit() {
           <i style="width:${Math.max(0, Number(r.profit) / best * 100)}%"></i></div></td>
       </tr>`).join('')}</tbody>
     </table></div>`;
+}
+
+/* Where the money enters, month by month. The all-time split lives on the
+   finance page; this one shows whether a channel is growing or dying. */
+function insChannels() {
+  const { months, series } = channelsByMonth();
+  const live = series.filter(s => s.values.some(v => v));
+  if (!months.length || !live.length) return '<div class="empty">No sales recorded yet.</div>';
+
+  const tot = live.map((s, i) => ({ k: s.k, i, v: s.values.reduce((a, b) => a + b, 0) }));
+  const all = tot.reduce((s, t) => s + t.v, 0) || 1;
+
+  return `
+    <div class="cards tight">
+      ${tot.slice(0, 4).map(t => `<div class="card"><b>${Math.round(t.v / all * 100)}%</b>
+        <span><i class="key-dot" style="background:${chanColor(t.k, t.i)}"></i>${esc(t.k)}</span></div>`).join('')}
+    </div>
+    <p class="muted" style="margin-bottom:14px">Revenue per month, split by where the order
+      came from. A channel growing month on month deserves more of your time; one shrinking
+      is telling you something too.</p>
+    <div class="panel">${stackedChart(months, live, chanColor)}</div>`;
 }
 
 function insDead() {
@@ -939,6 +1153,14 @@ function insLoyal() {
     </div>
     <p class="muted" style="margin-bottom:14px">A bat lasts a season, so a repeat purchase is
       a strong signal the product and service landed. Team orders count once per phone number.</p>
+    ${(() => {
+      const nv = newVsReturnByMonth();
+      if (!nv.months.length || !nv.series.some(s => s.values.some(v => v))) return '';
+      return `<div class="panel" style="margin-bottom:16px"><h3>New vs returning revenue</h3>
+        <p class="muted" style="margin:-4px 0 12px">A customer's first month counts as new;
+          anything after that is returning — the revenue that costs nothing to win.</p>
+        ${stackedChart(nv.months, nv.series, (k, i) => i === 0 ? '#ffb020' : '#28c76f')}</div>`;
+    })()}
     <div class="tbl-wrap"><table>
       <thead><tr><th class="num">#</th><th>Customer</th><th class="num">Orders</th>
         <th class="num">Spend</th><th class="num">Days between</th><th>First</th><th>Last</th></tr></thead>
@@ -1434,10 +1656,22 @@ function manageCategories() {
 
 function editProduct(id) {
   const isNew = !id;
+  const newCat = pFilter.cat || 'bats';
   const p = isNew
     ? { id: '', name: '', price: null, mrp: null, cost: null, stock: 0, tier: 'mid',
-        sort: (DB.products.length + 1) * 10, active: false, images: [], data: {},
-        category: pFilter.cat || 'bats' }
+        sort: (DB.products.length + 1) * 10,
+        /* A new bat is live the moment it is saved. This used to default to
+           hidden, which meant the only thing standing between a finished
+           product and the storefront was a checkbox nobody had a reason to
+           look at — bats were being created here and then quietly not sold,
+           because both the shop's query and the row-level policy filter on
+           active = true and neither says why a product is missing.
+
+           Anything that is not a bat still starts hidden, because it cannot
+           go live without a photo (the guard on save below) and would be
+           refused if it arrived here already ticked. */
+        active: newCat === 'bats',
+        images: [], data: {}, category: newCat }
     : DB.products.find(x => x.id === id);
   if (!p) return;
   openModal(isNew ? 'New product' : `Edit — ${esc(p.name)}`, `
@@ -1541,6 +1775,23 @@ function editProduct(id) {
       return false;
     }
 
+    /* A bat is drawn from its wood, and a bat that does not name one took
+       the whole shop down: the card read the wood out of a lookup table,
+       found nothing, and threw in the middle of building the grid, so the
+       storefront stopped rendering entirely. The shop now falls back to a
+       dash instead of throwing — but a live bat showing "—" where its wood
+       belongs is still an unfinished product in front of a customer, and
+       this is the screen that can say so before it gets there.
+
+       The three keys are spelled out because the Maze Room does not load
+       the storefront's catalogue; they are the keys of WOOD in
+       js/products.js and have to be kept in step with it. */
+    if (row.category === 'bats' && row.active &&
+        ['srilankan', 'kashmir', 'poplar'].indexOf(data.wood) === -1) {
+      toast('Set "wood" to srilankan, kashmir or poplar in the spec data before this bat goes live', true);
+      return false;
+    }
+
     if (isNew) {
       row.id = slugify(row.name);
       if (!row.id) { toast('The name needs letters or numbers', true); return false; }
@@ -1551,6 +1802,30 @@ function editProduct(id) {
     try {
       if (isNew) { await insertRow('products', row); DB.products.push(row); }
       else       { await saveRow('products', row); Object.assign(p, row); }
+
+      /* Stock has to land in product_stock, one row per branch. That is the
+         table the order path reads and decrements, and the only one that
+         decides whether a customer can actually buy; products.stock is the
+         older single-shop copy, written above so nothing still reading it
+         goes stale.
+
+         Writing only that copy was the bug. A number typed into this form
+         looked saved and was saved — to the column nothing checks. The list
+         went on showing zero, because it reads the branch table, and every
+         order was refused for a bat the shop believed it had none of, with
+         the customer told "Order placed" all the same. */
+      const stockBranch = BRANCH || (ME && ME.branch_id) || defaultBranch();
+      if (stockBranch) {
+        await supa('product_stock?on_conflict=product_id,branch_id', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: { product_id: row.id, branch_id: stockBranch, stock: row.stock }
+        });
+        const sr = DB.stock.find(s => s.product_id === row.id && s.branch_id === stockBranch);
+        if (sr) sr.stock = row.stock;
+        else DB.stock.push({ product_id: row.id, branch_id: stockBranch, stock: row.stock });
+      }
+
       if (DB.psSynced) await savePlaystyles(row.id);
       toast('Saved');
       render();
@@ -2113,6 +2388,8 @@ const SETTING_FIELDS = [
   ['free_ship_over', 'Free shipping over (₹)', 'number', 'Orders at or above this ship free'],
   ['ship_fee',       'Shipping fee (₹)', 'number', 'Charged below the free-shipping threshold'],
   ['razorpay_key',   'Razorpay key id', 'text',   'Starts rzp_live_ or rzp_test_. Blank disables online payment.'],
+  ['warranty_months', 'Standard warranty (months)', 'number',
+    'Months of cover every bat carries, as printed on the warranty card. Leave blank and the site says "the period printed on your card" instead of naming a number. It also stops the paid extended warranty being sold on top of cover the customer already has.'],
   ['gstin',            'GSTIN', 'text', 'Leave blank if not registered — bills are then issued without any tax, which is the correct document.'],
   ['legal_name',       'Registered business name', 'text', 'Exactly as registered. Printed on every bill.'],
   ['business_address', 'Business address', 'text', 'Required on a tax invoice.'],
@@ -2140,6 +2417,17 @@ function viewSettings() {
       <h3>Account</h3>
       <p class="muted">Signed in as <b>${esc(USER && USER.email)}</b><br>
         Supabase user <code>${esc(USER && USER.id)}</code></p>
+    </div>
+
+    <div class="panel danger">
+      <h3>Danger zone</h3>
+      <p class="muted" style="max-width:64ch">One-time pre-launch reset. Wipes every test
+        <b>order, invoice, expense, payroll run, attendance record, target, customer,
+        request, game score</b>, the activity log and stock-transfer history — and restarts
+        invoice numbering at 1. Bats, categories, branches, stock counts, staff, tasks,
+        SOPs, coupons and settings are kept. Everything wiped is snapshotted inside the
+        database first, so a mistake can be restored.</p>
+      <button class="btn danger" id="resetData">Reset test data…</button>
     </div>`;
 }
 
@@ -2162,10 +2450,43 @@ function wireSettings() {
     } catch (e) { toast(writeError(e), true); }
     finally { btn.disabled = false; btn.textContent = 'Save settings'; }
   };
+
+  /* The reset asks twice on purpose: the button says what it does, and the
+     modal makes the founder type RESET. The wipe itself runs server-side
+     (sql/020-reset-button.sql) where it also re-checks the caller's role
+     and snapshots every table before deleting. */
+  const rd = $('#resetData');
+  if (rd) rd.onclick = () => openModal('Reset test data — are you sure?', `
+      <p><b>This clears the whole trading history.</b> Orders, invoices, expenses,
+        payroll, attendance, targets, customers, requests, game scores, the activity
+        log and stock-transfer history are wiped, and invoice numbers restart at 1.</p>
+      <p class="muted">Kept: bats &amp; product details, categories, branches, current
+        stock counts, staff, tasks, SOPs, coupons, settings.</p>
+      <p class="muted">A snapshot of everything wiped is stored in the database first
+        (<code>reset_backup</code> schema), so it can be restored if this was a mistake.</p>
+      <div class="row"><label>Type <b>RESET</b> in capitals to confirm</label>
+        <input id="resetConfirm" autocomplete="off" placeholder="RESET"></div>`,
+    async () => {
+      const v = ($('#resetConfirm').value || '').trim();
+      if (v !== 'RESET') { toast('Type RESET (all capitals) to confirm', true); return false; }
+      try {
+        const out = await supaRpc('reset_test_data', { p_confirm: v });
+        const counts = (out && out.wiped) || {};
+        const total = Object.values(counts).reduce((s, n) => s + Number(n || 0), 0);
+        toast('Reset done — ' + total + ' test rows cleared (backup kept)');
+        await loadAll();
+        render();
+      } catch (e) {
+        toast(/not.*found|404|does not exist/i.test(e.message || '')
+          ? 'Run sql/020-reset-button.sql in the Supabase SQL editor first.'
+          : (e.message || 'Reset failed'), true);
+        return false;
+      }
+    }, 'Wipe test data');
 }
 
 /* ---------------- modal ---------------- */
-function openModal(title, body, onSave) {
+function openModal(title, body, onSave, saveLabel) {
   const wrap = document.createElement('div');
   wrap.className = 'modal';
   wrap.innerHTML = `
@@ -2174,7 +2495,7 @@ function openModal(title, body, onSave) {
       <div class="modal-body">${body}</div>
       <div class="modal-foot">
         <button class="btn ghost" data-close>Cancel</button>
-        <button class="btn primary" data-save>Save changes</button>
+        <button class="btn primary" data-save>${saveLabel || 'Save changes'}</button>
       </div>
     </div>`;
   document.body.appendChild(wrap);
@@ -2189,7 +2510,123 @@ function openModal(title, body, onSave) {
     const btn = $('[data-save]', wrap);
     btn.disabled = true; btn.textContent = 'Saving…';
     const res = await onSave();
-    btn.disabled = false; btn.textContent = 'Save changes';
+    btn.disabled = false; btn.textContent = saveLabel || 'Save changes';
     if (res !== false) close();
   };
+}
+
+/* ============================================================
+   ENQUIRIES — the contact form's inbox
+
+   Every message from /contact-us/ lands here. It is a database
+   table rather than an email for one blunt reason: there is no
+   MX record on tossports.com, so anything sent to the address on
+   the site bounces. A row cannot bounce.
+
+   Three states and nothing more. "New" is the only one that
+   matters day to day — it is what the dock badge counts and what
+   the list opens on — and the other two exist so a message can
+   be got rid of honestly, by being answered or closed, rather
+   than by being scrolled past.
+   ============================================================ */
+let ENQ_FILTER = 'new';
+
+function enqRows() {
+  const all = DB.enquiries || [];
+  return ENQ_FILTER === 'all' ? all : all.filter(e => e.status === ENQ_FILTER);
+}
+
+function viewEnquiries() {
+  if (!DB.enqSynced) {
+    return `
+      <div class="head"><h2>Enquiries</h2></div>
+      <div class="panel"><div class="empty">
+        The enquiries table is not in the database yet.<br>
+        Run <b>sql/029-enquiries.sql</b> and reload — the contact form has
+        nowhere to write until you do.
+      </div></div>`;
+  }
+
+  const all = DB.enquiries || [];
+  const counts = {
+    new: all.filter(e => e.status === 'new').length,
+    replied: all.filter(e => e.status === 'replied').length,
+    closed: all.filter(e => e.status === 'closed').length,
+    all: all.length
+  };
+  const rows = enqRows();
+
+  const tab = (k, label) => `<button class="chip${ENQ_FILTER === k ? ' on' : ''}"
+    data-enq-f="${k}">${label} <b>${counts[k]}</b></button>`;
+
+  return `
+    <div class="head">
+      <h2>Enquiries</h2>
+      <span class="muted">From the contact form on the website</span>
+    </div>
+
+    <div class="panel">
+      <div class="chips" style="margin-bottom:14px">
+        ${tab('new', 'New')}${tab('replied', 'Replied')}${tab('closed', 'Closed')}${tab('all', 'All')}
+      </div>
+
+      ${!rows.length ? `<div class="empty">Nothing ${
+        ENQ_FILTER === 'all' ? 'here yet' : 'in ' + ENQ_FILTER}.</div>` : `
+      <div class="enq-list">
+        ${rows.map(e => `
+          <article class="enq" data-enq="${e.id}">
+            <div class="enq-top">
+              <div>
+                <b>${esc(e.name)}</b>
+                <span class="pill ${esc(e.status)}">${esc(e.status)}</span>
+              </div>
+              <span class="muted">${when(e.created_at)}</span>
+            </div>
+            <div class="enq-meta">
+              ${esc(e.subject || 'General enquiry')}
+              ${e.phone ? ` · <a href="tel:${esc(e.phone)}">${esc(e.phone)}</a>` : ''}
+              ${e.email ? ` · <a href="mailto:${esc(e.email)}">${esc(e.email)}</a>` : ''}
+            </div>
+            <p class="enq-msg">${esc(e.message)}</p>
+            <div class="enq-act">
+              ${e.phone ? `<a class="btn ghost sm" target="_blank" rel="noopener"
+                 href="https://wa.me/${esc(String(e.phone).replace(/[^0-9]/g, '').replace(/^0+/, '').replace(/^(?!91)/, '91'))}">
+                 Reply on WhatsApp</a>` : ''}
+              ${e.email ? `<a class="btn ghost sm"
+                 href="mailto:${esc(e.email)}?subject=${encodeURIComponent('Re: ' + (e.subject || 'your enquiry') + ' — Toss Sports')}">
+                 Reply by email</a>` : ''}
+              ${e.status !== 'replied' ? `<button class="btn ghost sm" data-enq-set="replied" data-id="${e.id}">Mark replied</button>` : ''}
+              ${e.status !== 'closed'  ? `<button class="btn ghost sm" data-enq-set="closed"  data-id="${e.id}">Close</button>` : ''}
+              ${e.status !== 'new'     ? `<button class="btn ghost sm" data-enq-set="new"     data-id="${e.id}">Reopen</button>` : ''}
+            </div>
+          </article>`).join('')}
+      </div>`}
+    </div>`;
+}
+
+function wireEnquiries() {
+  $$('[data-enq-f]').forEach(b => b.onclick = () => {
+    ENQ_FILTER = b.dataset.enqF; render();
+  });
+
+  $$('[data-enq-set]').forEach(b => b.onclick = async () => {
+    const id = Number(b.dataset.id), status = b.dataset.enqSet;
+    b.disabled = true;
+    try {
+      await supa('enquiries?id=eq.' + id, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: { status }
+      });
+      /* Keep the copy in memory in step rather than refetching the lot —
+         the same rule the orders list follows. */
+      const row = (DB.enquiries || []).find(e => e.id === id);
+      if (row) row.status = status;
+      toast('Marked ' + status);
+      render();
+    } catch (err) {
+      b.disabled = false;
+      toast('Could not update: ' + err.message, true);
+    }
+  });
 }

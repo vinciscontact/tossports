@@ -2,6 +2,10 @@
 # The storefront uses the compressed reel at images/reel/toss-reel.mp4.
 images/marketing video/
 
+# The founder portrait masters, for the same reason. What the pages serve
+# is the resized, compressed set in images/founders/.
+founder images/
+
 # Secrets. .env.example is the map and IS committed; a real .env never is.
 # Nothing in the browser reads these — this site has no build step — so a
 # .env here would only ever be a place a service_role key goes to die.

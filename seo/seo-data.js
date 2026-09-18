@@ -21,14 +21,40 @@
    ============================================================ */
 
 /* ONE PLACE for the domain. Change this line when the domain is final. */
-const SITE = 'https://tossports.in';
+const SITE = 'https://tossports.com';
 
 const BUSINESS = {
   name: 'Toss Sports',
   legalName: 'Toss Sports',
   tagline: 'Handcrafted tennis ball cricket bats, made in Chennai',
-  email: 'contact@tossports.in',
-  phones: ['+918939981055', '+919176995707'],
+  /* The domain moved to tossports.com; this address never did, and there is
+     no MX record on either domain, so mail to contact@tossports.in bounced
+     silently. Meta's verification emails the address it finds on the site.
+
+     Gmail is the owner's choice for now. It is a stated exception to Meta's
+     own requirement — their brief asks for an address on the site's own
+     domain rather than generic webmail — so switch this to
+     contact@tossports.com the day the Hostinger mailbox exists. The
+     storefront reads the same value from Settings → support_email, which
+     changes without a deploy; this constant is for the static pages. */
+  email: 'tossturf@gmail.com',
+
+  /* ONE primary number, named as such. It used to be phones[0] and phones[1],
+     with the meaning of each held only in which index a template happened to
+     use — so "the workshop number" and "the WhatsApp number" drifted apart
+     across pages. The owner set the primary as +91 91769 95707; it is also
+     the WhatsApp number, so one line answers both. The other line stays as a
+     listed alternate rather than disappearing, because it is a real number
+     customers may already have saved. */
+  phone:    '+919176995707',
+  altPhone: '+918939981055',
+  phones: ['+919176995707', '+918939981055'],   /* kept for any older template */
+
+  /* Open every day. Written once here so the contact page, the footer and
+     the structured data search engines read cannot disagree. */
+  hours: 'Monday to Sunday, 10am to 9pm IST',
+  hoursShort: 'Open every day, 10am – 9pm',
+  openingHours: 'Mo-Su 10:00-21:00',
   whatsapp: '919176995707',
   instagram: 'https://www.instagram.com/toss_sportz',
   founded: '2020',
@@ -71,9 +97,9 @@ const CLUSTERS = {
     head: 'tennis ball cricket bat',
     also: ['tennis cricket bat', 'tennis ball bat', 'bat for tennis ball cricket',
            'tennis cricket bat online', 'tennis ball cricket bat price'],
-    title: 'Tennis Ball Cricket Bats from ₹950',
+    title: 'Tennis Ball Cricket Bats from ₹900',
     h1: 'Tennis ball cricket bats, made by hand in Chennai',
-    desc: 'Tennis cricket bats shaped in our own Chennai workshop — Sri Lankan wood, Kashmir Willow and Poplar. Soft and hard tennis ball bats from ₹950. Order on WhatsApp or online.',
+    desc: 'Tennis cricket bats shaped in our own Chennai workshop — Sri Lankan wood, Kashmir Willow and Poplar. Soft, medium and hard tennis ball bats from ₹900. Order on WhatsApp or online.',
     filter: function (p) { return (p.category || 'bats') === 'bats'; },
     intro: 'Every bat on this page is pressed, profiled and finished in our own unit in Nesapakkam, Chennai — not bought in and re-branded. That is why we can cut a bat to the weight you ask for, and why we stand behind it when it breaks.'
   },
@@ -94,9 +120,9 @@ const CLUSTERS = {
     head: 'gully cricket bat',
     also: ['street cricket bat', 'gully cricket bat online', 'best bat for gully cricket',
            'road cricket bat', 'galli cricket bat'],
-    title: 'Gully & Street Cricket Bats from ₹950',
+    title: 'Gully & Street Cricket Bats from ₹900',
     h1: 'Gully and street cricket bats',
-    desc: 'Street cricket bats built for concrete, tar and matting — thick toes, strong shoulders, honest prices from ₹950. Handmade in Chennai and played by clubs across Tamil Nadu.',
+    desc: 'Street cricket bats built for concrete, tar and matting — thick toes, strong shoulders, honest prices from ₹900. Handmade in Chennai and played by clubs across Tamil Nadu.',
     filter: function (p) { return p.tier === 'entry' || p.tier === 'mid'; },
     intro: 'Street cricket is harder on a bat than any turf game: concrete edges, tar, and a ball that gets wet and heavy. These are the models our own customers keep coming back for — nothing precious, just bats that survive the ground you actually play on.'
   },
@@ -129,9 +155,9 @@ const CLUSTERS = {
            'affordable tennis cricket bat', 'best cricket bat under 2000'],
     title: 'Cricket Bats Under ₹1,500 — Real Wood',
     h1: 'Tennis ball bats under ₹1,500',
-    desc: 'Proper wooden tennis ball cricket bats from ₹950 — not plastic, not a toy. Direct from our Chennai workshop with no middleman markup.',
+    desc: 'Proper wooden tennis ball cricket bats from ₹900 — not plastic, not a toy. Direct from our Chennai workshop with no middleman markup.',
     filter: function (p) { return p.price != null && p.price <= 1500; },
-    intro: 'A ₹950 bat from us is a real bat: single-piece wood, cane handle, proper grip. The reason it costs less is that it goes from our unit to you, without a distributor and a shop taking a cut on the way.'
+    intro: 'A ₹900 bat from us is a real bat: solid wood, a proper handle and grip. The reason it costs less is that it goes from our unit to you, without a distributor and a shop taking a cut on the way.'
   },
 
   'cricket-bat-shop-chennai': {
@@ -166,7 +192,7 @@ const GUIDES = [
       ['The ball decides everything else',
        'A soft tennis ball weighs around 55–60g and gives on impact. A medium or "hard" tennis ball is heavier and barely gives at all, so the same shot puts far more shock into the blade. That is why bats are built differently for each, and why the first question we ask a customer is which ball they play with.'],
       ['If you play with the soft ball',
-       'Look for Poplar or Kashmir Willow at 550–800g. It will pick up fast, which matters more than raw power when the ball is not coming on. Our Regular Bat and the lighter Kashmir models are built for exactly this, from ₹950.'],
+       'Look for Poplar or Kashmir Willow at 550–800g. It will pick up fast, which matters more than raw power when the ball is not coming on. Our Regular Srilankan and Alpha Bat Lite are built for exactly this, from ₹900.'],
       ['If you play with the medium or hard ball',
        'You want Sri Lankan (Ceylon) wood, a heavier press, and ideally a seasoned face. Sri Lankan wood is denser than Kashmir Willow and takes repeated hard-ball impact without lifting. Our Power X line carries triple hard seasoning for this reason.'],
       ['If you play with both',
@@ -264,7 +290,7 @@ const GUIDES = [
     desc: 'How to buy a tennis ball cricket bat in Chennai directly from the workshop — visit us in Nesapakkam, or order on WhatsApp.',
     keywords: ['buy cricket bat Chennai', 'cricket bat shop near me Chennai',
                'cricket bat price Chennai', 'tennis ball bat Chennai'],
-    answer: 'You can buy directly from our workshop at Nesapakkam, Chennai, or from Toss The Turf in Kolathur. Bats run from ₹950 to ₹2,999, we cut to your weight, and you can message us on WhatsApp before paying anything.',
+    answer: 'You can buy directly from our workshop at Nesapakkam, Chennai, or from Toss The Turf in Kolathur. Bats run from ₹900 to ₹4,000, we cut to your weight, and you can message us on WhatsApp before paying anything.',
     sections: [
       ['Come to the unit',
        'The workshop is at 69, Kavignar Kannadasan Nagar 5th Street, Nesapakkam, Ramapuram, Chennai 600078. You can see the bats being finished, pick up a few and feel the weight, and take one away the same week.'],
@@ -273,7 +299,7 @@ const GUIDES = [
       ['Order without visiting',
        'Message us on WhatsApp at 91769 95707. Tell us the ball you play with, roughly what weight you like, and your budget, and we will send photos of two or three that fit. No account, no card needed to ask.'],
       ['What it costs',
-       'Bats start at ₹950 and go to ₹2,999 for the Toss Power X. That is the price from the maker — there is no distributor or retailer margin in it, which is why comparable bats elsewhere start higher.'],
+       'Bats start at ₹900 and go to ₹4,000 for the Graphix Premium Hard. That is the price from the maker — there is no distributor or retailer margin in it, which is why comparable bats elsewhere start higher.'],
       ['Delivery across India',
        'We ship anywhere in India, free over ₹1,500, usually 3–6 days. Clubs across Tamil Nadu and Karnataka already play with these.']
     ]
@@ -286,7 +312,7 @@ const FAQS = [
   ['What is a tennis ball cricket bat?',
    'A tennis ball cricket bat is a bat built for the lighter tennis ball used in street, gully and club cricket, rather than a hard leather ball. It is lighter, needs no knocking in, and is usually made from Sri Lankan wood, Kashmir Willow or Poplar.'],
   ['How much does a tennis ball cricket bat cost in India?',
-   'A proper wooden tennis ball cricket bat costs between ₹950 and ₹3,500 in India. Toss Sports bats run from ₹950 to ₹2,999 direct from our Chennai workshop, without a distributor margin.'],
+   'A proper wooden tennis ball cricket bat costs between ₹950 and ₹3,500 in India. Toss Sports bats run from ₹900 to ₹4,000 direct from our Chennai workshop, without a distributor margin.'],
   ['Do tennis ball cricket bats need knocking in?',
    'No. Knocking in compresses the face against a hard leather ball, and a tennis ball never applies that load. Keeping the bat dry and taping the toe matters far more.'],
   ['Which wood is best for a tennis ball bat?',

@@ -9,10 +9,40 @@
 
 let LIVE = { products: false, settings: false, scores: false };
 
+/* Everything the storefront reads off a product that has no column of its
+   own, with a value that is safe to render.
+
+   Supabase keeps the sellable fields as columns and the rest of the spec in
+   a free-form `data` blob. A bat created in the Maze Room and saved with
+   that blob still empty arrives here with no wood, no weight and no ball at
+   all — and the shop walked straight into it: pickupWords read p.weight[0]
+   off undefined and threw inside the map that builds the grid, so one
+   incomplete row stopped the whole catalogue from rendering and took the
+   filters and the search results down with it.
+
+   Filling the shape here, once, is what keeps a half-finished product a
+   cosmetic problem — a card with a dash on it — instead of an outage. The
+   Maze Room refuses to put a bat live without a wood, which is where it
+   belongs; this is the floor underneath that. Empty arrays rather than
+   invented numbers: every reader already has a sensible answer for "not
+   known", and none of them should be told 780 grams by a default. */
+const PRODUCT_SHAPE = {
+  wood: '', profile: 'standard',
+  /* `level` and `style` are the catalogue's own player vocabulary and they
+     drive the shop's Level and Best-for filters. Empty, not guessed: a bat
+     nobody has classified yet should be absent from those chips rather than
+     silently filed under "beginner" and recommended to someone. */
+  level: '', style: [],
+  weight: [], ball: [], usage: [], features: [], badges: [],
+  tagline: '', edge: '', spine: '', handle: '', finish: '',
+  height: '', sweetSpot: '',
+  rating: 0, reviews: 0, popularity: 0
+};
+
 /* Supabase keeps the queryable columns separate from the spec blob.
    Flatten back into the shape every view and the SVG renderer expect. */
 function rowToProduct(r) {
-  return Object.assign({}, r.data || {}, {
+  return Object.assign({}, PRODUCT_SHAPE, r.data || {}, {
     id: r.id, name: r.name,
     price: r.price, mrp: r.mrp, tier: r.tier,
     stock: r.stock, images: r.images || [], cost: r.cost,
@@ -61,6 +91,12 @@ async function syncSettings() {
        from settings is what stops the shown total and the recorded total
        drifting apart the day someone changes the price. */
     if (s.engraving_price != null) SERVICES.engraving.price = Number(s.engraving_price);
+    /* Standard warranty months. Guarded against 0 and nonsense so that clearing
+       the field in the Maze Room returns the site to "the period on your card"
+       rather than advertising a zero-month warranty. */
+    if (s.warranty_months != null && Number(s.warranty_months) > 0) {
+      WARRANTY_MONTHS = Number(s.warranty_months);
+    }
     LIVE.settings = true;
     return true;
   } catch (e) { console.warn('settings sync:', e.message); return false; }
@@ -98,13 +134,20 @@ async function syncPlaystyles() {
 /* Recording an order must never block the customer. The WhatsApp hand-off
    and the confirmation screen happen regardless; this just makes the order
    show up in the Maze Room. */
-async function pushOrder(order) {
+async function pushOrder(order, opts) {
+  opts = opts || {};
   try {
     await supa('orders', {
       method: 'POST',
       headers: { Prefer: 'return=minimal' },
       body: {
         id: order.id,
+        /* 'pending' means the row exists but the money has not been asked
+           for yet — it is what lets the server price the Razorpay order
+           instead of trusting the browser, and what stops a payment ever
+           existing without an order behind it. orders_sanitise accepts only
+           'pending' or 'new' from a browser; see sql/030. */
+        status: opts.status === 'pending' ? 'pending' : undefined,
         customer: order.info || {},
         /* `engrave` travels with the line because the database re-prices the
            order from the catalogue, and an engraved bat costs more than a
@@ -127,7 +170,18 @@ async function pushOrder(order) {
         coupon: order.coupon || null,
         method: order.method === 'wa' ? 'whatsapp' : order.method,
         channel: 'web',
-        paid: order.method === 'online'
+        paid: order.method === 'online',
+        /* Both of these are thrown away by orders_sanitise() on insert, and
+           should be: a checkout that ran in the customer's browser cannot
+           prove money moved. They are sent anyway so a staff-entered order
+           still carries them, and so the shape of an order is one thing.
+
+           payment_ref_claimed is the hint that survives. It is what the
+           browser SAYS the payment was, stored under a name that says so,
+           to be pasted into Razorpay's search rather than believed. What
+           settles an order is the signed webhook — see sql/026. */
+        payment_id: order.payment_id || null,
+        payment_ref_claimed: order.payment_id || null
       }
     });
     return true;
