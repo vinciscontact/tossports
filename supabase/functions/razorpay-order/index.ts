@@ -28,8 +28,10 @@
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const KEY_ID = Deno.env.get('RAZORPAY_KEY_ID') ?? '';
-const KEY_SECRET = Deno.env.get('RAZORPAY_KEY_SECRET') ?? '';
+/* Read per request, not once at startup. A worker that was already warm when
+   the secrets were added kept the empty values it booted with, so the function
+   went on saying "not configured" after the owner had configured it. */
+const env = (k: string) => (Deno.env.get(k) ?? '').trim();
 
 /* How long a pending order may hold its stock. Matches
    release_stale_orders() in sql/030 - if they ever disagree, a customer
@@ -53,11 +55,21 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
 
+  const KEY_ID = env('RAZORPAY_KEY_ID');
+  const KEY_SECRET = env('RAZORPAY_KEY_SECRET');
+
   if (!KEY_ID || !KEY_SECRET) {
-    /* Said plainly, because the storefront falls back to the old flow when
-       this happens and somebody needs to know why capture stopped working. */
-    return json({ error: 'not_configured',
-      message: 'RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set on this function.' }, 503);
+    /* Say WHICH one is missing, and which similarly named secrets do exist —
+       names only, never values. "Not configured" alone left the owner unable
+       to tell a typo in a name from a secret saved to the wrong place. */
+    const near = Object.keys(Deno.env.toObject())
+      .filter(k => /razor|rzp/i.test(k)).sort();
+    return json({
+      error: 'not_configured',
+      has_key_id: !!KEY_ID,
+      has_key_secret: !!KEY_SECRET,
+      razorpay_like_secret_names: near
+    }, 503);
   }
 
   let orderId = '';
