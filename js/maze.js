@@ -84,8 +84,8 @@ async function buzzPoll() {
   if (!SESSION) return;
   let rows;
   try {
-    rows = await supa('orders?select=*&created_at=gt.' + encodeURIComponent(BUZZ.mark) +
-      '&order=created_at.asc&limit=10');
+    rows = await supa('orders?select=*&status=neq.pending&created_at=gt.' +
+      encodeURIComponent(BUZZ.mark) + '&order=created_at.asc&limit=10');
   } catch (e) { return; }                       /* offline — try again next tick */
   if (!rows || !rows.length) return;
   BUZZ.mark = rows[rows.length - 1].created_at;
@@ -378,7 +378,13 @@ async function loadAll() {
          branches, stock, monthPL, perf, bestSeller, deadStock, loyalty,
          psGroups, playstyles, prodStyles, enquiries] = await Promise.all([
     get('products?select=*&order=sort.asc', []),
-    get('orders?select=*&order=created_at.desc&limit=200', []),
+    /* `pending` is a held basket, not an order: the row exists so Razorpay
+       can be charged the price Postgres decided, and it is cancelled again
+       if nobody pays within the grace period. Excluding it here keeps the
+       Sales figures honest — every sales view filters on "not cancelled",
+       so a pending basket would otherwise be counted as revenue nobody paid.
+       It appears the moment the webhook flips it to 'new'. */
+    get('orders?select=*&status=neq.pending&order=created_at.desc&limit=200', []),
     get('coupons?select=*&order=unlock_runs.asc', []),
     get('scores?select=*&order=runs.desc&limit=50', []),
     get('settings?select=*', []),

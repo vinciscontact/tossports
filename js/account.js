@@ -886,7 +886,10 @@ function paintAccountChrome() {
    ------------------------------------------------------------ */
 async function acctRead(uid) {
   const [orders, reqs, prof] = await Promise.allSettled([
-    supa(`orders?user_id=eq.${uid}&order=created_at.desc&limit=100`),
+    /* Same reason as the Maze Room: a pending basket is not an order the
+       customer has placed, and showing one would promise something that may
+       be cancelled minutes later. It appears once payment confirms it. */
+    supa(`orders?user_id=eq.${uid}&status=neq.pending&order=created_at.desc&limit=100`),
     supa(`requests?user_id=eq.${uid}&order=created_at.desc&limit=50`),
     supa(`customer_profiles?user_id=eq.${uid}&limit=1`)
   ]);

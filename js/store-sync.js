@@ -134,13 +134,20 @@ async function syncPlaystyles() {
 /* Recording an order must never block the customer. The WhatsApp hand-off
    and the confirmation screen happen regardless; this just makes the order
    show up in the Maze Room. */
-async function pushOrder(order) {
+async function pushOrder(order, opts) {
+  opts = opts || {};
   try {
     await supa('orders', {
       method: 'POST',
       headers: { Prefer: 'return=minimal' },
       body: {
         id: order.id,
+        /* 'pending' means the row exists but the money has not been asked
+           for yet — it is what lets the server price the Razorpay order
+           instead of trusting the browser, and what stops a payment ever
+           existing without an order behind it. orders_sanitise accepts only
+           'pending' or 'new' from a browser; see sql/030. */
+        status: opts.status === 'pending' ? 'pending' : undefined,
         customer: order.info || {},
         /* `engrave` travels with the line because the database re-prices the
            order from the catalogue, and an engraved bat costs more than a

@@ -3312,18 +3312,27 @@ function newOrderId() {
   return 'TOSS-' + Date.now().toString(36).toUpperCase().slice(-6) +
          '-' + Math.floor(Math.random() * 900 + 100);
 }
-function completeOrder(method, info, extra) {
-  extra = extra || {};
-  lastOrder = {
-    id: extra.id || newOrderId(), method, info,
+/* The order as this browser understands it. Built in one place because
+   payOnline() now needs it BEFORE the payment sheet opens — to save the
+   order — and completeOrder() needs the same shape afterwards, and the two
+   drifting apart would mean paying for one basket and recording another. */
+function orderDraft(id, method, info) {
+  return {
+    id: id || newOrderId(), method, info,
     /* the Razorpay payment id — the thread that ties this order to the
        payment in their dashboard; without it reconciliation is manual */
-    payment_id: extra.payment_id || null,
+    payment_id: null,
     items: cart.slice(),
     subtotal: cartSubtotal(), shipping: shipFee(),
     total: grandTotal(),
     coupon: couponOff() > 0 ? couponCode() : null, off: couponOff()
   };
+}
+
+function completeOrder(method, info, extra) {
+  extra = extra || {};
+  lastOrder = orderDraft(extra.id, method, info);
+  lastOrder.payment_id = extra.payment_id || null;
   /* Recording must never block the customer: the confirmation screen and the
      WhatsApp hand-off happen whatever the database says. But "never block"
      had quietly become "never mention". The insert can be refused outright —
@@ -3336,7 +3345,12 @@ function completeOrder(method, info, extra) {
      reach the screen. `recorded` is null while in flight, true once the
      database has it, false when it refused — and viewDone() says so. */
   lastOrder.recorded = null;
-  if (typeof pushOrder === 'function') {
+  /* Already saved as `pending` before the payment — see payOnline(). Writing
+     it again would collide on the id and take the stock a second time, so the
+     only thing left to do is say it is safely recorded. */
+  if (extra.recorded) {
+    lastOrder.recorded = true;
+  } else if (typeof pushOrder === 'function') {
     const mine = lastOrder;
     pushOrder(mine).then(function (ok) {
       mine.recorded = !!ok;
@@ -3363,12 +3377,36 @@ function completeOrder(method, info, extra) {
   route();
   window.scrollTo(0, 0);
 }
-function payOnline(info) {
-  const amount = grandTotal() * 100;
-  /* The order id exists BEFORE the payment so it can ride along in the
-     Razorpay notes — then either side of a dispute can find the other:
-     the dashboard shows the order id, the order shows the payment id. */
+/* ------------------------------------------------------------
+   ONLINE PAYMENT — the order exists before the money does.
+
+   This used to open Razorpay with nothing but a key and an amount.
+   That is the reason payments had to be captured by hand: Razorpay's
+   capture settings "are applicable only for payments created using
+   the Orders API", and a payment made without an order_id "cannot be
+   captured and will be automatically refunded". No dashboard toggle
+   could have fixed it, because the payments belonged to no order.
+
+   So now, in order:
+
+     1. the order is written to Postgres as `pending`, where
+        orders_sanitise re-prices it from the catalogue
+     2. an Edge Function reads THAT total and asks Razorpay for an
+        order of exactly those paise — the browser never names a price
+     3. Checkout opens against that order, so capture is automatic
+     4. the signed webhook marks it paid and moves it to `new`
+
+   Three things fall out of the order existing first: capture works,
+   the amount cannot be tampered with, and a payment can no longer
+   succeed against an order that was never saved.
+
+   If the Edge Function is not configured yet, this falls back to the
+   old behaviour rather than refusing to sell. Manual capture is worse
+   than automatic; both are better than a shop that cannot take money.
+   ------------------------------------------------------------ */
+async function payOnline(info) {
   const oid = newOrderId();
+
   if (!RAZORPAY_KEY || RAZORPAY_KEY.includes('REPLACE')) {
     toast('Demo mode — add your Razorpay key to go live');
     setTimeout(() => completeOrder('online', info, { id: oid }), 900);
@@ -3379,24 +3417,80 @@ function payOnline(info) {
     toast('Payment is still loading — try again in a second');
     return;
   }
-  const rzp = new window.Razorpay({
-    key: RAZORPAY_KEY,
-    amount, currency: 'INR',
+
+  const btn = $('#placeBtn');
+  if (btn) { btn.disabled = true; btn.dataset.was = btn.innerHTML; btn.textContent = 'Preparing…'; }
+  const restore = () => {
+    if (btn) { btn.disabled = false; if (btn.dataset.was) btn.innerHTML = btn.dataset.was; }
+  };
+
+  /* ---- 1. the order, before anything is charged ---- */
+  const draft = orderDraft(oid, 'online', info);
+  let saved = false;
+  if (typeof pushOrder === 'function') {
+    saved = await pushOrder(draft, { status: 'pending' });
+  }
+
+  /* Refusing here is the point. The usual reason is no stock, and taking
+     money for a bat we cannot ship is the one outcome worth blocking a sale
+     to avoid — the customer keeps their money and their basket. */
+  if (typeof pushOrder === 'function' && !saved) {
+    restore();
+    toast('We could not reserve that — it may have just sold out. ' +
+          'Nothing has been charged. Message us on WhatsApp and we will sort it.', true);
+    return;
+  }
+
+  /* ---- 2. ask the server what Razorpay should charge ---- */
+  let rzpOrder = null;
+  try {
+    const r = await fetch(SUPA_URL + '/functions/v1/razorpay-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPA_KEY },
+      body: JSON.stringify({ order_id: oid })
+    });
+    if (r.ok) rzpOrder = await r.json();
+    else console.warn('razorpay-order:', r.status, await r.text());
+  } catch (e) { console.warn('razorpay-order unreachable:', e.message); }
+
+  restore();
+
+  /* ---- 3. open Checkout ---- */
+  const opts = {
+    key: (rzpOrder && rzpOrder.key_id) || RAZORPAY_KEY,
+    currency: 'INR',
     name: 'Toss Sports',
-    description: cart.map(i => byId(i.id).name).join(', ').slice(0, 200),
+    description: cart.map(i => (byId(i.id) || {}).name || i.id).join(', ').slice(0, 200),
     prefill: { name: info.name, contact: info.phone, email: info.email || undefined },
     notes: { order_id: oid, address: info.address + ', ' + info.city + ' ' + info.pin },
     theme: { color: '#FF8A1E' },
-    handler: r => completeOrder('online', info, { id: oid, payment_id: r.razorpay_payment_id }),
-    /* Closing the sheet is not an error — the bag is untouched and the
-       button still says Pay. Say so, or the customer assumes the worst. */
-    modal: { ondismiss: () => toast('Payment not completed — your bag is safe. Pay when ready, or order on WhatsApp.') }
-  });
+    /* The order already exists, so completeOrder must not write it again —
+       a second insert would be a duplicate id and a second stock decrement. */
+    handler: r => completeOrder('online', info, {
+      id: oid, payment_id: r.razorpay_payment_id, recorded: saved
+    }),
+    modal: { ondismiss: () => toast(
+      'Payment not completed — your bag is safe. Pay when ready, or order on WhatsApp.') }
+  };
+
+  if (rzpOrder && rzpOrder.razorpay_order_id) {
+    /* With an order id the amount comes from Razorpay's own record of it,
+       so it is not sent from here at all. */
+    opts.order_id = rzpOrder.razorpay_order_id;
+  } else {
+    opts.amount = grandTotal() * 100;
+    console.warn('Toss: paying without a Razorpay order — this payment will need ' +
+                 'capturing by hand. Set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET on the ' +
+                 'razorpay-order Edge Function to make capture automatic.');
+  }
+
+  const rzp = new window.Razorpay(opts);
   rzp.on('payment.failed', r => toast(
     ((r.error && r.error.description) || 'Payment failed') +
     ' — nothing was charged. Try again or order on WhatsApp.'));
   rzp.open();
 }
+
 function loadRazorpay() {
   if (window.Razorpay || $('#rzpJs')) return;
   const s = document.createElement('script');
@@ -3891,7 +3985,16 @@ function mount(page, parts) {
         window.open(waLink(cartWaText(info)), '_blank');
         completeOrder('wa', info);
       } else {
-        payOnline(info);
+        /* payOnline handles its own failures and resets the button; this is
+           only here so an unexpected throw surfaces instead of leaving the
+           customer looking at a button that did nothing. */
+        payOnline(info).catch(e => {
+          console.error('payOnline:', e);
+          const b = $('#placeBtn');
+          if (b) { b.disabled = false; if (b.dataset.was) b.innerHTML = b.dataset.was; }
+          toast('Something went wrong starting the payment. Nothing was charged — ' +
+                'try again, or order on WhatsApp.', true);
+        });
       }
     };
   }
