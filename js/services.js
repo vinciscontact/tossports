@@ -1266,8 +1266,15 @@ function trackPage() {
   const route = location.hash.replace(/^#/, '') || '/';
   if (route === _lastTracked) return;
   _lastTracked = route;
+  /* Keep the REAL query string — ?utm_source=…, ?gclid=…, ?fbclid=… — in front
+     of the route's own. GA4 reads a visit's source from page_location, and the
+     first version of this built page_location from the hash alone, so every
+     tagged link (the Google Business Profile, Google Ads, Instagram) would have
+     arrived stripped and been counted as "direct". */
+  const [rPath, rQuery] = (route.startsWith('/') ? route : '/' + route).split('?');
+  const q = [location.search.replace(/^\?/, ''), rQuery].filter(Boolean).join('&');
   gtag('event', 'page_view', {
-    page_location: location.origin + (route.startsWith('/') ? route : '/' + route),
+    page_location: location.origin + rPath + (q ? '?' + q : ''),
     page_title: document.title
   });
 }
