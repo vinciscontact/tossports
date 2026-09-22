@@ -79,8 +79,12 @@ const LEGAL = {
         placed by a parent or guardian. We do not knowingly collect information directly
         from a child.</p>`],
       ['Contact', `
-        <p>Email <a href="mailto:tossturf@gmail.com">tossturf@gmail.com</a> or call
-        <a href="tel:+919176995707">+91 91769 95707</a>.</p>`]
+        <p>For privacy requests, legal matters or a grievance, email
+        <a href="mailto:tossports.legal@gmail.com">tossports.legal@gmail.com</a>.</p>
+        <p>For anything about an order, call or WhatsApp
+        <a href="tel:+919176995707">+91 91769 95707</a> or
+        <a href="tel:+918610662462">+91 86106 62462</a>, or email
+        <a href="mailto:tossturf@gmail.com">tossturf@gmail.com</a>.</p>`]
     ]
   },
 
@@ -136,7 +140,14 @@ const LEGAL = {
         them, and codes obtained by manipulating the game will not be honoured.</p>`],
       ['Governing law', `
         <p>These terms are governed by the laws of India, and the courts at Chennai, Tamil
-        Nadu have jurisdiction.</p>`]
+        Nadu have jurisdiction.</p>`],
+      ['Contact and grievances', `
+        <p>Questions about these terms, or a grievance: email
+        <a href="mailto:tossports.legal@gmail.com">tossports.legal@gmail.com</a>.
+        About an order: call or WhatsApp
+        <a href="tel:+919176995707">+91 91769 95707</a> or
+        <a href="tel:+918610662462">+91 86106 62462</a>, or email
+        <a href="mailto:tossturf@gmail.com">tossturf@gmail.com</a>.</p>`]
     ]
   },
 
@@ -191,8 +202,9 @@ const LEGAL = {
         full. A made-to-order or engraved bat can be cancelled until work starts on it —
         after that it exists and cannot be unmade.</p>`],
       ['How to reach us', `
-        <p>WhatsApp <a href="https://wa.me/919176995707" rel="noopener" target="_blank">+91
-        91769 95707</a>, or email
+        <p>Call or WhatsApp <a href="https://wa.me/919176995707" rel="noopener" target="_blank">+91
+        91769 95707</a> or <a href="https://wa.me/918610662462" rel="noopener" target="_blank">+91
+        86106 62462</a>, or email
         <a href="mailto:tossturf@gmail.com">tossturf@gmail.com</a> with your order
         number.</p>`]
     ]
@@ -279,7 +291,8 @@ const LEGAL = {
         </ul>
         <p>Start any claim on WhatsApp at
         <a href="https://wa.me/919176995707" rel="noopener" target="_blank">+91 91769
-        95707</a> with your order number and photographs of the problem. Photographs are
+        95707</a> or <a href="https://wa.me/918610662462" rel="noopener" target="_blank">+91
+        86106 62462</a> with your order number and photographs of the problem. Photographs are
         not a formality — they are often enough to settle a claim without the bat
         travelling anywhere.</p>`],
 

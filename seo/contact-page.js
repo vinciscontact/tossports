@@ -60,7 +60,8 @@ function contactPage(deps) {
   const PHONE = BUSINESS.phone;          /* primary — also the WhatsApp line */
   const WA_PHONE = BUSINESS.phone;
   const TURF_PHONE = BUSINESS.phone;
-  const ALT_PHONE = BUSINESS.altPhone;
+  const PHONE2 = BUSINESS.phone2;
+  const wa = n => 'https://wa.me/' + String(n).replace(/\D/g, '');
 
   const script = `
 (function () {
@@ -188,6 +189,9 @@ function contactPage(deps) {
               <option>Bat repair (Bat Doctor)</option>
               <option>Custom or bulk order</option>
               <option>Turf booking</option>
+              <option>Collaboration or marketing</option>
+              <option>Careers</option>
+              <option>Investors or franchise</option>
             </select>
           </div>
         </div>
@@ -204,7 +208,7 @@ function contactPage(deps) {
 
         <p class="contact-alt">Prefer to talk?
           <a href="https://wa.me/${BUSINESS.whatsapp}" rel="noopener" target="_blank">Message us on WhatsApp</a>
-          or call the workshop on <a href="tel:${PHONE}">${PHONE}</a>.</p>
+          or call <a href="tel:${PHONE}">${PHONE}</a> / <a href="tel:${PHONE2}">${PHONE2}</a>.</p>
       </form>
     </section>
 
@@ -215,12 +219,43 @@ function contactPage(deps) {
       <dl class="contact-dl">
         <div><dt>Business</dt><dd>${esc(BUSINESS.legalName)}</dd></div>
         <div><dt>Address</dt><dd>${addr(BUSINESS.main)}</dd></div>
-        <div><dt>Phone &amp; WhatsApp</dt><dd><a href="tel:${PHONE}">${PHONE}</a> ·
-          <a href="https://wa.me/${BUSINESS.whatsapp}" rel="noopener" target="_blank">WhatsApp</a></dd></div>
-        ${ALT_PHONE ? `<div><dt>Alternate</dt><dd><a href="tel:${ALT_PHONE}">${ALT_PHONE}</a></dd></div>` : ''}
-        <div><dt>Email</dt><dd><a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></dd></div>
         <div><dt>Hours</dt><dd>${esc(BUSINESS.hours)}</dd></div>
       </dl>
+
+      <!-- Separate desks, so a franchise pitch never sits in the queue in front
+           of someone asking where their bat is. -->
+      <div class="contact-desks">
+        <div class="contact-desk">
+          <b>Customer service &amp; orders</b>
+          <p class="contact-desk-for">Buying a bat, an existing order, warranty, repairs</p>
+          <dl class="contact-dl">
+            <div><dt>Phone &amp; WhatsApp</dt><dd>
+              <a href="tel:${PHONE}">${PHONE}</a> ·
+              <a href="${wa(PHONE)}" rel="noopener" target="_blank">WhatsApp</a></dd></div>
+            <div><dt>Phone &amp; WhatsApp</dt><dd>
+              <a href="tel:${PHONE2}">${PHONE2}</a> ·
+              <a href="${wa(PHONE2)}" rel="noopener" target="_blank">WhatsApp</a></dd></div>
+            <div><dt>Email</dt><dd><a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></dd></div>
+          </dl>
+        </div>
+        <div class="contact-desk">
+          <b>Collaboration, careers, investors &amp; franchise</b>
+          <p class="contact-desk-for">Partnerships, marketing, jobs, investment and franchise enquiries</p>
+          <dl class="contact-dl">
+            <div><dt>Phone &amp; WhatsApp</dt><dd>
+              <a href="tel:${BUSINESS.bizPhone}">${BUSINESS.bizPhone}</a> ·
+              <a href="${wa(BUSINESS.bizPhone)}" rel="noopener" target="_blank">WhatsApp</a></dd></div>
+            <div><dt>Email</dt><dd><a href="mailto:${BUSINESS.bizEmail}">${BUSINESS.bizEmail}</a></dd></div>
+          </dl>
+        </div>
+        <div class="contact-desk">
+          <b>Legal &amp; privacy</b>
+          <p class="contact-desk-for">Privacy requests, policies and grievances</p>
+          <dl class="contact-dl">
+            <div><dt>Email</dt><dd><a href="mailto:${BUSINESS.legalEmail}">${BUSINESS.legalEmail}</a></dd></div>
+          </dl>
+        </div>
+      </div>
 
       <div class="contact-places">
         <div class="contact-place">

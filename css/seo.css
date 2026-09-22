@@ -212,6 +212,15 @@
 .contact-place p{margin:0;font-size:.87rem;color:rgba(255,255,255,.62);line-height:1.55}
 .contact-place a{white-space:nowrap}
 
+/* the three desks — orders, business, legal — each its own small panel */
+.contact-desks{margin-top:22px;display:grid;gap:14px}
+.contact-desk{border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:16px 16px 14px;
+  background:rgba(255,255,255,.03)}
+.contact-desk:first-child{border-color:rgba(255,138,30,.45)}
+.contact-desk > b{display:block;color:#fff;font-size:.96rem}
+.contact-desk-for{margin:3px 0 12px;font-size:.8rem;color:rgba(255,255,255,.55);line-height:1.45}
+.contact-desk .contact-dl{font-size:.88rem}
+
 /* ---------- the form ---------- */
 .contact-form{display:grid;gap:16px}
 /* Two fields share a row once there is room for both to stay usable.

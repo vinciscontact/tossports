@@ -47,8 +47,18 @@ const BUSINESS = {
      listed alternate rather than disappearing, because it is a real number
      customers may already have saved. */
   phone:    '+919176995707',
-  altPhone: '+918939981055',
-  phones: ['+919176995707', '+918939981055'],   /* kept for any older template */
+  /* Customer service and orders have TWO lines, both on WhatsApp. */
+  phone2:   '+918610662462',
+  altPhone: '+918610662462',                      /* older templates read this */
+  phones: ['+919176995707', '+918610662462'],     /* kept for any older template */
+
+  /* Collaboration, careers, investors, franchise and marketing go to their own
+     line and inbox, so they never queue behind order questions. */
+  bizPhone: '+918939981055',
+  bizEmail: 'tossportst055@gmail.com',
+
+  /* Privacy, terms and grievance matters — named on the policy pages. */
+  legalEmail: 'tossports.legal@gmail.com',
 
   /* Open every day. Written once here so the contact page, the footer and
      the structured data search engines read cannot disagree. */

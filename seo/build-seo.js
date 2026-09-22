@@ -222,7 +222,15 @@ const ORG = {
   description: 'Handcrafted tennis ball cricket bats made in Chennai. Sri Lankan wood, Kashmir Willow and Poplar, shaped to order.',
   sameAs: [BUSINESS.instagram],
   address: addressOf(BUSINESS.main),
-  areaServed: { '@type': 'Country', name: 'India' }
+  areaServed: { '@type': 'Country', name: 'India' },
+  contactPoint: [
+    { '@type': 'ContactPoint', contactType: 'customer service', telephone: BUSINESS.phone,
+      email: BUSINESS.email, areaServed: 'IN', availableLanguage: ['en', 'ta'] },
+    { '@type': 'ContactPoint', contactType: 'customer service', telephone: BUSINESS.phone2,
+      email: BUSINESS.email, areaServed: 'IN', availableLanguage: ['en', 'ta'] },
+    { '@type': 'ContactPoint', contactType: 'business enquiries', telephone: BUSINESS.bizPhone,
+      email: BUSINESS.bizEmail, areaServed: 'IN' }
+  ]
 };
 
 /** The workshop — a shop people can visit, which is the local-SEO asset. */
@@ -378,9 +386,14 @@ ${o.body}
       <b>${esc(BUSINESS.legalName)}</b>
       <p>${esc(BUSINESS.main.street)}, ${esc(BUSINESS.main.locality)},
          ${esc(BUSINESS.main.region)} ${esc(BUSINESS.main.postal)}, India</p>
-      <p>Phone &amp; WhatsApp <a href="tel:${BUSINESS.phone}">${BUSINESS.phone}</a></p>
-      <p>${esc(BUSINESS.hoursShort)}</p>
+      <p>Orders &amp; support (phone / WhatsApp)<br>
+         <a href="tel:${BUSINESS.phone}">${BUSINESS.phone}</a> ·
+         <a href="tel:${BUSINESS.phone2}">${BUSINESS.phone2}</a></p>
       <p><a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></p>
+      <p>${esc(BUSINESS.hoursShort)}</p>
+      <p>Collaboration, careers, investors &amp; franchise<br>
+         <a href="tel:${BUSINESS.bizPhone}">${BUSINESS.bizPhone}</a> ·
+         <a href="mailto:${BUSINESS.bizEmail}">${BUSINESS.bizEmail}</a></p>
       <p><a href="${o.depth}contact-us/">Contact us</a></p>
     </div>
     <div>
@@ -1037,7 +1050,9 @@ triple blade. ${PRODUCTS.length} models.
 ## Where we are
 Workshop and store: ${BUSINESS.main.street}, ${BUSINESS.main.locality} ${BUSINESS.main.postal}.
 Cricket turf and store: ${BUSINESS.turf.street}, ${BUSINESS.turf.locality} ${BUSINESS.turf.postal}.
-Phone & WhatsApp ${BUSINESS.phone} · ${BUSINESS.email} · ${BUSINESS.hours}
+Orders & customer service (phone & WhatsApp): ${BUSINESS.phone}, ${BUSINESS.phone2} · ${BUSINESS.email} · ${BUSINESS.hours}
+Collaboration, careers, investors, franchise & marketing (phone & WhatsApp): ${BUSINESS.bizPhone} · ${BUSINESS.bizEmail}
+Legal & privacy: ${BUSINESS.legalEmail}
 
 ## Guides
 ${GUIDES.map(g => `- [${g.h1}](${SITE}/guides/${g.slug}/): ${g.answer}`).join('\n')}
