@@ -4018,3 +4018,56 @@ body.pdp-open .fab{bottom:82px}
   }
   .story-x-art img{height:100%;width:auto}
 }
+
+/* ---------- product page: hero stage + angle strip ----------
+   One white plinth framed by the moving orange stripe (the shop cards'
+   edge), the wood name set huge and faint behind the bat, a floor shadow
+   under it, and the other angles as a centred row of pills below.
+   Scoped to .pdp-hero so nothing else that uses .pdp-stage changes. */
+.pdp-hero,.pdp-hero.with-thumbs{grid-template-columns:minmax(0,1fr);width:100%;
+  justify-content:stretch;gap:16px}
+.pdp-frame{position:relative;padding:3px;border-radius:22px;overflow:hidden;
+  isolation:isolate;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.pdp-edge{position:absolute;z-index:0;top:-60%;left:-60%;width:220%;height:220%;
+  pointer-events:none;
+  background:repeating-linear-gradient(45deg,
+    #FF8A1E 0 20px,#FFC489 20px 34px,#FFFFFF 34px 40px,#E06F00 40px 60px);
+  animation:styEdge 14s linear infinite;will-change:transform}
+.pdp-hero .pdp-stage,
+.pdp-hero .pdp-stage:has(img#pdpMain),.pdp-hero .pdp-stage.has-photo{
+  position:relative;z-index:1;overflow:hidden;border-radius:19px;
+  background:radial-gradient(70% 60% at 50% 38%,#fff,#F5F4F8 80%);
+  box-shadow:none;padding:30px 18px 38px;min-height:360px}
+/* the watermark — decoration only, behind everything, never clickable */
+.pdp-wm{position:absolute;inset:0;display:grid;place-items:center;z-index:0;
+  pointer-events:none;user-select:none;text-align:center;
+  font-family:var(--f-display);text-transform:uppercase;line-height:.85;
+  font-size:clamp(3.4rem,13vw,10rem);letter-spacing:.02em;
+  color:rgba(20,20,58,.055);white-space:nowrap}
+.pdp-floor{position:absolute;left:50%;bottom:26px;z-index:0;width:min(46%,280px);
+  height:26px;transform:translateX(-50%);pointer-events:none;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(20,20,58,.22),transparent)}
+.pdp-hero #pdpMain{position:relative;z-index:1}
+.pdp-hero .pdp-stage .bat-art{filter:drop-shadow(0 18px 22px rgba(20,20,58,.22))}
+.pdp-hero .bat-glow{display:none}
+.pdp-hero .pdp-stage .badges{position:absolute;top:16px;left:16px;z-index:2;
+  flex-direction:column;align-items:flex-start;margin:0}
+/* the angle strip: pills, centred under the plinth */
+.pdp-hero .pdp-thumbs{order:2;flex-direction:row;justify-content:center;flex-wrap:wrap;
+  max-height:none;overflow:visible;gap:12px;padding:2px}
+.pdp-hero .pdp-th{width:62px;height:92px;border-radius:40px;padding:10px 6px;
+  border:2px solid rgba(255,255,255,.18)}
+.pdp-hero .pdp-th.on{border-color:var(--orange);
+  box-shadow:0 0 0 4px rgba(255,138,30,.25),0 10px 22px rgba(0,0,0,.35);
+  transform:translateY(-3px)}
+@media (max-width:820px){
+  .pdp-hero .pdp-stage{min-height:320px;padding:26px 12px 34px}
+  .pdp-hero .pdp-th{width:54px;height:80px}
+}
+@media (prefers-reduced-motion:reduce){.pdp-edge{animation:none}}
+/* The studio shots are on white, so as an opaque box they hid the watermark
+   behind them. Multiply turns their white into the stage colour and leaves
+   the bat. They also carry their own contact shadow, so the drawn floor is
+   for the illustrated bats only. */
+.pdp-hero img#pdpMain{mix-blend-mode:multiply}
+.pdp-hero .pdp-stage.has-photo .pdp-floor{display:none}

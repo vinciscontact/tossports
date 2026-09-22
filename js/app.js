@@ -1801,8 +1801,27 @@ function galleryHTML(p, off) {
      stranded in a sea of empty white with the other shots pushed so far
      down they read as decoration. Beside it, they are the first thing
      the eye finds after the product. */
+  /* The stage is framed by the same moving orange stripe as the shop cards,
+     with the wood name set huge and faint behind the bat and a floor
+     shadow under it — a lit plinth rather than a plain white box. The
+     angle strip sits BELOW as a centred row of pills. */
+  const wm = WOOD_OF(p).short !== '—' ? WOOD_OF(p).short : (p.name || '');
+  const stage = `
+    <div class="pdp-frame">
+      <span class="pdp-edge" aria-hidden="true"></span>
+      <div class="pdp-stage${imgs.length ? ' has-photo' : ''}">
+        <span class="pdp-wm" aria-hidden="true">${esc(wm)}</span>
+        <span class="pdp-floor" aria-hidden="true"></span>
+        ${badges}${main}
+        ${imgs.length ? `
+          <button class="pdp-zoom" id="pdpZoom" aria-label="Zoom this photo">
+            ${ICON.search}<span>Zoom</span>
+          </button>` : ''}
+      </div>
+    </div>`;
   return `
-  <div class="pdp-gal${imgs.length > 1 ? ' with-thumbs' : ''}">
+  <div class="pdp-gal pdp-hero${imgs.length > 1 ? ' with-thumbs' : ''}">
+    ${stage}
     ${imgs.length > 1 ? `
       <div class="pdp-thumbs" role="group" aria-label="Product images">
         ${imgs.map((src, i) => {
@@ -1824,13 +1843,6 @@ function galleryHTML(p, off) {
           </button>`;
         }).join('')}
       </div>` : ''}
-    <div class="pdp-stage${imgs.length ? ' has-photo' : ''}">
-      ${badges}${main}
-      ${imgs.length ? `
-        <button class="pdp-zoom" id="pdpZoom" aria-label="Zoom this photo">
-          ${ICON.search}<span>Zoom</span>
-        </button>` : ''}
-    </div>
   </div>`;
 }
 
