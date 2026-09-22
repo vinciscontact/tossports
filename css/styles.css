@@ -2234,6 +2234,32 @@ body.pdp-open .fab{bottom:82px}
 .card:hover .card-art.photo img{transform:scale(1.04)}
 .card-noimg{font-size:2.4rem;opacity:.4}
 
+/* ---------- product cards: white, with the moving orange edge ----------
+   The same striped ring as the "Shop by style" cards (.sty-edge), so a bat
+   card and a style card read as one family. CSS only — the markup, links
+   and buttons inside the card are untouched.
+
+   The ring is the card's own ::before, oversized and translated exactly
+   like .sty-edge (transform only, so 31 of them stay cheap). The card is
+   padded 2px and its two children are painted white above the ring, which
+   leaves 2px of stripe showing all the way round. */
+.card{padding:2px;border:0;background:transparent;isolation:isolate}
+.card::before{content:'';position:absolute;z-index:0;top:-60%;left:-60%;
+  width:220%;height:220%;pointer-events:none;
+  background:repeating-linear-gradient(45deg,
+    #FF8A1E 0 20px,#FFC489 20px 34px,#FFFFFF 34px 40px,#E06F00 40px 60px);
+  opacity:.85;animation:styEdge 14s linear infinite;will-change:transform}
+.card:hover::before{opacity:1;animation-duration:5s}
+.card>.card-art,.card>.card-b{position:relative;z-index:1;background:var(--paper)}
+.card>.card-art{border-radius:calc(var(--r-lg) - 2px) calc(var(--r-lg) - 2px) 0 0}
+.card>.card-b{border-radius:0 0 calc(var(--r-lg) - 2px) calc(var(--r-lg) - 2px)}
+/* the navy glow was there to light the bat on a dark band; on white it
+   would be a grey smudge */
+.card-art::after,.card-art .bat-glow{display:none}
+/* a lighter, navy-tinted shadow — the dark one was tuned for navy */
+.card-art .bat-photo{filter:drop-shadow(0 14px 18px rgba(20,20,58,.22))}
+@media (prefers-reduced-motion:reduce){.card::before{animation:none}}
+
 /* ---------- WIN SPLASH ---------- */
 /* Fires when an innings ends with a code unlocked. Confetti falls behind
    a spot-lit card; the code scrambles in at display size. */
