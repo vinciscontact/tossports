@@ -488,7 +488,12 @@ function resetRedirectURL() {
 /** Always resolves. Never reveals whether an account exists. */
 async function requestPasswordReset(email) {
   try {
-    await fetch(SUPA_URL + '/auth/v1/recover', {
+    /* redirect_to says where the emailed link lands. Without it Supabase
+       uses the project's Site URL, which was left at a development
+       address — so every reset link opened a dead page. Supabase honours
+       this only for addresses in its Redirect URLs list. */
+    const back = location.origin + '/maze.html';
+    await fetch(SUPA_URL + '/auth/v1/recover?redirect_to=' + encodeURIComponent(back), {
       method: 'POST',
       headers: { apikey: SUPA_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: String(email).trim(), gotrue_meta_security: {} })

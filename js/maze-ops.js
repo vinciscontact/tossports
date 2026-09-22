@@ -1380,7 +1380,10 @@ async function createLogin(email, name) {
        database keys off public.staff, which only an owner can write, so an
        auth user with no staff row can read exactly what a stranger can. The
        account is the key; the staff row is the lock. */
-    const res = await fetch(SUPA_URL + '/auth/v1/signup', {
+    /* the confirmation email brings them back to the Maze Room — see
+       requestPasswordReset() in config.js for why this must be explicit */
+    const back = location.origin + '/maze.html';
+    const res = await fetch(SUPA_URL + '/auth/v1/signup?redirect_to=' + encodeURIComponent(back), {
       method: 'POST',
       headers: { apikey: SUPA_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, password: pw })
