@@ -11,6 +11,45 @@ let FREE_SHIP_OVER = 1500;
 let SHIP_FEE = 99;
 let STORE_NOTE = '';
 
+/* Months of warranty every Toss bat carries as standard.
+   Null until it is set in Maze Room → Settings → Standard warranty months.
+
+   Null is deliberately not zero. The warranty terms say the period is the one
+   printed on the warranty card, so with no number set the site says exactly
+   that and claims nothing — rather than a hardcoded "3-month warranty" badge
+   sitting on the homepage that no product data backs up, which is what it
+   used to do. Setting the number here makes it appear on every product page,
+   in the hero badge, and in the checkout line, all at once and with no deploy. */
+let WARRANTY_MONTHS = null;
+
+/* The one place the terms live, so a link never goes stale in three files. */
+const WARRANTY_URL = '/warranty-policy/';
+const RETURN_DAYS = 10;
+
+/* How many bats, and what the cheapest costs — worked out from the catalogue
+   rather than typed into sentences. "29 bats … from ₹950" sat in the hero long
+   after the range became 31 bats from ₹900, because nothing connected the copy
+   to the data it described. */
+const batCount   = () => PRODUCTS.filter(p => prodCat(p) === 'bats').length;
+const priceFloor = () => {
+  const ps = PRODUCTS.filter(p => prodCat(p) === 'bats' && hasPrice(p)).map(p => p.price);
+  return ps.length ? Math.min(...ps) : null;
+};
+const fromPrice  = () => priceFloor() ? 'From ' + fmt(priceFloor()) + '.' : '';
+
+/* "3-month warranty" when the number is known, and the honest fallback when it
+   is not. Everything customer-facing asks this rather than hardcoding a span. */
+function warrantyLabel() {
+  return WARRANTY_MONTHS
+    ? WARRANTY_MONTHS + '-month warranty'
+    : 'Warranty on every bat';
+}
+function warrantyLine() {
+  return WARRANTY_MONTHS
+    ? `Covered by a ${WARRANTY_MONTHS}-month warranty against manufacturing defects.`
+    : 'Covered by the warranty period printed on the card supplied with your bat.';
+}
+
 /* Set the live key in Maze Room → Settings → Razorpay key id. */
 let RAZORPAY_KEY = 'rzp_test_REPLACE_WITH_YOUR_KEY';
 
@@ -24,11 +63,29 @@ try { cart = JSON.parse(localStorage.getItem('toss_cart') || '[]'); } catch (e) 
 const saveCart = () => localStorage.setItem('toss_cart', JSON.stringify(cart));
 
 let filters = { wood: [], profile: [], ball: [], tier: [], division: [],
-                style: [], weight: [], sort: 'pop', cat: 'bats', q: '' };
+                level: [], style: [], weight: [], badge: [], sort: 'pop', cat: 'bats', q: '' };
 
-/* Who a bat is for, as tagged in the Maze Room. A bat carries several, so
-   these read from the join the sync built rather than a field on the product. */
-const stylesOf = p => (typeof PROD_STYLES !== 'undefined' && PROD_STYLES[p.id]) || [];
+/* Who a bat is for. The printed catalogue answers this directly — every bat
+   carries a level and one or two styles — so this reads the product itself
+   rather than a join table that can only answer once Supabase has replied.
+   Offline, on a cold cache, or with the database unreachable, the shop's
+   "Best for" filter now still works.
+
+   PROD_STYLES is merged in behind it so a tag the owner added by hand in the
+   Maze Room still shows on the shop. sql/027 keeps product_playstyles equal
+   to these fields, so in practice the two agree and the merge is a no-op. */
+const stylesOf = p => {
+  const own = [p.level].concat(p.style || [], weightBand(p)).filter(Boolean);
+  const db = (typeof PROD_STYLES !== 'undefined' && PROD_STYLES[p.id]) || [];
+  return own.concat(db.filter(id => !own.includes(id)));
+};
+
+/* One name for any facet id, wherever it came from: the catalogue's own
+   vocabulary first, then whatever the Maze Room has on file, then the raw id
+   so a retired tag sitting in a bookmarked URL renders instead of crashing. */
+const facetLabel = id => LEVEL_LABEL[id] || STYLE_LABEL[id] ||
+  ({ light: 'Light', medium: 'Medium', heavy: 'Heavy' })[id] ||
+  ((typeof styleMeta === 'function' && styleMeta(id)) || {}).name || id;
 const styleMeta = id => (typeof PLAYSTYLES !== 'undefined' &&
   PLAYSTYLES.find(s => s.id === id)) || null;
 /* The live styles in one group, in the order the owner sorted them. */
@@ -95,10 +152,18 @@ function cartCount() { return cart.reduce((n, i) => n + i.qty, 0); }
 const WARRANTY = () => (SERVICES.warranty && SERVICES.warranty.enabled)
   ? SERVICES.warranty.plans : [];
 
-/** Months of cover a bat already comes with. 0 for most of them. */
+/** Months of cover a bat already comes with.
+
+    Reads the bat's own `warranty` field first, then falls back to the standard
+    period every Toss bat carries. The fallback is what stops the paid plans
+    being sold on top of cover the customer already has: the 2026 catalogue
+    carries no per-bat warranty text at all, so without it freeWarrantyMonths
+    returned 0 for all 31 bats and the 3-month plan was offered to people who
+    already had three months included. */
 function freeWarrantyMonths(p) {
   const m = String((p && p.warranty) || '').match(/(\d+)\s*month/i);
-  return m ? Number(m[1]) : 0;
+  if (m) return Number(m[1]);
+  return WARRANTY_MONTHS || 0;
 }
 
 /** The plans worth offering on this bat, with the months they actually add. */
@@ -240,6 +305,22 @@ function pruneCart() {
   return dropped;
 }
 
+/* ---------------- the spec vocabulary, for imperfect products ----------
+
+   A bat saved from the Maze Room without a wood or a profile used to take
+   the entire shop down with it. The card read WOOD[p.wood].short straight
+   out of the table, found nothing there, and threw in the middle of the
+   map that builds the grid — so viewShop() never returned, the page kept
+   whatever had been on it, and every filter and sort along with it looked
+   broken. The catalogue is edited by people, over the web, one field at a
+   time; a row that is missing one of them is a normal thing to happen and
+   should cost that product a line of its own text, not the storefront.
+
+   The dash is deliberate. It reads as "not filled in yet" to a customer
+   and as a job to whoever opens that product in the Maze Room. */
+const WOOD_OF    = p => WOOD[p && p.wood]       || { key: '', label: '—', short: '—' };
+const PROFILE_OF = p => PROFILE[p && p.profile] || { key: '', label: '—', blurb: '' };
+
 /* ---------------- WhatsApp ---------------- */
 function waLink(text) {
   return 'https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(text);
@@ -288,6 +369,58 @@ function cartWaText(info) {
   return t;
 }
 
+/* The finished order, written out as the message the customer sends us.
+
+   Built from the order rather than the cart, because completeOrder() has
+   already emptied the cart by the time the confirmation screen renders —
+   cartWaText() would hand them a message with nothing in it.
+
+   It also has to carry what the cart never knew: the order number, and for
+   an online payment the Razorpay reference. Those two are what turn this
+   from a shopping list into something either side can look up later. */
+function orderWaText(o) {
+  const paid = o.method === 'online';
+  let t = 'Hi Toss Sports 👋\n\n';
+  t += paid ? 'I have just paid for this order:\n\n' : 'I want to place this order:\n\n';
+  t += `*Order ${o.id}*\n`;
+  if (o.payment_id) t += `Payment reference: ${o.payment_id}\n`;
+  t += '\n';
+
+  (o.items || []).forEach((i, n) => {
+    const p = byId(i.id) || { name: i.id, price: 0 };
+    const v = variantName(p, i.variant);
+    t += `${n + 1}. *${p.name}*${v ? ' — ' + v : ''}\n`;
+    if (i.engrave) t += `   Engraved: "${i.engrave}"\n`;
+    if (i.warranty) {
+      const w = WARRANTY().find(x => x.id === String(i.warranty));
+      if (w) t += `   Warranty: ${w.months} months\n`;
+    }
+    const unit = (p.price || 0) + (i.engrave ? SERVICES.engraving.price : 0) + warrantyPrice(i);
+    t += `   Qty ${i.qty}`;
+    t += hasPrice(p) ? ` × ${fmt(unit)} = ${fmt(unit * i.qty)}\n` : '  (price on request)\n';
+  });
+
+  t += `\nSubtotal: ${fmt(o.subtotal)}`;
+  t += `\nShipping: ${o.shipping === 0 ? 'FREE' : fmt(o.shipping)}`;
+  if (o.off > 0) t += `\nDiscount (${o.coupon}): −${fmt(o.off)}`;
+  t += `\n*Total: ${fmt(o.total)}*\n`;
+  if (paid) t += 'Paid online ✅\n';
+
+  const info = o.info;
+  if (info) {
+    t += `\n— Delivery details —\n${info.name}\n${info.phone}\n${info.address}\n${info.city} — ${info.pin}\n${info.state}`;
+    if (info.email) t += `\n${info.email}`;
+    if (info.notes) t += `\nNote: ${info.notes}`;
+  }
+  t += '\n\nPlease confirm and share tracking.';
+  /* One line, at the end, on the message the customer sends themselves. It
+     puts the terms in a thread both sides keep, timestamped, next to the
+     order number — which is worth more in a dispute than a page either of us
+     could have edited since. */
+  t += `\n\n_Warranty & ${RETURN_DAYS}-day returns: https://tossports.com${WARRANTY_URL}_`;
+  return t;
+}
+
 /* ---------------- filtering ---------------- */
 const prodCat = p => p.category || 'bats';
 
@@ -309,7 +442,46 @@ const DIVISION = {
 };
 function division(p) {
   if (p.division) return p.division;
-  return (p.ball || []).includes('medium') ? 'pro' : 'gully';
+  /* Anything built for a medium or hard ball is turf-and-tournament kit.
+     Only the soft-ball range is gully cricket. */
+  const b = p.ball || [];
+  return (b.includes('medium') || b.includes('hard')) ? 'pro' : 'gully';
+}
+
+/* One test per filter group. OR within a group, AND across groups: "attacker
+   or classic, tournament level, soft ball" is what someone means when they
+   tick four boxes.
+
+   Kept in one table because TWO things ask it the same question: the results
+   grid, and the panel deciding which options would come back empty. When
+   those were separate the panel promised six Quick Hands bats while the grid,
+   with Medium Tennis ticked, showed none — the catalogue has no medium-ball
+   Quick Hands bat, and only one of the two pieces of code knew it.
+
+   profile, division and weight are not in the printed catalogue and are no
+   longer offered in the panel. Their tests stay so that links already out in
+   the world — footers, landing pages, bookmarks — still filter correctly. */
+const FILTER_TEST = {
+  ball:     (p, v) => v.some(b => (p.ball || []).includes(b)),
+  style:    (p, v) => v.some(x => stylesOf(p).includes(x)),
+  level:    (p, v) => v.includes(p.level),
+  wood:     (p, v) => v.includes(p.wood),
+  badge:    (p, v) => v.some(x => badgeKeys(p).includes(x)),
+  tier:     (p, v) => v.includes(p.tier),
+  profile:  (p, v) => v.includes(p.profile),
+  division: (p, v) => v.includes(division(p)),
+  weight:   (p, v) => v.includes(weightBand(p))
+};
+
+/* Does p pass every active group — except, optionally, `skip`, and with
+   `extra` values standing in for that group? That second form is how the
+   panel asks "if I ticked this too, would anything be left?" */
+function passesFilters(p, skip, extra) {
+  for (const g in FILTER_TEST) {
+    const vals = g === skip ? extra : filters[g];
+    if (vals && vals.length && !FILTER_TEST[g](p, vals)) return false;
+  }
+  return true;
 }
 
 function filtered() {
@@ -342,17 +514,7 @@ function filtered() {
 
   let list = PRODUCTS.filter(p => prodCat(p) === filters.cat);
   /* the spec filters describe bats — other categories are a plain grid */
-  if (filters.cat === 'bats') list = list.filter(p =>
-    (!filters.wood.length    || filters.wood.includes(p.wood)) &&
-    (!filters.profile.length || filters.profile.includes(p.profile)) &&
-    (!filters.ball.length    || filters.ball.some(b => (p.ball || []).includes(b))) &&
-    (!filters.tier.length    || filters.tier.includes(p.tier)) &&
-    (!filters.division.length || filters.division.includes(division(p))) &&
-    /* OR within a group, AND across groups: "attacker or all-rounder, and
-       light" is what a person means when they tick three chips. */
-    (!filters.style.length  || filters.style.some(v => stylesOf(p).includes(v))) &&
-    (!filters.weight.length || filters.weight.some(v => stylesOf(p).includes(v)))
-  );
+  if (filters.cat === 'bats') list = list.filter(p => passesFilters(p));
   const s = filters.sort;
   /* "price on request" items always sink to the bottom, whichever way we sort */
   const lo = p => (p.price == null ?  Infinity : p.price);
@@ -378,12 +540,14 @@ function activeChips() {
   filters.division.forEach(v => out.push({ g: 'division', v, l: DIVISION[v].label }));
   /* A style the owner has since retired can still be sitting in a bookmarked
      URL, so fall back to the raw id rather than crashing on a missing name. */
-  filters.style.forEach(v  => out.push({ g: 'style',  v, l: (styleMeta(v) || {}).name || v }));
-  filters.weight.forEach(v => out.push({ g: 'weight', v, l: (styleMeta(v) || {}).name || v }));
+  filters.level.forEach(v  => out.push({ g: 'level',  v, l: facetLabel(v) }));
+  filters.style.forEach(v  => out.push({ g: 'style',  v, l: facetLabel(v) }));
+  filters.weight.forEach(v => out.push({ g: 'weight', v, l: facetLabel(v) }));
+  filters.badge.forEach(v  => out.push({ g: 'badge',  v, l: (BADGE[v] || {}).label || v }));
   return out;
 }
 /* filter state lives in the URL so filtered views are shareable and Back works */
-const FKEYS = ['wood', 'profile', 'ball', 'tier', 'division', 'style', 'weight'];
+const FKEYS = ['wood', 'profile', 'ball', 'tier', 'division', 'level', 'style', 'weight', 'badge'];
 
 function shopURL() {
   const q = [];
@@ -435,10 +599,12 @@ const IG_PROFILE = TOSS_LINKS.instagram;
    the cheapest choice, which is also where the margin is better. */
 function tierRowHTML(flush) {
   const TIERS = [
+    /* Ball type is a filter of its own and every price bracket now covers
+       all three, so these notes describe the spend, not the ball. */
     { id: 'entry',   name: 'Starter',      line: 'First proper bat',
-      note: 'Street and soft tennis ball' },
+      note: 'Where the range starts' },
     { id: 'mid',     name: 'Intermediate', line: 'What most players buy',
-      note: 'Soft and medium ball, weekend matches', star: true },
+      note: 'Better wood, weekend matches', star: true },
     { id: 'premium', name: 'Professional', line: 'Tournament weapons',
       note: 'Big edges, custom weights, warranty' }
   ];
@@ -452,7 +618,6 @@ function tierRowHTML(flush) {
     const list = PRODUCTS.filter(p => p.tier === t.id && prodCat(p) === 'bats' && hasPrice(p));
     if (!list.length) return '';
     const from = Math.min(...list.map(p => p.price));
-    const reviews = list.reduce((s, p) => s + (p.reviews || 0), 0);
     return `
       <a class="tier${t.star ? ' star' : ''}" href="#/shop?tier=${t.id}">
         ${t.star ? '<span class="tier-flag">Most picked</span>' : ''}
@@ -460,7 +625,6 @@ function tierRowHTML(flush) {
         <span class="tier-line">${t.line}</span>
         <div class="tier-price"><small>from</small> ${fmt(from)}</div>
         <span class="tier-note">${t.note}</span>
-        <span class="tier-meta">${list.length} bats · ${reviews} reviews</span>
         <span class="tier-go">See these ${ICON.arrow}</span>
       </a>`;
   }).join('');
@@ -484,26 +648,38 @@ function tierRowHTML(flush) {
   </section>`;
 }
 
-/* Evidence that other people already did this. For a first-time buyer from
-   a small brand, this does more than any amount of copy. */
+/* Evidence that this is a real workshop with a real range. For a first-time
+   buyer from a small brand, this does more than any amount of copy.
+
+   IT USED TO BE A RATINGS BAND, AND THE RATINGS WERE NOT REAL
+   -----------------------------------------------------------
+   This printed an average star rating and a total review count, both summed
+   from numbers sitting in the catalogue file — numbers no customer had ever
+   left, on a shop that had taken no orders. Carrying them into the new
+   catalogue would have meant inventing 31 fresh ones, which is a lie told
+   in a place people specifically look to decide whether to trust you.
+
+   So the band now counts things that are true and checkable: how many models
+   we actually make, how many ball types they cover, and what the range
+   starts at. The day real reviews exist, a stars tile belongs back here —
+   with the number those reviews add up to. */
 function socialProofHTML() {
-  const priced = PRODUCTS.filter(p => p.reviews);
-  const reviews = priced.reduce((s, p) => s + p.reviews, 0);
-  const avg = priced.length
-    ? (priced.reduce((s, p) => s + p.rating * p.reviews, 0) / reviews).toFixed(1)
-    : '0';
-  const top = PRODUCTS.slice().sort((a, b) => (b.reviews || 0) - (a.reviews || 0))[0];
+  const bats   = PRODUCTS.filter(p => prodCat(p) === 'bats');
+  const priced = bats.filter(hasPrice);
+  const from   = priced.length ? Math.min(...priced.map(p => p.price)) : null;
+  const balls  = new Set(); bats.forEach(p => (p.ball || []).forEach(b => balls.add(b)));
+  const top    = bats.slice().sort((a, b) => (b.popularity || 0) - (a.popularity || 0))[0];
 
   return `
   <section class="proof">
     <div class="wrap proof-grid">
-      <div class="proof-i"><b>${avg}<span>★</span></b><span>Average rating</span></div>
-      <div class="proof-i"><b>${reviews.toLocaleString('en-IN')}</b><span>Player reviews</span></div>
-      <div class="proof-i"><b>${PRODUCTS.length}</b><span>Models in our unit</span></div>
-      <div class="proof-i wide">
-        <b>Most bought</b>
-        <a href="#/product/${top.id}">${esc(top.name)} — ${top.reviews} reviews ${ICON.arrow}</a>
-      </div>
+      <div class="proof-i"><b>${bats.length}</b><span>Models in our unit</span></div>
+      <div class="proof-i"><b>${balls.size}</b><span>Ball types covered</span></div>
+      ${from ? `<div class="proof-i"><b>${fmt(from)}</b><span>Range starts at</span></div>` : ''}
+      ${top ? `<div class="proof-i wide">
+        <b>Best seller</b>
+        <a href="#/product/${top.id}">${esc(top.name)} ${ICON.arrow}</a>
+      </div>` : ''}
     </div>
   </section>`;
 }
@@ -550,17 +726,17 @@ function cardHTML(p) {
       ${batArt(p)}
     </a>
     <div class="card-b">
-      <span class="card-meta">${WOOD[p.wood].short} · ${(PROFILE_WORDS[p.profile] || PROFILE_WORDS.standard).b}</span>
+      <span class="card-meta">${WOOD_OF(p).short} · ${(PROFILE_WORDS[p.profile] || PROFILE_WORDS.standard).b}</span>
       <h3><a href="#/product/${p.id}">${esc(p.name)}</a></h3>
       ${p.tagline ? `<p class="card-tag">${esc(p.tagline)}</p>` : ''}
       <!-- plain language first, the figure as fine print. "780 grams" means
            nothing to a first-time buyer; "Light pickup" is actionable. -->
       <div class="card-spec">
-        <span><b>${pickupWords(p).b}</b><i>${pickupWords(p).s}</i>
-          <u>${p.weight[0]}–${p.weight[1]}g</u></span>
-        <span><b>${ballWords(p).b}</b><i>${ballWords(p).s}</i></span>
+        <span class="sp sp-w-${pickupKey(p)}"><b>${pickupWords(p).b}</b><i>${pickupWords(p).s}</i>
+          <u>${p.weight[0]}–${p.weight[1]}g</u>${meterHTML()}</span>
+        <span class="sp sp-b-${ballKey(p)}"><b>${ballWords(p).b}</b><i>${ballWords(p).s}</i>${meterHTML()}</span>
       </div>
-      <div class="rate">${ICON.star}${p.rating}<span>(${p.reviews})</span></div>
+      ${p.reviews ? `<div class="rate">${ICON.star}${p.rating}<span>(${p.reviews})</span></div>` : ''}
       <div class="card-foot">
         ${hasPrice(p)
           ? `<div class="price num">${fmt(p.price)}${p.mrp ? `<small>${fmt(p.mrp)}</small>` : ''}
@@ -574,60 +750,58 @@ function cardHTML(p) {
   </article>`;
 }
 
+/* The filter panel, in the order the printed catalogue asks its questions:
+   "FIND YOUR BAT BY BALL TYPE", then YOUR STYLE, then the bat. Level, wood,
+   the catalogue's own highlights and price follow.
+
+   No counts beside the options — the owner asked for shoppers not to be shown
+   numbers. The count is still worked out, though, because it answers the
+   question that matters: would ticking this leave anything at all? An option
+   that would empty the grid is greyed out rather than offered as a dead end.
+   An option already ticked is never disabled, so it can always be unticked. */
 function filterPanelHTML() {
-  const count = (g, v) => PRODUCTS.filter(p => prodCat(p) === 'bats' &&
-    (g === 'ball'     ? (p.ball || []).includes(v)
-     : g === 'division' ? division(p) === v
-     : p[g] === v)).length;
-  const grp = (title, g, opts) => `
+  const bats = PRODUCTS.filter(p => prodCat(p) === 'bats');
+  /* How many bats would remain if v were added to group g, given everything
+     else already ticked. OR within a group, so a ticked sibling counts too. */
+  const wouldLeave = (g, v) => {
+    const vals = filters[g].includes(v) ? filters[g] : filters[g].concat(v);
+    return bats.filter(p => passesFilters(p, g, vals)).length;
+  };
+  const grp = (title, g, opts, note) => `
     <div class="fgroup">
       <b>${title}</b>
-      ${opts.map(o => `
-        <label class="chk">
-          <input type="checkbox" data-f="${g}" value="${o.v}" ${filters[g].includes(o.v) ? 'checked' : ''}>
-          <span>${o.l}</span><span class="n">${count(g, o.v)}</span>
-        </label>`).join('')}
+      ${note ? `<p class="fnote">${note}</p>` : ''}
+      ${opts.map(o => {
+        const on = filters[g].includes(o.v);
+        const dead = !on && wouldLeave(g, o.v) === 0;
+        return `
+        <label class="chk${dead ? ' dead' : ''}"${dead ? ' title="No bats match this with your other choices"' : ''}>
+          <input type="checkbox" data-f="${g}" value="${o.v}" ${on ? 'checked' : ''} ${dead ? 'disabled' : ''}>
+          <span>${o.l}${o.sub ? `<small>${o.sub}</small>` : ''}</span>
+        </label>`;
+      }).join('')}
     </div>`;
-  /* One block per play-style group, driven entirely by what the Maze Room
-     holds — add "Finisher" there and it appears here with no code change.
-     Renders nothing at all when the tables are absent or empty, which is
-     also what happens offline. */
-  const styleGroups = (typeof PLAYSTYLE_GROUPS === 'undefined' ? [] : PLAYSTYLE_GROUPS)
-    .slice().sort((a, b) => (a.sort || 0) - (b.sort || 0))
-    .map(g => {
-      const key = g.id === 'weight' ? 'weight' : 'style';
-      const live = stylesInGroup(g.id);
-      if (!live.length) return '';
-      const n = sid => PRODUCTS.filter(p => prodCat(p) === 'bats' &&
-        stylesOf(p).includes(sid)).length;
-      return `
-        <div class="fgroup">
-          <b>${esc(g.name)}</b>
-          ${live.map(s => `
-            <label class="chk">
-              <input type="checkbox" data-f="${key}" value="${esc(s.id)}"
-                ${filters[key].includes(s.id) ? 'checked' : ''}>
-              <span>${esc(s.name)}</span>
-              <span class="n">${n(s.id)}</span>
-            </label>`).join('')}
-        </div>`;
-    }).join('');
+
+  /* Style carries the catalogue's own description, and — once exactly one
+     ball is chosen — that ball's weight band for the style, straight off the
+     catalogue's "YOUR BALL · YOUR STYLE · YOUR BAT" table. With no ball or
+     several chosen there is no single right number, so it says none. */
+  const oneBall = filters.ball.length === 1 ? filters.ball[0] : null;
+  const styleOpts = Object.values(STYLE).map(st => ({
+    v: st.key, l: st.label,
+    sub: (oneBall && STYLE_BANDS[oneBall] ? STYLE_BANDS[oneBall][st.key] + ' · ' : '') + st.blurb
+  }));
 
   return (
-    styleGroups +
-    grp('Division', 'division',
-      Object.keys(DIVISION).map(k => ({ v: k, l: DIVISION[k].label }))) +
+    grp('Ball type', 'ball',
+      Object.keys(BALL_LABEL).map(k => ({ v: k, l: BALL_LABEL[k], sub: BALL_NOTE[k] })),
+      'Start here — the ball decides how strong the bat must be.') +
+    grp('Your style', 'style', styleOpts,
+      oneBall ? null : 'Pick one ball type to see the right weight for each style.') +
+    grp('Level', 'level', Object.values(LEVEL).map(l => ({ v: l.key, l: l.label }))) +
     grp('Wood', 'wood', Object.values(WOOD).map(w => ({ v: w.key, l: w.label }))) +
-    grp('Profile', 'profile', Object.values(PROFILE).map(w => ({ v: w.key, l: w.label }))) +
-    grp('Ball Type', 'ball', [{ v: 'soft', l: 'Soft Tennis' }, { v: 'medium', l: 'Medium Tennis' }]) +
-    `<div class="fgroup"><b>Price</b>
-      ${['entry','mid','premium'].map(t => `
-        <label class="chk">
-          <input type="checkbox" data-f="tier" value="${t}" ${filters.tier.includes(t) ? 'checked' : ''}>
-          <span>${TIER_LABEL[t]}</span>
-          <span class="n">${PRODUCTS.filter(p => p.tier === t).length}</span>
-        </label>`).join('')}
-    </div>`
+    grp('Highlights', 'badge', Object.values(BADGE).map(b => ({ v: b.key, l: b.label }))) +
+    grp('Price', 'tier', ['entry', 'mid', 'premium'].map(t => ({ v: t, l: TIER_LABEL[t] })))
   );
 }
 
@@ -818,7 +992,14 @@ function styleRowsHTML() {
 function viewHome() {
   const best = PRODUCTS.filter(p => p.popularity >= 80)
     .sort((a, b) => b.popularity - a.popularity).slice(0, 8);
-  const px = byId('power-x');
+  /* The flagship is a family of three now, not one bat with three variants:
+     the catalogue lists Feather, Mercury and Sixit as separate products
+     because Sixit is a medium-ball bat and the other two are soft-ball, and
+     a single product cannot sit in two ball ranges. byId is filtered so the
+     section survives any one of them being taken off sale. */
+  const pxFamily = ['power-x-feather', 'power-x-mercury', 'power-x-sixit']
+    .map(byId).filter(Boolean);
+  const px = pxFamily[0];
   const entry = PRODUCTS.filter(p => p.tier === 'entry').sort((a,b)=>b.popularity-a.popularity).slice(0, 6);
 
   /* THE HERO — copy on the left, the bats on the right.
@@ -873,7 +1054,7 @@ function viewHome() {
      no re-shoot, and the two replacements are TOSS-branded where the
      side views showed no branding at all. */
   const HERO_SHOTS = [
-    { img: 'power-x-front',      href: '#/product/power-x',
+    { img: 'power-x-front',      href: '#/product/power-x-feather',
       w: [69, 167, 213],
       alt: 'Toss Power X — handmade Sri Lankan willow bat',
       label: 'Toss Power X',       note: '3 years of research' },
@@ -881,14 +1062,17 @@ function viewHome() {
       w: [75, 184, 216],
       alt: 'Sri Lankan willow tennis-ball cricket bat',
       label: 'Sri Lankan willow',  note: 'Dense grain, big ping' },
-    { img: 'varnished-bat-3',    href: '#/product/varnished-bat',
+    { img: 'varnished-bat-3',    href: '#/product/srilankan-pro',
       w: [81, 206, 248],
       alt: 'Varnished tennis-ball cricket bat',
-      label: 'Varnished Bat',      note: 'Best seller' },
-    { img: 'leather-ball-bat-1', href: '#/shop',
-      w: [91, 231, 272],
-      alt: 'Leather-ball cricket bat made by Toss',
-      label: 'Leather-ball bats',  note: 'For the harder game' }
+      label: 'Srilankan PRO',      note: 'Best seller' },
+    /* The camo graphic bat earns the fourth slot over the leather-ball
+       shot for one reason: its grip is the site's own orange, so the
+       featured bat ties into the panel instead of sitting on it. */
+    { img: 'graphic-bats-hard-tennis-cricket-bat-2-studio-v2-1', href: '#/shop',
+      w: [52, 132, 230],
+      alt: 'Camo graphic hard tennis-ball cricket bat with orange grip',
+      label: 'Graphic bats',       note: 'Loud looks, hard hits' }
   ];
 
   /* All four bats are on stage at once, fanned across the panel — a single
@@ -934,8 +1118,8 @@ function viewHome() {
       <div class="nhero-copy">
         <p class="eyebrow">Handmade in Chennai</p>
         <h1 class="d1">Bats made by hand.<span class="hl-2">Never resold.</span></h1>
-        <p class="lede">29 bats shaped in our own unit — Sri Lankan wood, Kashmir
-          Willow and Poplar. From ₹950.</p>
+        <p class="lede">${batCount()} bats shaped in our own unit — Sri Lankan wood, Kashmir
+          Willow and Poplar. ${fromPrice()}</p>
         <!-- Two buttons, one decision. The social icons used to sit in this
              row and gave it three different shapes to parse — a filled pill,
              an outlined pill and two bare circles — which is what made the
@@ -957,7 +1141,7 @@ function viewHome() {
           <ul class="nhero-badges">
             <li>${ICON.hammer}<span>Made in our unit</span></li>
             <li>${ICON.truck}<span>Free over ₹1,500</span></li>
-            <li>${ICON.shield}<span>3-month warranty</span></li>
+            <li>${ICON.shield}<span>${warrantyLabel()}</span></li>
           </ul>
 
           <!-- Icon-only and unfilled on purpose, so they read as "also
@@ -1029,9 +1213,9 @@ function viewHome() {
   <section class="trust">
     <div class="wrap trust-grid">
       <div class="trust-i">${ICON.hammer}<div><b>We make it, so we answer for it</b><span>Shaped in our own unit — never resold</span></div></div>
-      <div class="trust-i">${ICON.whatsapp}<div><b>Not sure? Ask before you pay</b><span>Message us — no account, no card</span></div></div>
+      <div class="trust-i">${ICON.whatsapp}<div><b>Not sure? Ask before you pay</b><span>Message us first — no sign-in, no card</span></div></div>
       <div class="trust-i">${ICON.truck}<div><b>Delivered across India</b><span>Free over ₹1,500 · 3–6 days</span></div></div>
-      <div class="trust-i">${ICON.shield}<div><b>Breaks in 3 months? We replace it</b><span>Warranty on Toss Power X</span></div></div>
+      <div class="trust-i">${ICON.shield}<div><b>A real defect is our problem</b><span>Warranty &amp; ${RETURN_DAYS}-day returns · <a href="${WARRANTY_URL}">terms</a></span></div></div>
     </div>
   </section>
 
@@ -1052,6 +1236,7 @@ function viewHome() {
 
   ${tierRowHTML(true)}
 
+  ${!px ? '' : `
   <section class="sec flag dark">
     <div class="wrap flag-grid">
       <div class="flag-art">
@@ -1061,24 +1246,26 @@ function viewHome() {
       <div class="rv">
         <p class="eyebrow">The flagship</p>
         <h2 class="d2">Toss Power X</h2>
-        <p class="lede">Three years of research packed into one blade. Triple hard seasoned,
-          water resistant, science-induced rock toe and handle guard.</p>
+        <p class="lede">Three years of research packed into one blade. Hand crafted,
+          with a science-induced rock toe and handle guard.</p>
         <ul>
-          <li>${ICON.check}Molecules packed powerful bat</li>
-          <li>${ICON.check}Triple hard seasoned, water resistant</li>
+          <li>${ICON.check}Hand crafted, triple hard seasoned</li>
           <li>${ICON.check}Rock toe + handle guard</li>
-          <li>${ICON.check}3 months assured warranty</li>
+          <li>${ICON.check}The lightest bats we make — from 650g</li>
+          <li>${ICON.check}Tournament build across soft and medium ball</li>
         </ul>
         <div class="editions">
-          ${px.variants.map(v => `<div class="edition"><b>${v.name.replace(' Edition','')}</b><span>${v.weight[0]}–${v.weight[1]}g</span></div>`).join('')}
+          ${pxFamily.map(v => `<a class="edition" href="#/product/${v.id}">
+            <b>${esc(v.name.replace('Power X ', ''))}</b>
+            <span>${v.weight[0]}–${v.weight[1]}g</span></a>`).join('')}
         </div>
-        <div class="flag-price"><b>${fmt(px.price)}</b><s>${fmt(px.mrp)}</s></div>
+        <div class="flag-price"><b>${fmt(px.price)}</b></div>
         <div class="hero-cta" style="margin-top:20px">
-          <a href="#/product/power-x" class="btn btn-primary">View Power X ${ICON.arrow}</a>
+          <a href="#/shop?q=Power+X" class="btn btn-primary">See the Power X range ${ICON.arrow}</a>
         </div>
       </div>
     </div>
-  </section>
+  </section>`}
 
   ${communityHTML()}
 
@@ -1146,22 +1333,350 @@ function viewHome() {
         </div>
         <div class="mk-stage">
           <span class="mk-n">05</span>
-          <span class="mk-art">${batSVG(byId('power-x') || PRODUCTS[0], { glow: false })}</span>
+          <span class="mk-art">${batSVG(byId('power-x-feather') || PRODUCTS[0], { glow: false })}</span>
           <b>Finished</b>
           <p>Custom weight, scoop and colour on request — then it ships to you.</p>
         </div>
       </div>
 
       <div class="mk-foot rv">
-        <span>29 models come off this line — from ₹950, direct price, no middleman.</span>
+        <span>${batCount()} models come off this line — ${fromPrice().toLowerCase().replace(/\.$/, '')}, direct price, no middleman.</span>
         <a class="btn btn-primary btn-sm" href="#/shop?profile=scoop">Customise yours ${ICON.arrow}</a>
       </div>
     </div>
   </section>
 
+  ${gullyStoryHTML()}
+  ${storyTeaserHTML()}
   ${trustBand()}
   `;
 }
+
+/* ---------------- THE GULLY STORY ----------------
+   Four panels of one evening in a street game, drawn rather than
+   photographed: no stock photo of "Indian street cricket" is honest about
+   this shop, and the one photograph that would be — theirs — does not exist
+   yet. Everything here is shapes and thick strokes, so it weighs a few kB,
+   scales to any screen and never loads a file.
+
+   The art is one SVG that stays put while the words scroll past it. Each
+   panel adds to the same scene instead of replacing it, which is the whole
+   point: the wall, the chalk and the bat are still there at the end. */
+function gullyArtSVG() {
+  return `
+  <svg class="gy-svg" viewBox="0 0 640 420" role="img" xmlns="http://www.w3.org/2000/svg"
+       aria-label="An evening street cricket game: chalk stumps on a wall, a ball bowled, a six over the wall, and the bat left leaning at dusk">
+    <defs>
+      <linearGradient id="gySky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0B0B24"/>
+        <stop offset=".55" stop-color="#241640"/>
+        <stop offset="1" stop-color="#7A3A12"/>
+      </linearGradient>
+      <radialGradient id="gyLamp" cx=".5" cy=".5">
+        <stop offset="0" stop-color="#FFC46B" stop-opacity=".55"/>
+        <stop offset="1" stop-color="#FFC46B" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="gyVig" cx=".5" cy=".48" r=".78">
+        <stop offset=".55" stop-color="#000" stop-opacity="0"/>
+        <stop offset="1" stop-color="#000" stop-opacity=".55"/>
+      </radialGradient>
+      <linearGradient id="gyBlade" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#C9884A"/>
+        <stop offset=".5" stop-color="#E7B87E"/>
+        <stop offset="1" stop-color="#8E5A28"/>
+      </linearGradient>
+    </defs>
+
+    <!-- the evening, and the town behind the wall -->
+    <rect width="640" height="420" fill="url(#gySky)"/>
+    <g fill="#0A0A1E" opacity=".85">
+      <rect x="18"  y="120" width="86"  height="96"/>
+      <rect x="120" y="152" width="64"  height="64"/>
+      <rect x="250" y="104" width="104" height="112"/>
+      <rect x="372" y="146" width="72"  height="70"/>
+      <rect x="470" y="118" width="120" height="98"/>
+    </g>
+    <g fill="#FFC46B" opacity=".5">
+      <rect x="34"  y="140" width="10" height="12"/><rect x="62" y="166" width="10" height="12"/>
+      <rect x="272" y="126" width="11" height="13"/><rect x="316" y="160" width="11" height="13"/>
+      <rect x="492" y="140" width="11" height="13"/><rect x="536" y="172" width="11" height="13"/>
+    </g>
+
+    <!-- the wall every gully game is played against -->
+    <rect x="0" y="212" width="640" height="122" fill="#241F3E"/>
+    <g stroke="rgba(255,255,255,.055)" stroke-width="2">
+      <path d="M0 246H640M0 280H640M0 314H640"/>
+      <path d="M70 212v34M210 212v34M350 212v34M490 212v34
+               M140 246v34M280 246v34M420 246v34M560 246v34
+               M70 280v34M210 280v34M350 280v34M490 280v34"/>
+    </g>
+    <rect x="0" y="206" width="640" height="8" fill="#2E2850"/>
+    <!-- the road -->
+    <rect x="0" y="334" width="640" height="86" fill="#101026"/>
+    <rect x="0" y="334" width="640" height="4" fill="#1B1B3A"/>
+
+    <!-- CHALK: three lines and two bails, drawn on panel one and never rubbed out -->
+    <g class="gy-chalk" stroke="#F3F1FF" stroke-width="4" stroke-linecap="round" opacity=".92">
+      <path d="M150 236v66M168 236v66M186 236v66"/>
+      <path d="M144 230h48"/>
+    </g>
+
+    <!-- PANEL 1 — somebody crouches with a piece of chalk -->
+    <g class="gy-l gy-l1" fill="none" stroke="#08081A" stroke-width="9"
+       stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="238" cy="268" r="11" fill="#08081A" stroke="none"/>
+      <path d="M238 280l-6 26"/>
+      <path d="M232 306l-14 24M232 306l16 22"/>
+      <path d="M236 288l-32 6"/>
+      <circle cx="198" cy="294" r="5" fill="#F3F1FF" stroke="none"/>
+    </g>
+
+    <!-- The slippers stay all evening — they are the boundary now — so they
+         belong to the scene rather than to the panel that put them there. -->
+    <g class="gy-l gy-l1 gy-keep" stroke="none" fill="#08081A" opacity=".9">
+      <ellipse cx="392" cy="352" rx="17" ry="7"/>
+      <ellipse cx="424" cy="358" rx="17" ry="7"/>
+    </g>
+
+    <!-- PANEL 2 — first ball: the run-up, the ball, the bat ready -->
+    <g class="gy-l gy-l2" fill="none" stroke="#08081A" stroke-width="9"
+       stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="516" cy="248" r="11" fill="#08081A" stroke="none"/>
+      <path d="M516 260l-5 34"/>
+      <path d="M511 294l-20 38M511 294l18 34"/>
+      <path d="M514 272l18-24"/>
+      <path d="M512 274l-22 12"/>
+    </g>
+    <g class="gy-l gy-l2">
+      <circle cx="538" cy="238" r="9" fill="#C9D949"/>
+      <path d="M470 258h44M452 272h34" stroke="#F3F1FF" stroke-opacity=".45"
+            stroke-width="4" stroke-linecap="round"/>
+    </g>
+
+    <!-- the batter: present for panels two and three, mid-shot in the third -->
+    <g class="gy-bat gy-l gy-l2 gy-l3" fill="none" stroke="#08081A" stroke-width="9"
+       stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="214" cy="252" r="11" fill="#08081A" stroke="none"/>
+      <path d="M214 264l-3 34"/>
+      <path d="M211 298l-16 34M211 298l18 32"/>
+      <path d="M213 276l22 10"/>
+      <g class="gy-blade">
+        <path d="M235 286l16 12" stroke="#2A2035" stroke-width="7"/>
+        <path d="M249 296l20 26" stroke="url(#gyBlade)" stroke-width="15"/>
+      </g>
+    </g>
+
+    <!-- PANEL 3 — over the wall, and whoever hit it goes to fetch it -->
+    <g class="gy-l gy-l3">
+      <path class="gy-arc" d="M250 288C330 176 452 128 592 152" fill="none"
+            stroke="#FF8A1E" stroke-width="4" stroke-linecap="round"
+            stroke-dasharray="9 12" opacity=".85"/>
+      <circle cx="592" cy="152" r="10" fill="#C9D949"/>
+      <!-- a fielder sitting on the wall, legs over the edge, with no chance -->
+      <g fill="none" stroke="#08081A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="452" cy="158" r="10" fill="#08081A" stroke="none"/>
+        <path d="M452 169v36"/>
+        <path d="M452 180l-20-16M452 180l22-18"/>
+        <path d="M452 205l-16 10M436 215l-2 22"/>
+        <path d="M452 205l14 12M466 217v20"/>
+      </g>
+    </g>
+
+    <!-- Evening falling. It sits above the game and below the streetlight, so
+         the lamp reads as the only light left rather than one more layer. -->
+    <rect class="gy-dusk" width="640" height="420" fill="#05050F"/>
+
+    <!-- PANEL 4 — the light goes, the bat stays -->
+    <g class="gy-l gy-l4">
+      <path d="M596 334V128" stroke="#08081A" stroke-width="8" stroke-linecap="round"/>
+      <path d="M596 132h-34" stroke="#08081A" stroke-width="8" stroke-linecap="round"/>
+      <ellipse cx="560" cy="138" rx="15" ry="7" fill="#FFC46B"/>
+      <path d="M560 140l-96 194h192z" fill="url(#gyLamp)"/>
+      <!-- the bat, leaning where it always ends up -->
+      <g>
+        <path d="M272 334l-22-74" stroke="url(#gyBlade)" stroke-width="18" stroke-linecap="round"/>
+        <path d="M250 260l-9-30" stroke="#2A2035" stroke-width="8" stroke-linecap="round"/>
+      </g>
+      <circle cx="300" cy="328" r="9" fill="#C9D949"/>
+      <!-- two of them walking home, bats over the shoulder -->
+      <g fill="none" stroke="#08081A" stroke-width="7" stroke-linecap="round"
+         stroke-linejoin="round" opacity=".92">
+        <circle cx="404" cy="266" r="8" fill="#08081A" stroke="none"/>
+        <path d="M404 275l3 26M407 301l-11 26M407 301l12 24M404 284l16-8"/>
+        <circle cx="452" cy="272" r="8" fill="#08081A" stroke="none"/>
+        <path d="M452 281l3 24M455 305l-10 24M455 305l12 22M452 289l16-7"/>
+      </g>
+    </g>
+
+    <rect class="gy-vig" width="640" height="420" fill="url(#gyVig)"/>
+  </svg>`;
+}
+
+/* The words beside the art. Each step is a real block of text in the page —
+   the scene is decoration, so the story still reads with the SVG blocked,
+   in a feed reader, or to Google. */
+const GULLY_STEPS = [
+  ['01', 'Three lines on a wall',
+   'Somebody finds a piece of chalk. That is the stumps sorted, and the match is on.'],
+  ['02', 'One tip, one hand',
+   'No umpire, no rope, no scoreboard. Only rules everyone agreed on years ago and nobody ever wrote down.'],
+  ['03', 'Whoever hits it, fetches it',
+   'Over the wall is six and out. The argument about whether it cleared the wall is part of the game.'],
+  ['04', 'The bat comes back tomorrow',
+   'The game ends when the light does. A street bat has to survive concrete, drains and a thousand tennis balls — so that is the bat we build.']
+];
+
+function gullyStoryHTML() {
+  return `
+  <section class="sec gully dark" id="gully" data-p="1">
+    <div class="wrap">
+      <p class="eyebrow">Where it actually happens</p>
+      <h2 class="d2">Every bat we make<br>starts in a gully.</h2>
+
+      <div class="gy-grid">
+        <!-- The column stretches the full height of the story; the pin inside
+             it is what sticks. A sticky element can only travel inside its own
+             box, so pinning the column itself let the art scroll away after
+             the first panel and left the rest of the story beside nothing. -->
+        <div class="gy-stage" aria-hidden="true">
+          <div class="gy-pin">
+            ${gullyArtSVG()}
+            <span class="gy-dots">${GULLY_STEPS.map((_, i) =>
+              `<i data-d="${i + 1}"></i>`).join('')}</span>
+          </div>
+        </div>
+
+        <ol class="gy-steps">
+          ${GULLY_STEPS.map(([n, h, p], i) => `
+            <li class="gy-step" data-i="${i + 1}">
+              <span class="gy-n">${n}</span>
+              <h3>${h}</h3>
+              <p>${p}</p>
+            </li>`).join('')}
+          <li class="gy-step gy-end" data-i="4">
+            <a class="btn btn-primary" href="#/shop">Shop the bats ${ICON.arrow}</a>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>`;
+}
+
+/* Which panel is showing is whichever block of text is nearest the middle of
+   the screen.
+
+   This deliberately does NOT use an IntersectionObserver holding references to
+   the steps. The home page re-renders when the catalogue arrives from the
+   database, which replaces every node in it — an observer wired at mount then
+   spends the rest of the visit watching elements that are no longer on the
+   page, and the art stays frozen on panel one. Re-reading the DOM on each
+   frame costs five getBoundingClientRect calls and cannot go stale. */
+let GULLY_ON = false;
+function wireGully() {
+  gullyTick();
+  if (GULLY_ON) return;
+  GULLY_ON = true;
+  let queued = false;
+  const onScroll = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; gullyTick(); });
+  };
+  addEventListener('scroll', onScroll, { passive: true });
+  addEventListener('resize', onScroll);
+}
+function gullyTick() {
+  const sec = document.getElementById('gully');
+  if (!sec) return;                       /* any other page — nothing to do */
+  const mid = innerHeight * 0.42;
+  let best = null, bestGap = Infinity;
+  $$('.gy-step', sec).forEach(s => {
+    const r = s.getBoundingClientRect();
+    const gap = Math.abs((r.top + r.bottom) / 2 - mid);
+    if (gap < bestGap) { bestGap = gap; best = s; }
+  });
+  if (best && sec.dataset.p !== best.dataset.i) sec.dataset.p = best.dataset.i;
+}
+
+/* The brand story, one paragraph, pointing at about-us/.
+
+   A real crawlable URL rather than a hash route, for the reason written on
+   the footer nav below it: Google discards everything after the #, so a
+   story living at #/about would be a page nothing could link to. The full
+   version at /about-us/ carries its own Person schema for both founders. */
+function storyTeaserHTML() {
+  return `
+  <section class="sec story-x">
+    <div class="wrap story-x-in">
+      <div class="story-x-copy rv">
+        <p class="story-x-eyebrow">Our story</p>
+        <h2 class="story-x-h">Two brothers.<br><span class="g">One crazy</span> <span class="o">idea.</span></h2>
+        <p class="story-x-p">Cricket didn't start in stadiums. It started with a tennis ball,
+          a bat that was probably too heavy, and someone shouting
+          &ldquo;Match podalama?&rdquo; — which is exactly why Iniyavan and
+          Imayavarman started Toss.</p>
+        <p class="story-x-cta"><a class="btn btn-primary" href="about-us/">Read our story ${ICON.arrow}</a></p>
+      </div>
+
+      <!-- The two posters, pinned up at angles, and each one is the way
+           into that brother's spread. Tapping one carries the poster
+           itself onto the story page, where it lands as the plate at the
+           head of his section; the button above still opens the story at
+           its cover, so the opening spread is only ever skipped on
+           purpose.
+
+           They were decorative and hidden from screen readers while they
+           were just a picture of the page next door. They are navigation
+           now, so they are named and reachable instead. -->
+      <div class="story-x-art">
+        <a class="story-x-plate story-x-p2" href="about-us/#cofounder">
+          <picture>
+            <source type="image/webp" srcset="images/founders/cofounder-imayavarman-440.webp">
+            <img src="images/founders/cofounder-imayavarman-440.jpg"
+                 alt="Imayavarman, co-founder — read his story"
+                 width="440" height="782" loading="lazy" decoding="async">
+          </picture>
+        </a>
+        <a class="story-x-plate story-x-p1" href="about-us/#founder">
+          <picture>
+            <source type="image/webp" srcset="images/founders/founder-iniyavan-440.webp">
+            <img src="images/founders/founder-iniyavan-440.jpg"
+                 alt="Iniyavan, founder — read his story"
+                 width="440" height="660" loading="lazy" decoding="async">
+          </picture>
+        </a>
+      </div>
+    </div>
+  </section>`;
+}
+
+/* ============================================================
+   THE PLATE MORPH — the homepage half
+
+   A cross-document view transition pairs an element on the way out with
+   the element carrying the same name on the way in. Both posters are on
+   screen, but only one of them is being navigated to, so the name goes
+   on that one here, at the moment of the navigation.
+
+   Which one is read off the destination's hash rather than from a click
+   handler, so a keyboard activation, a tapped poster and a restored
+   session all take the identical path — there is no click to miss.
+
+   The other half of this lives in the head of about-us/index.html, and
+   the tuning in css/view-transition.css. A browser that has never heard
+   of pageswap never fires it and simply follows the link. */
+window.addEventListener('pageswap', function (e) {
+  if (!e.viewTransition || !e.activation) return;
+
+  var to = new URL(e.activation.entry.url);
+  if (!/\/about-us\/$/.test(to.pathname)) return;
+
+  var plate = to.hash === '#founder'   ? document.querySelector('.story-x-p1')
+            : to.hash === '#cofounder' ? document.querySelector('.story-x-p2')
+            : null;
+
+  if (plate) plate.style.viewTransitionName = 'plate';
+});
 
 /* Testimonials sit directly under the stats band rather than at the foot of
    the page. Numbers and quotes together make one evidence block, placed where
@@ -1351,17 +1866,32 @@ function wireTrust() {
    "780 grams" tells you nothing unless you already know bats; "Heavy — hits
    hardest" does. The figure stays underneath for anyone who wants it, so
    nothing is hidden — the meaning just leads and the data supports it. */
+/* Light and heavy are judged against the bat's own ball type, not against
+   the whole catalogue. A 1000g hard bat is mid-range for a hard ball and
+   absurd for a soft one; calling it "Heavy" on both would be true of the
+   scales and useless to the player holding it. */
 function pickupWords(p) {
-  const mid = (p.weight[0] + p.weight[1]) / 2;
-  if (mid < 760) return { b: 'Light pickup', s: 'Fast swing, easy to control' };
-  if (mid > 850) return { b: 'Heavy',        s: 'Hits hardest, tires you sooner' };
-  return             { b: 'Balanced',   s: 'The range most players pick' };
+  const band = weightBand(p);
+  if (band === 'light') return { b: 'Light pickup', s: 'Fast swing, easy to control' };
+  if (band === 'heavy') return { b: 'Heavy',        s: 'Hits hardest, tires you sooner' };
+  return                       { b: 'Balanced',     s: 'The range most players pick' };
+}
+/* The colour key for the two spec tiles. Kept beside the words they colour,
+   so a new ball type or weight band cannot gain a label and lose its colour. */
+function pickupKey(p) { return weightBand(p) || 'balanced'; }
+/* Three segments, filled by the level in the class beside it (CSS decides how
+   many). Decorative only — aria-hidden, because the words above already say
+   "Light pickup" or "Hard ball" to a screen reader. */
+function meterHTML() { return '<em class="sp-m" aria-hidden="true"><i></i><i></i><i></i></em>'; }
+function ballKey(p) {
+  const b = p.ball || [];
+  return b.includes('hard') ? 'hard' : b.includes('medium') ? 'medium' : 'soft';
 }
 function ballWords(p) {
-  const soft = p.ball.includes('soft'), med = p.ball.includes('medium');
-  if (soft && med) return { b: 'Soft or medium ball', s: 'Handles either' };
-  if (med)         return { b: 'Medium ball',         s: 'Tournaments and turf' };
-  return                { b: 'Soft ball',          s: 'Street and gully' };
+  const b = p.ball || [];
+  if (b.includes('hard'))   return { b: 'Hard ball',   s: 'Hard tennis and stumper' };
+  if (b.includes('medium')) return { b: 'Medium ball', s: 'Tournaments and turf' };
+  return                           { b: 'Soft ball',   s: 'Street and gully' };
 }
 const PROFILE_WORDS = {
   standard: { b: 'Classic shape',  s: 'All-round, nothing extreme' },
@@ -1376,10 +1906,15 @@ const PROFILE_WORDS = {
    ₹2,999 flagship as if they were alternatives. Dropping the 01–29 numbering
    also removes a false ranking — it was only sort position, so switching to
    "price low to high" would have made "01" quietly mean cheapest. */
+/* The subtitles deliberately say nothing about ball type. These are PRICE
+   brackets, and since the 2026 catalogue every bracket spans all three balls
+   — the cheapest hard-tennis bat is ₹1,350 and lands in "Starting out",
+   which used to tell the reader it was for "street games and soft tennis
+   ball". Ball type is its own filter; this row is about what you spend. */
 const SHOP_GROUPS = [
-  { tier: 'entry',   title: 'Starting out',    sub: 'A first proper bat. Street games and soft tennis ball.' },
-  { tier: 'mid',     title: 'Weekend matches', sub: 'Soft and medium ball, regular play, better wood.' },
-  { tier: 'premium', title: 'Tournament bats', sub: 'Big edges, custom weights, and our warranty.' }
+  { tier: 'entry',   title: 'Starting out',    sub: 'A first proper bat. Every ball type has one.' },
+  { tier: 'mid',     title: 'Weekend matches', sub: 'Better wood and finish, for regular weekly play.' },
+  { tier: 'premium', title: 'Tournament bats', sub: 'Our best timber, finishes and tournament builds.' }
 ];
 
 function groupedIndex(list) {
@@ -1399,7 +1934,6 @@ function groupedIndex(list) {
         <div class="ix-gh">
           <h2>${g.title}</h2>
           <p>${g.sub}</p>
-          <span class="ix-gn">${rows.length} bat${rows.length === 1 ? '' : 's'}</span>
         </div>
         <div class="grid">${rows.map(cardHTML).join('')}</div>
       </div>`;
@@ -1469,13 +2003,19 @@ function viewShop() {
               <option value="lo"${filters.sort==='lo'?' selected':''}>Price: low to high</option>
               <option value="hi"${filters.sort==='hi'?' selected':''}>Price: high to low</option>
               <option value="light"${filters.sort==='light'?' selected':''}>Lightest first</option>
-              <option value="rate"${filters.sort==='rate'?' selected':''}>Top rated</option>
+              ${PRODUCTS.some(p => p.reviews)
+                ? `<option value="rate"${filters.sort==='rate'?' selected':''}>Top rated</option>`
+                : ''}
             </select>
             <!-- A text search spans every category, so "bats" would be a lie
                  the moment somebody searches for a ball. -->
-            <span class="count num">${list.length} ${filters.q
-              ? 'result' + (list.length === 1 ? '' : 's')
-              : 'bat' + (list.length === 1 ? '' : 's')}</span>
+            <!-- A search result count answers something the shopper asked, so it
+                 stays. The plain browsing count did not: it only ever told them
+                 how small or large the range is, which is not their business
+                 and not ours to volunteer. -->
+            ${filters.q
+              ? `<span class="count num">${list.length} result${list.length === 1 ? '' : 's'}</span>`
+              : ''}
           </div>
 
           ${chips.length ? `<div class="pills">
@@ -1519,8 +2059,27 @@ function galleryHTML(p, off) {
      stranded in a sea of empty white with the other shots pushed so far
      down they read as decoration. Beside it, they are the first thing
      the eye finds after the product. */
+  /* The stage is framed by the same moving orange stripe as the shop cards,
+     with the wood name set huge and faint behind the bat and a floor
+     shadow under it — a lit plinth rather than a plain white box. The
+     angle strip sits BELOW as a centred row of pills. */
+  const wm = WOOD_OF(p).short !== '—' ? WOOD_OF(p).short : (p.name || '');
+  const stage = `
+    <div class="pdp-frame">
+      <span class="pdp-edge" aria-hidden="true"></span>
+      <div class="pdp-stage${imgs.length ? ' has-photo' : ''}">
+        <span class="pdp-wm" aria-hidden="true">${esc(wm)}</span>
+        <span class="pdp-floor" aria-hidden="true"></span>
+        ${badges}${main}
+        ${imgs.length ? `
+          <button class="pdp-zoom" id="pdpZoom" aria-label="Zoom this photo">
+            ${ICON.search}<span>Zoom</span>
+          </button>` : ''}
+      </div>
+    </div>`;
   return `
-  <div class="pdp-gal${imgs.length > 1 ? ' with-thumbs' : ''}">
+  <div class="pdp-gal pdp-hero${imgs.length > 1 ? ' with-thumbs' : ''}">
+    ${stage}
     ${imgs.length > 1 ? `
       <div class="pdp-thumbs" role="group" aria-label="Product images">
         ${imgs.map((src, i) => {
@@ -1542,13 +2101,6 @@ function galleryHTML(p, off) {
           </button>`;
         }).join('')}
       </div>` : ''}
-    <div class="pdp-stage${imgs.length ? ' has-photo' : ''}">
-      ${badges}${main}
-      ${imgs.length ? `
-        <button class="pdp-zoom" id="pdpZoom" aria-label="Zoom this photo">
-          ${ICON.search}<span>Zoom</span>
-        </button>` : ''}
-    </div>
   </div>`;
 }
 
@@ -1714,14 +2266,14 @@ function viewProductGeneric(p) {
           <div class="pdp-assure">
             <span>${ICON.hammer}<b>From our unit</b><i>Hand-checked</i></span>
             <span>${ICON.truck}<b>${hasPrice(p) && p.price >= FREE_SHIP_OVER ? 'Free shipping' : 'Ships India-wide'}</b><i>3–6 days</i></span>
-            <span>${ICON.whatsapp}<b>Ask before you pay</b><i>No account needed</i></span>
+            <span>${ICON.whatsapp}<b>Ask before you pay</b><i>Message us, no sign-in</i></span>
             <span>${ICON.check}<b>Checked &amp; packed</b><i>Photographed first</i></span>
           </div>
 
           <div class="buy-row">
             ${hasPrice(p)
               ? `<button class="btn btn-primary btn-block" id="addBtn">${ICON.cart} Add to Bag</button>
-                 <button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Order on WhatsApp</button>`
+                 <button class="btn btn-dark btn-block" id="buyBtn">Buy now</button>`
               : `<button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Ask price on WhatsApp</button>`}
           </div>
         </div>
@@ -1805,11 +2357,13 @@ function buybarHTML(p) {
     </div>
 
     <div class="bb-act">
-      <button class="btn ${priced ? 'btn-wa-ghost' : 'btn-wa'}" id="waBtn2">
-        ${ICON.whatsapp}<span class="bb-wa-t">${priced ? 'WhatsApp' : 'Ask on WhatsApp'}</span>
-      </button>
-      ${priced ? `<button class="btn btn-primary" id="addBtn2">${ICON.cart}
-        <span class="bb-add-t">Add to Bag</span></button>` : ''}
+      ${priced
+        ? `<button class="btn btn-dark" id="buyBtn2">
+             <span class="bb-wa-t">Buy now</span></button>
+           <button class="btn btn-primary" id="addBtn2">${ICON.cart}
+             <span class="bb-add-t">Add to Bag</span></button>`
+        : `<button class="btn btn-wa" id="waBtn2">
+             ${ICON.whatsapp}<span class="bb-wa-t">Ask on WhatsApp</span></button>`}
     </div>
   </div>`;
 }
@@ -1824,9 +2378,9 @@ function viewProduct(id) {
     .sort((a, b) => b.popularity - a.popularity).slice(0, 4);
 
   const specs = [
-    ['Wood', WOOD[p.wood].label],
-    ['Profile', PROFILE[p.profile].label],
-    ['Weight', weightLabel(p)],
+    ['Wood', WOOD_OF(p).label],
+    ['Profile', PROFILE_OF(p).label],
+    ['Weight', weightLabel(p), 'sp-w-' + pickupKey(p)],
     ['Height', heightLabel(p)],
     ['Handle', p.handle],
     ['Sweet spot', p.sweetSpot],
@@ -1836,7 +2390,7 @@ function viewProduct(id) {
     p.width ? ['Blade width', p.width] : null,
     p.blades ? ['Blade construction', p.blades + ' blade laminated'] : null,
     p.toeGuard ? ['Toe guard', 'Fitted'] : null,
-    ['Ball type', p.ball.map(b => BALL_LABEL[b]).join(' & ')],
+    ['Ball type', p.ball.map(b => BALL_LABEL[b]).join(' & '), 'sp-b-' + ballKey(p)],
     ['Best for', p.usage],
     p.warranty ? ['Warranty', p.warranty] : null
   ].filter(Boolean);
@@ -1855,7 +2409,7 @@ function viewProduct(id) {
         <div>
           <h1 class="pdp-title">${esc(p.name)}</h1>
           <p class="pdp-tag">${esc(p.tagline)}</p>
-          <div class="rate">${ICON.star}${p.rating} <span>· ${p.reviews} reviews</span></div>
+          ${p.reviews ? `<div class="rate">${ICON.star}${p.rating} <span>· ${p.reviews} reviews</span></div>` : ''}
 
           ${hasPrice(p) ? `
             <div class="pdp-price">
@@ -1873,7 +2427,7 @@ function viewProduct(id) {
           <div class="pdp-assure">
             <span>${ICON.hammer}<b>Made by us</b><i>Never resold</i></span>
             <span>${ICON.truck}<b>${p.price >= FREE_SHIP_OVER ? 'Free shipping' : 'Ships India-wide'}</b><i>3–6 days</i></span>
-            <span>${ICON.shield}<b>${p.warranty ? '3 month warranty' : 'Defect cover'}</b><i>We replace it</i></span>
+            <span>${ICON.shield}<b>${warrantyLabel()}</b><i>Defects, after inspection</i></span>
             <span>${ICON.check}<b>Weight to order</b><i>Tell us yours</i></span>
           </div>
 
@@ -1913,8 +2467,17 @@ function viewProduct(id) {
           <div class="buy-row">
             ${hasPrice(p)
               ? `<button class="btn btn-primary btn-block" id="addBtn">${ICON.cart} Add to Bag</button>
-                 <button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Order on WhatsApp</button>`
+                 <button class="btn btn-dark btn-block" id="buyBtn">Buy now</button>`
               : `<button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Ask price on WhatsApp</button>`}
+          </div>
+
+          <!-- Directly under the decision, because this is where somebody
+               hesitates: "what if it breaks, what if it's wrong". Three lines
+               and a link beat a policy page nobody finds. -->
+          <div class="pdp-terms">
+            <span>${ICON.shield}${warrantyLabel()}</span>
+            <span>${ICON.truck}${RETURN_DAYS}-day return if unused</span>
+            <a href="${WARRANTY_URL}">Warranty &amp; returns ${ICON.arrow}</a>
           </div>
 
           ${reviewCard(p)}
@@ -1927,7 +2490,7 @@ function viewProduct(id) {
           <details open>
             <summary><b>Description</b><span class="acc-i"></span></summary>
             <div class="acc-b">
-              <p>${esc(p.tagline)}. ${WOOD[p.wood].short} with a
+              <p>${esc(p.tagline)}. ${WOOD_OF(p).short} with a
                 ${(PROFILE_WORDS[p.profile] || PROFILE_WORDS.standard).b.toLowerCase()} profile,
                 ${p.weight[0]}–${p.weight[1]}g and ${p.height[0]}–${p.height[1]} inches.
                 Built for ${p.ball.map(b => BALL_LABEL[b].toLowerCase()).join(' and ')} cricket.</p>
@@ -1939,7 +2502,9 @@ function viewProduct(id) {
             <summary><b>Specifications</b><span class="acc-i"></span></summary>
             <div class="acc-b">
               <table class="spec-tbl">
-                ${specs.map(s => `<tr><th>${esc(s[0])}</th><td>${esc(s[1])}</td></tr>`).join('')}
+                ${specs.map(s => `<tr><th>${esc(s[0])}</th><td>${s[2]
+                    ? `<span class="sp-pill ${esc(s[2])}">${esc(s[1])}</span>`
+                    : esc(s[1])}</td></tr>`).join('')}
               </table>
             </div>
           </details>
@@ -1962,14 +2527,24 @@ function viewProduct(id) {
             </div>
           </details>
 
+          <!-- Summarised, never paraphrased into a promise. The full terms are
+               one link away and they are what a claim is judged against; this
+               block exists so nobody has to read them to know the shape of it. -->
           <details>
             <summary><b>Warranty</b><span class="acc-i"></span></summary>
             <div class="acc-b">
-              <p>${p.warranty
-                ? esc(p.warranty) + ' from the date of delivery.'
-                : 'Covered against manufacturing defects — wood splitting on its own, or a handle coming loose.'}</p>
-              <p>Normal wear from playing, or damage from a wet ground or the wrong ball,
-                isn't covered. Message us with a photo and we'll sort it out.</p>
+              <p>${p.warranty ? esc(p.warranty) + ' from the date of delivery.' : warrantyLine()}</p>
+              <p>It covers manufacturing and wood defects, and abnormal structural failure
+                in normal play — including failure after a normal ball impact, once we have
+                inspected it. Keep your invoice: it is required for any claim.</p>
+              <p>It does not cover normal wear, scratches and dents, damage from misuse or
+                improper knocking in, water or heat damage, or work done on the bat outside
+                our unit. This bat is built for
+                ${p.ball.map(b => BALL_LABEL[b].toLowerCase()).join(' and ')} — using it
+                against a different ball is not a defect.</p>
+              <p>Send us a photo on WhatsApp first. If inspection confirms the fault is
+                ours, we cover what the courier charged you to send it in.</p>
+              <p><a href="${WARRANTY_URL}">Full warranty, return &amp; replacement terms ${ICON.arrow}</a></p>
             </div>
           </details>
 
@@ -1978,8 +2553,14 @@ function viewProduct(id) {
             <div class="acc-b">
               <p>We ship across India. Free over ${fmt(FREE_SHIP_OVER)}, otherwise ${fmt(SHIP_FEE)}.
                 Orders leave our unit in 1–2 days and arrive in 3–6 depending on where you are.</p>
-              <p>Every bat is checked and photographed before it's packed. If what arrives
-                isn't what you ordered, tell us on WhatsApp and we'll replace it.</p>
+              <p><b>${RETURN_DAYS}-day return.</b> Changed your mind? Tell us within
+                ${RETURN_DAYS} days of delivery. The bat has to come back unused, unplayed
+                and in its original packaging — a knocked-in or played bat can't be
+                returned on preference.</p>
+              <p><b>${RETURN_DAYS}-day replacement</b> for a wrong product, transit damage
+                or a verified manufacturing defect, after inspection and subject to
+                availability.</p>
+              <p><a href="${WARRANTY_URL}">Read the full terms ${ICON.arrow}</a></p>
             </div>
           </details>
         </div>
@@ -2009,21 +2590,20 @@ const QUIZ = [
     opts:[
       {v:'soft',   e:'🎾', b:'Soft tennis ball',   s:'Regular street and gully cricket'},
       {v:'medium', e:'🏏', b:'Medium tennis ball', s:'Heavier ball, tournaments and turf'},
-      {v:'any',    e:'🤷', b:'Both / not sure',    s:'Show me bats that handle either'}
+      {v:'hard',   e:'🥎', b:'Hard tennis ball',   s:'Hard tennis, stumper and rubber ball'},
+      {v:'any',    e:'🤷', b:'Not sure yet',       s:'Show me the whole range'}
     ]},
-  { key:'style', q:'How do you bat?', sub:'Be honest — it changes the profile we suggest.',
+  /* The catalogue's own second question, YOUR STYLE. Options are built by
+     styleOpts() so each can quote the weight the catalogue gives that style
+     for the ball just chosen — a quick-hands soft-ball bat is 650–730g, a
+     quick-hands hard-ball bat 950–1000g, and the same word means both. */
+  { key:'style', q:'How do you bat?', sub:'Straight from our catalogue — pick the one that sounds like you.' },
+  { key:'level', q:'What level do you play at?', sub:'This decides how much bat you need, not how good you are.',
     opts:[
-      {v:'power',   e:'💥', b:'I go for the boundary', s:'Big edges and thick profiles'},
-      {v:'balance', e:'⚖️', b:'All-round, I rotate strike', s:'Balanced pickup, mid sweet spot'},
-      {v:'speed',   e:'⚡', b:'Fast hands, quick swing', s:'Lighter scoop and mongoose builds'},
-      {v:'new',     e:'🌱', b:"I'm just starting", s:'Simple, forgiving, affordable'}
-    ]},
-  { key:'weight', q:'What weight feels right?', sub:'Heavier hits harder. Lighter swings faster.',
-    opts:[
-      {v:'light',  e:'🪶', b:'Light — under 750g',  s:'Fast swing, easier control'},
-      {v:'mid',    e:'🎯', b:'Medium — 750g to 850g', s:'The most popular range'},
-      {v:'heavy',  e:'🔨', b:'Heavy — 850g plus',   s:'Maximum power transfer'},
-      {v:'any',    e:'🤷', b:"Don't mind",          s:'Show me everything'}
+      {v:'beginner',   e:'🌱', b:'Beginner',   s:'Your first proper bat'},
+      {v:'serious',    e:'🏏', b:'Serious',    s:'You play every week'},
+      {v:'tournament', e:'🏆', b:'Tournament', s:'Built for the weekend that counts'},
+      {v:'any',        e:'🤷', b:'Not sure',   s:'Show me every level'}
     ]},
   { key:'budget', q:"What's your budget?", sub:'Every price band has a good bat in it.',
     opts:[
@@ -2035,39 +2615,60 @@ const QUIZ = [
 ];
 let quizStep = 0, quizAns = {};
 
-function scoreProduct(p) {
-  let s = p.popularity / 20;
-  if (quizAns.ball && quizAns.ball !== 'any') { if (p.ball.includes(quizAns.ball)) s += 30; else s -= 40; }
-  if (quizAns.style === 'power')   s += (p.profile === 'bigedge' ? 26 : 0) + (/thick|big/i.test(p.edge||'') ? 14 : 0) + (p.profile === 'multi' ? 10 : 0);
-  if (quizAns.style === 'speed')   s += (p.profile === 'scoop' ? 24 : 0) + (p.profile === 'mongoose' ? 22 : 0) + (p.weight[0] < 750 ? 12 : 0);
-  if (quizAns.style === 'balance') s += (p.profile === 'standard' ? 20 : 0) + (p.profile === 'scoop' ? 12 : 0);
-  if (quizAns.style === 'new')     s += (p.tier === 'entry' ? 26 : 0) + (/beginner/i.test(p.features.join(' ')) ? 14 : 0);
-  const mid = (p.weight[0] + p.weight[1]) / 2;
-  if (quizAns.weight === 'light' ) s += mid < 760 ? 20 : -16;
-  if (quizAns.weight === 'mid'   ) s += (mid >= 740 && mid <= 870) ? 20 : -10;
-  if (quizAns.weight === 'heavy' ) s += mid > 840 ? 20 : -16;
-  if (quizAns.budget && quizAns.budget !== 'any') s += p.tier === quizAns.budget ? 26 : -20;
-  if (!hasPrice(p)) s -= 12;
-  return s;
+/* Style options, quoting the catalogue's weight band for the chosen ball.
+   With no ball chosen there is no single right number, so none is shown —
+   a figure that is only true for one ball in three is worse than none. */
+function styleOpts(ans) {
+  const band = STYLE_BANDS[(ans || {}).ball];
+  const line = k => (band ? band[k] + ' · ' : '') + STYLE[k].blurb;
+  return [
+    { v:'attacker',    e:'💥', b:'Attacker',    s: line('attacker') },
+    { v:'classic',     e:'⚖️', b:'Classic',     s: line('classic') },
+    { v:'quick-hands', e:'⚡', b:'Quick Hands', s: line('quick-hands') },
+    { v:'any',         e:'🤷', b:'Not sure',    s:'Show me every style' }
+  ];
+}
+const quizOpts = step => step.opts || styleOpts(quizAns);
+
+/* Every answer is a real constraint, and all four are the catalogue's own
+   terms: ball, style, level, price. That is only safe because the finder
+   never OFFERS an answer that would leave nothing — see quizDead() — so
+   narrowing cannot run out of bats. The old finder had to treat style as a
+   mere preference precisely because it could not promise that. */
+const QUIZ_TEST = {
+  ball:   (p, v) => (p.ball || []).includes(v),
+  style:  (p, v) => (p.style || []).includes(v),
+  level:  (p, v) => p.level === v,
+  budget: (p, v) => p.tier === v
+};
+function quizCandidates(ans) {
+  return PRODUCTS.filter(p => prodCat(p) === 'bats').filter(p =>
+    Object.keys(QUIZ_TEST).every(k =>
+      !ans[k] || ans[k] === 'any' || QUIZ_TEST[k](p, ans[k])));
+}
+const stillMatching = () => quizCandidates(quizAns);
+
+/* Would this answer, on top of the ones already given, leave no bat at all?
+   Medium ball + Quick Hands is the real example — the catalogue has no such
+   bat — and offering it would lead someone into an empty verdict. */
+function quizDead(key, v) {
+  if (v === 'any') return false;
+  const before = {};
+  for (const st of QUIZ) { if (st.key === key) break; before[st.key] = quizAns[st.key]; }
+  before[key] = v;
+  return quizCandidates(before).length === 0;
 }
 
-/* Bats that genuinely still fit the answers so far.
-   Ball, budget and weight are real compatibility constraints, so they filter.
-   Batting style is a preference, not a constraint — a power player CAN use a
-   standard bat — so it ranks in scoreProduct() rather than eliminating here.
-   Keeping style out is also what stops the count collapsing to zero, which
-   would both discourage people and contradict the shortlist they end up with. */
-function stillMatching() {
-  return PRODUCTS.filter(p => prodCat(p) === 'bats').filter(p => {
-    const a = quizAns;
-    if (a.ball && a.ball !== 'any' && !p.ball.includes(a.ball)) return false;
-    if (a.budget && a.budget !== 'any' && p.tier !== a.budget) return false;
-    const mid = (p.weight[0] + p.weight[1]) / 2;
-    if (a.weight === 'light' && mid >= 790) return false;
-    if (a.weight === 'heavy' && mid <= 800) return false;
-    if (a.weight === 'mid'   && (mid < 700 || mid > 900)) return false;
-    return true;
-  });
+/* Ranking among bats that already fit every answer. Popularity comes from
+   the catalogue's own badges, so a Best Seller leads a plain listing. */
+function scoreProduct(p) {
+  let s = (p.popularity || 0) / 10;
+  for (const k in QUIZ_TEST) {
+    const v = quizAns[k];
+    if (v && v !== 'any') s += QUIZ_TEST[k](p, v) ? 30 : -40;
+  }
+  if (!hasPrice(p)) s -= 12;
+  return s;
 }
 
 /* A soft tennis ball really does look different from a medium one — that is
@@ -2085,20 +2686,23 @@ function ballArt(fill, shade, seam) {
 
 /* Each option shows the kind of bat it leads to, using the real renderer. */
 const OPT_BAT = {
-  style:  { power:'big-edge-varnish-pro', balance:'cws', speed:'custom-scoop', new:'regular-bat' },
-  weight: { light:'regular-bat', mid:'cws', heavy:'cs-pro' },
-  budget: { entry:'regular-bat', mid:'custom-scoop', premium:'power-x' }
+  style:  { attacker:'black-mamba', classic:'kerala-scoop', 'quick-hands':'power-x-feather' },
+  level:  { beginner:'regular-srilankan', serious:'four-scoop', tournament:'glossy-premium' },
+  budget: { entry:'regular-srilankan', mid:'four-scoop', premium:'glossy-premium' }
 };
 
 function optArt(key, v) {
   if (key === 'ball') {
     if (v === 'soft')   return ballArt('#e3f56b', '#a8c23c', 'a');
     if (v === 'medium') return ballArt('#c2cf4a', '#7d8f24', 'b');
+    /* The hard ball is the one that is visibly not a tennis ball — darker,
+       denser, and the reason the whole third of the range exists. */
+    if (v === 'hard')   return ballArt('#9aa63a', '#5c6b16', 'h');
     return `<span class="opt-both">${ballArt('#e3f56b', '#a8c23c', 'c')}${ballArt('#c2cf4a', '#7d8f24', 'd')}</span>`;
   }
   const id = (OPT_BAT[key] || {})[v];
   const p = id && byId(id);
-  return p ? `<span class="opt-bat">${batSVG(p, { glow: false, trueScale: key === 'weight' })}</span>`
+  return p ? `<span class="opt-bat">${batSVG(p, { glow: false })}</span>`
            : `<span class="opt-any">ANY</span>`;
 }
 
@@ -2108,21 +2712,22 @@ function fitReasons(p) {
   const a = quizAns, r = [];
   if (a.ball === 'soft')        r.push('Built for the soft tennis ball you play with');
   else if (a.ball === 'medium') r.push('Strong enough for the heavier medium ball');
-  else                          r.push('Handles both soft and medium tennis balls');
+  else if (a.ball === 'hard')   r.push('Built to take a hard tennis or stumper ball');
+  else                          r.push('Picked from across the whole range');
+  const band = STYLE_BANDS[a.ball] && STYLE_BANDS[a.ball][a.style];
   const style = {
-    power:   p.profile === 'bigedge' ? 'Thick edges to carry your boundary swing'
-                                     : 'Real meat behind the ball for big hitting',
-    balance: 'Balanced pickup for rotating the strike',
-    speed:   'Light swing weight for your fast hands',
-    new:     'Forgiving and simple — right for starting out'
+    attacker:      'Bottom weight with a low-mid sweet spot, for your big hitting',
+    classic:       'Even balance with a mid sweet spot, for all-round batting',
+    'quick-hands': 'Top-light with a mid-high sweet spot, for your fast hands'
   }[a.style];
-  if (style) r.push(style);
-  const mid = Math.round((p.weight[0] + p.weight[1]) / 2);
-  r.push(`~${mid}g pickup — ${
-    a.weight === 'light' ? 'in the light range you wanted'
-    : a.weight === 'heavy' ? 'the heavy hitter you asked for'
-    : a.weight === 'mid' ? 'right in your preferred range'
-    : 'an easy middle weight'}`);
+  if (style) r.push(style + (band ? ' — our catalogue puts that at ' + band : ''));
+  const level = {
+    beginner:   'A beginner’s bat — forgiving, and priced for a first proper bat',
+    serious:    'Built for someone who plays every week',
+    tournament: 'A tournament build, for the matches that count'
+  }[a.level];
+  if (level) r.push(level);
+  r.push(p.weight[0] + '–' + p.weight[1] + 'g, ' + WOOD_OF(p).label);
   if (a.budget && a.budget !== 'any' && hasPrice(p)) r.push(`${fmt(p.price)} — inside your budget`);
   return r;
 }
@@ -2135,7 +2740,12 @@ function fitReasons(p) {
 function viewFinder() {
   if (quizStep >= QUIZ.length) {
     /* the finder is a bat fitter — other categories never enter the ranking */
-    const ranked = PRODUCTS.filter(p => prodCat(p) === 'bats')
+    /* Only bats that fit every answer. The finder never offered an answer
+       that would leave none, so this is never empty — the fallback is for a
+       catalogue that changed underneath someone mid-quiz. */
+    const fit = stillMatching();
+    const pool = fit.length ? fit : PRODUCTS.filter(p => prodCat(p) === 'bats');
+    const ranked = pool
       .map(p => ({ p, s: scoreProduct(p) }))
       .sort((a, b) => b.s - a.s).map(x => x.p);
     const win = ranked[0], backups = ranked.slice(1, 3);
@@ -2172,11 +2782,12 @@ function viewFinder() {
   }
 
   const q = QUIZ[quizStep];
+  const qOpts = quizOpts(q);
   const pct = (quizStep / QUIZ.length) * 100;
   const left = stillMatching();
   const lead = left.slice().sort((a, b) => scoreProduct(b) - scoreProduct(a))[0] || PRODUCTS[0];
   const answered = Object.keys(quizAns).length > 0;
-  const SPEC_LABEL = { ball: 'Ball', style: 'Style', weight: 'Weight', budget: 'Budget' };
+  const SPEC_LABEL = { ball: 'Ball', style: 'Style', level: 'Level', budget: 'Budget' };
 
   return `
   <!-- Same drawing sheet as the home hero. The finder is where somebody
@@ -2201,7 +2812,7 @@ function viewFinder() {
         <div class="fdr-specs">
           ${QUIZ.map((s, i) => {
             const done = quizAns[s.key] !== undefined;
-            const opt = done && s.opts.find(o => o.v === quizAns[s.key]);
+            const opt = done && quizOpts(s).find(o => o.v === quizAns[s.key]);
             return `<div class="fdr-spec${done ? ' done' : ''}${i === quizStep ? ' now' : ''}">
               <span>${SPEC_LABEL[s.key]}</span>
               <b>${opt ? esc(opt.b) : i === quizStep ? 'Answering…' : '—'}</b>
@@ -2222,13 +2833,17 @@ function viewFinder() {
         <h1 class="d2 q-head">${q.q}</h1>
         <p class="lede">${q.sub}</p>
 
-        <div class="q-opts n${q.opts.length}">
-          ${q.opts.map(o => `
-            <button class="q-opt${quizAns[q.key] === o.v ? ' on' : ''}" data-q="${o.v}">
+        <div class="q-opts n${qOpts.length}">
+          ${qOpts.map(o => {
+            const dead = quizDead(q.key, o.v);
+            return `
+            <button class="q-opt${quizAns[q.key] === o.v ? ' on' : ''}${dead ? ' dead' : ''}" data-q="${o.v}"
+                    ${dead ? 'disabled aria-disabled="true"' : ''}>
               <span class="q-art">${optArt(q.key, o.v)}</span>
               <b>${o.b}</b>
-              <span class="q-sub">${o.s}</span>
-            </button>`).join('')}
+              <span class="q-sub">${dead ? 'Not in our catalogue with your earlier answers' : o.s}</span>
+            </button>`;
+          }).join('')}
         </div>
 
         <div class="quiz-nav">
@@ -2526,6 +3141,92 @@ function viewGame() {
 }
 
 /* ---------------- VIEW: CHECKOUT ---------------- */
+/* ------------------------------------------------------------
+   WHAT THE CUSTOMER HAS TYPED, KEPT ACROSS RE-RENDERS
+
+   route() rebuilds this page from its markup every time, and checkout
+   re-renders for perfectly ordinary reasons — applying a discount code is
+   the common one, and it is usually the LAST thing somebody does before
+   paying. Rebuilt markup meant empty inputs, so a customer who had filled
+   in their whole address watched all six fields empty themselves the moment
+   they claimed their discount. Some of them would type it all again.
+
+   The draft is only ever read into a field that is empty, so it can never
+   overwrite something the customer is in the middle of changing, and it is
+   cleared once the order is placed so the next one starts clean.
+   ------------------------------------------------------------ */
+let CO_DRAFT = {};
+const CO_FIELDS = ['#cName', '#cPhone', '#cAddr', '#cCity', '#cState', '#cPin', '#cEmail', '#cNotes'];
+
+function coSaveDraft() {
+  CO_FIELDS.forEach(function (sel) { const el = $(sel); if (el) CO_DRAFT[sel] = el.value; });
+}
+function coRestoreDraft() {
+  CO_FIELDS.forEach(function (sel) {
+    const el = $(sel);
+    if (el && !el.value && CO_DRAFT[sel]) el.value = CO_DRAFT[sel];
+  });
+}
+
+/* ------------------------------------------------------------
+   THE ACCOUNT GATE
+
+   An order has to belong to somebody, so checkout asks who you are.
+   Browsing and the bag stay open on purpose: the gate stands at the
+   last possible moment, which is also the first moment the Firebase
+   SDK is worth downloading. Up to here the storefront still carries
+   no external JavaScript, which is the rule it was written under.
+
+   Two states are NOT "signed out" and must not be treated as it:
+
+     · settling — the SDK has not reported yet. Showing the gate on a
+       maybe would bounce an already-signed-in customer into a sign-in
+       form every time they opened checkout.
+     · unavailable — Firebase is unconfigured, or its CDN is blocked.
+       The shop sells anyway. Closing the till because Google is having
+       a bad day is the worse failure of the two, and this gate was
+       never the thing deciding who owns an order — the database is.
+   ------------------------------------------------------------ */
+let AUTH_STATE = 'idle';          /* idle | settling | ready | unavailable */
+
+function authGateStatus() {
+  if (AUTH_STATE === 'ready' || AUTH_STATE === 'unavailable') return AUTH_STATE;
+
+  if (typeof fbReady !== 'function' ||
+      (typeof fbConfigured === 'function' && !fbConfigured())) {
+    AUTH_STATE = 'unavailable';
+    return AUTH_STATE;
+  }
+
+  if (AUTH_STATE === 'idle') {
+    AUTH_STATE = 'settling';
+    fbReady().then(
+      () => { AUTH_STATE = 'ready';       route(true); },
+      () => { AUTH_STATE = 'unavailable'; route(true); }
+    );
+  }
+  return AUTH_STATE;
+}
+
+function viewCheckoutGate() {
+  const n = cartCount();
+  return `
+  <section class="co"><div class="wrap">
+    <div class="panel" style="max-width:520px;margin:0 auto">
+      <h1 class="d2">Sign in to place your order</h1>
+      <p class="lede" style="margin:12px 0 0">
+        Your bag is saved — ${n} item${n === 1 ? '' : 's'}, ${fmt(grandTotal())}.
+        An account is how you track this order, reorder it later and claim the
+        warranty on it.
+      </p>
+      <div class="buy-row" style="margin-top:22px">
+        <a href="#/account" class="btn btn-primary btn-block" id="gateSignIn">Sign in or create an account</a>
+        <a href="#/shop" class="btn btn-ghost btn-block">Keep shopping</a>
+      </div>
+    </div>
+  </div></section>`;
+}
+
 function viewCheckout() {
   if (lastOrder) return viewDone();
   /* Before the empty-bag check, so a bag holding only retired lines is
@@ -2537,6 +3238,18 @@ function viewCheckout() {
       <p>Add a bat and come back.</p>
       <a href="#/shop" class="btn btn-primary btn-sm" style="margin-top:16px">Shop Bats</a>
     </div></div></section>`;
+
+  /* Who is buying. Asked after the bag is known to be real, so an empty bag
+     never sends anyone to a sign-in form for an order that does not exist. */
+  const gate = authGateStatus();
+  if (gate === 'settling') return `
+    <section class="co"><div class="wrap">
+      <div class="panel" style="max-width:520px;margin:0 auto;text-align:center">
+        <p class="lede" style="margin:0">Checking your account…</p>
+      </div>
+    </div></section>`;
+  if (gate === 'ready' && typeof acctUser === 'function' && !acctUser())
+    return viewCheckoutGate();
 
   const sub = cartSubtotal(), sh = shipFee(), off = couponOff(), tot = sub + sh - off;
   return `
@@ -2580,21 +3293,30 @@ function viewCheckout() {
             <h3>How do you want to pay?</h3>
             <p class="sub">Both options are confirmed by us before dispatch.</p>
 
-            <div class="pay-opt on" data-pay="wa">
+            <!-- Paying leads. It used to sit second, behind a WhatsApp option
+                 tagged "Most used" and selected by default, so a customer who
+                 had filled in the whole form still had to notice and switch
+                 before they could actually pay. The methods are named here
+                 rather than left to appear only once Razorpay opens, because
+                 "is my UPI accepted?" is a question worth answering before
+                 the click, not after it. -->
+            <div class="pay-opt on" data-pay="online">
               <div class="pay-radio"></div>
               <div>
-                <b>${ICON.whatsapp} Order on WhatsApp <span class="pay-tag">Most used</span></b>
-                <p>Your full order opens as a ready-made WhatsApp message. We confirm stock,
-                   weight and delivery, then you pay — UPI on confirmation or cash on delivery.</p>
+                <b>${ICON.rupee} Pay now <span class="pay-tag">Fastest</span></b>
+                <p>UPI, credit or debit card, or netbanking — through Razorpay.
+                   Your order is confirmed instantly and goes straight into dispatch.</p>
+                <p style="font-size:.76rem;color:var(--ink-50);margin-top:6px">
+                  UPI · GPay · PhonePe · Paytm · Visa · Mastercard · RuPay · Netbanking</p>
               </div>
             </div>
 
-            <div class="pay-opt" data-pay="online">
+            <div class="pay-opt" data-pay="wa">
               <div class="pay-radio"></div>
               <div>
-                <b>${ICON.rupee} Pay online now</b>
-                <p>UPI, card or netbanking via Razorpay. Order is confirmed instantly
-                   and goes straight into dispatch.</p>
+                <b>${ICON.whatsapp} Confirm on WhatsApp first</b>
+                <p>Your full order opens as a ready-made WhatsApp message. We confirm stock,
+                   weight and delivery, then you pay — UPI on confirmation.</p>
               </div>
             </div>
           </div>
@@ -2655,11 +3377,16 @@ function viewCheckout() {
                  <span>Add ${fmt(FREE_SHIP_OVER - sub)} more for free shipping</span><span></span></div>` : ''}
               <div class="sum tot"><span>Total</span><span class="num">${fmt(tot)}</span></div>
             </div>
-            <button class="btn btn-wa btn-block" id="placeBtn" style="margin-top:18px">
-              ${ICON.whatsapp} Send Order on WhatsApp
+            <button class="btn btn-primary btn-block" id="placeBtn" style="margin-top:18px">
+              ${ICON.rupee} Pay ${fmt(tot)}
             </button>
+            <!-- Shown before payment, not after. A term the customer met only
+                 on the confirmation screen is a term they never agreed to, and
+                 it is the first thing argued about in a chargeback. -->
             <p style="font-size:.74rem;color:var(--ink-50);text-align:center;margin:12px 0 0">
-              By placing this order you agree to be contacted on WhatsApp about it.
+              By placing this order you agree to be contacted on WhatsApp about it, and to
+              our <a href="${WARRANTY_URL}">warranty, return &amp; replacement terms</a> —
+              ${RETURN_DAYS}-day return on an unused bat, claims subject to inspection.
             </p>
           </div>
         </div>
@@ -2682,6 +3409,24 @@ function viewDone() {
             : 'Payment received. We\'re packing your bat now.'}
         </p>
         <div class="oid">${o.id}</div>
+        ${o.payment_id ? `<p style="font-size:.8rem;color:var(--ink-50);margin-top:6px">
+          Payment reference <b style="color:var(--ink)">${esc(o.payment_id)}</b> — also on your Razorpay receipt</p>` : ''}
+
+        <!-- The honest line. The order did not reach us, and saying nothing
+             would leave the customer holding a number that means nothing at
+             this end. The WhatsApp step below is already compulsory, so the
+             way out is the one they were about to take anyway — this only
+             explains why it matters this time. -->
+        ${o.recorded === false ? `
+        <div style="margin-top:16px;padding:14px 16px;text-align:left;border-radius:12px;
+             border:1px solid rgba(255,176,32,.45);background:rgba(255,176,32,.1)">
+          <b style="display:block;margin-bottom:4px">This order has not reached us yet.</b>
+          <span style="font-size:.84rem;color:var(--ink-70);line-height:1.5">
+            ${o.method === 'online'
+              ? 'Your payment went through and nothing is lost — but the order itself did not save, so please send it on WhatsApp below and we will match it to your payment.'
+              : 'Nothing is lost — but we do not have the order yet, so please send it on WhatsApp below and we will pick it up from there.'}
+          </span>
+        </div>` : ''}
         <div style="text-align:left;border-top:1px solid var(--line);padding-top:18px;margin-top:6px">
           ${o.items.map(i => {
             const p = byId(i.id), v = variantName(p, i.variant);
@@ -2695,11 +3440,39 @@ function viewDone() {
           ${o.off > 0 ? `<div class="sum"><span>Discount (${o.coupon})</span>
              <span class="off num">− ${fmt(o.off)}</span></div>` : ''}
           <div class="sum tot"><span>Total</span><span class="num">${fmt(o.total)}</span></div>
+          <!-- Repeated here on purpose. The customer agreed to this at the pay
+               button; this is the copy they can come back to, alongside the
+               order number they would quote in a claim. -->
+          <p style="font-size:.74rem;color:var(--ink-50);margin:14px 0 0;line-height:1.55">
+            ${warrantyLine()} ${RETURN_DAYS}-day return on an unused, unplayed bat in its
+            original packaging. Keep this order number and your invoice — both are needed
+            for a claim. <a href="${WARRANTY_URL}">Warranty, return &amp; replacement terms</a>
+          </p>
         </div>
-        <div class="buy-row" style="margin-top:24px">
+        <!-- The hand-off, and the only thing on this screen until it is done.
+
+             Every order is finished on WhatsApp — stock, weight and delivery
+             are confirmed there, not here. When this was one of two equal
+             buttons sitting beside "Keep shopping", orders arrived with
+             nobody on the other end of them. It leads now, and the way on
+             appears once they have opened it.
+
+             It is a real link the customer taps, not a window.open on a
+             timer: a tab opened without a gesture behind it is what popup
+             blockers exist to stop. -->
+        <div class="done-wa" style="margin-top:24px;text-align:left;
+             border:1px solid var(--line);border-radius:14px;padding:18px">
+          <b style="display:block;margin-bottom:6px">One last step — send us this order on WhatsApp</b>
+          <p style="font-size:.82rem;color:var(--ink-50);margin:0 0 14px">
+            It opens already written, with your order number and details in it. This is the
+            thread we use to confirm ${o.method === 'online' ? 'weight and delivery' : 'stock, weight and delivery'}.
+          </p>
+          <a href="${waLink(orderWaText(o))}" target="_blank" rel="noopener"
+             id="waDone" class="btn btn-wa btn-block">${ICON.whatsapp} Send my order on WhatsApp</a>
+        </div>
+        <div class="buy-row${o.waSent ? '' : ' hide'}" id="doneNext" style="margin-top:14px">
           <a href="#/shop" class="btn btn-ghost btn-block">Keep shopping</a>
-          <a href="${waLink('Hi Toss Sports, checking on my order ' + o.id)}" target="_blank"
-             rel="noopener" class="btn btn-wa btn-block">${ICON.whatsapp} Track on WhatsApp</a>
+          <a href="#/account" class="btn btn-ghost btn-block">View my orders</a>
         </div>
       </div>
     </div>
@@ -2807,7 +3580,7 @@ function closeDrawers() {
    the fuzzy matching and the service and help entries. */
 
 /* ---------------- checkout logic ---------------- */
-let payMethod = 'wa';
+let payMethod = 'online';   /* paying is the default; WhatsApp is the alternative */
 
 function readForm() {
   return {
@@ -2853,16 +3626,73 @@ function newOrderId() {
   return 'TOSS-' + Date.now().toString(36).toUpperCase().slice(-6) +
          '-' + Math.floor(Math.random() * 900 + 100);
 }
-function completeOrder(method, info) {
-  lastOrder = {
-    id: newOrderId(), method, info,
+/* The order as this browser understands it. Built in one place because
+   payOnline() now needs it BEFORE the payment sheet opens — to save the
+   order — and completeOrder() needs the same shape afterwards, and the two
+   drifting apart would mean paying for one basket and recording another. */
+function orderDraft(id, method, info) {
+  return {
+    id: id || newOrderId(), method, info,
+    /* the Razorpay payment id — the thread that ties this order to the
+       payment in their dashboard; without it reconciliation is manual */
+    payment_id: null,
     items: cart.slice(),
     subtotal: cartSubtotal(), shipping: shipFee(),
     total: grandTotal(),
     coupon: couponOff() > 0 ? couponCode() : null, off: couponOff()
   };
-  /* fire and forget — a network problem must not cost the customer their order */
-  if (typeof pushOrder === 'function') pushOrder(lastOrder);
+}
+
+function completeOrder(method, info, extra) {
+  extra = extra || {};
+  lastOrder = orderDraft(extra.id, method, info);
+  lastOrder.payment_id = extra.payment_id || null;
+  /* Recording must never block the customer: the confirmation screen and the
+     WhatsApp hand-off happen whatever the database says. But "never block"
+     had quietly become "never mention". The insert can be refused outright —
+     no stock is the ordinary case — and the screen still said Order placed
+     while the shop received nothing and the customer was left holding an
+     order number that nobody here would recognise.
+
+     So it is still fire-and-forget in the sense that matters: nothing waits
+     on it. The difference is that the answer, when it comes, is allowed to
+     reach the screen. `recorded` is null while in flight, true once the
+     database has it, false when it refused — and viewDone() says so. */
+  /* The number the owner will actually look at. `purchase` only when money
+     moved on the site; a WhatsApp order is an intention, recorded as a lead,
+     so revenue in the report is revenue that exists. */
+  if (typeof trackEvent === 'function') {
+    const items = (lastOrder.items || []).map(i => {
+      const p = byId(i.id) || {};
+      return { item_id: i.id, item_name: p.name || i.id, price: p.price || 0, quantity: i.qty };
+    });
+    if (method === 'online') {
+      trackEvent('purchase', { transaction_id: lastOrder.id, value: lastOrder.total,
+        currency: 'INR', shipping: lastOrder.shipping, coupon: lastOrder.coupon || undefined, items });
+    } else {
+      trackEvent('generate_lead', { value: lastOrder.total, currency: 'INR',
+        lead_source: 'whatsapp_order', items });
+    }
+  }
+
+  lastOrder.recorded = null;
+  /* Already saved as `pending` before the payment — see payOnline(). Writing
+     it again would collide on the id and take the stock a second time, so the
+     only thing left to do is say it is safely recorded. */
+  if (extra.recorded) {
+    lastOrder.recorded = true;
+  } else if (typeof pushOrder === 'function') {
+    const mine = lastOrder;
+    pushOrder(mine).then(function (ok) {
+      mine.recorded = !!ok;
+      /* Only redraw if this is still the order on screen. A customer who has
+         already moved on should not have the page pulled out from under
+         them by an answer to a question they stopped asking. */
+      if (lastOrder === mine && /^#\/checkout/.test(location.hash)) route(true);
+    });
+  } else {
+    lastOrder.recorded = true;      /* no database configured; nothing to tell */
+  }
 
   /* The account holds its orders in memory and only fetches them once
      (ACCOUNT.loaded), and acctWarm() has usually filled that in long before
@@ -2874,28 +3704,124 @@ function completeOrder(method, info) {
 
   cart = []; saveCart(); syncCart();
   coupon = null; saveCoupon();          /* a code is single-use */
+  CO_DRAFT = {};                        /* the next order starts on a clean form */
   route();
   window.scrollTo(0, 0);
 }
-function payOnline(info) {
-  const amount = grandTotal() * 100;
-  if (RAZORPAY_KEY.includes('REPLACE')) {
+/* ------------------------------------------------------------
+   ONLINE PAYMENT — the order exists before the money does.
+
+   This used to open Razorpay with nothing but a key and an amount.
+   That is the reason payments had to be captured by hand: Razorpay's
+   capture settings "are applicable only for payments created using
+   the Orders API", and a payment made without an order_id "cannot be
+   captured and will be automatically refunded". No dashboard toggle
+   could have fixed it, because the payments belonged to no order.
+
+   So now, in order:
+
+     1. the order is written to Postgres as `pending`, where
+        orders_sanitise re-prices it from the catalogue
+     2. an Edge Function reads THAT total and asks Razorpay for an
+        order of exactly those paise — the browser never names a price
+     3. Checkout opens against that order, so capture is automatic
+     4. the signed webhook marks it paid and moves it to `new`
+
+   Three things fall out of the order existing first: capture works,
+   the amount cannot be tampered with, and a payment can no longer
+   succeed against an order that was never saved.
+
+   If the Edge Function is not configured yet, this falls back to the
+   old behaviour rather than refusing to sell. Manual capture is worse
+   than automatic; both are better than a shop that cannot take money.
+   ------------------------------------------------------------ */
+async function payOnline(info) {
+  const oid = newOrderId();
+
+  if (!RAZORPAY_KEY || RAZORPAY_KEY.includes('REPLACE')) {
     toast('Demo mode — add your Razorpay key to go live');
-    setTimeout(() => completeOrder('online', info), 900);
+    setTimeout(() => completeOrder('online', info, { id: oid }), 900);
     return;
   }
-  const rzp = new window.Razorpay({
-    key: RAZORPAY_KEY,
-    amount, currency: 'INR',
+  if (!window.Razorpay) {
+    loadRazorpay();
+    toast('Payment is still loading — try again in a second');
+    return;
+  }
+
+  const btn = $('#placeBtn');
+  if (btn) { btn.disabled = true; btn.dataset.was = btn.innerHTML; btn.textContent = 'Preparing…'; }
+  const restore = () => {
+    if (btn) { btn.disabled = false; if (btn.dataset.was) btn.innerHTML = btn.dataset.was; }
+  };
+
+  /* ---- 1. the order, before anything is charged ---- */
+  const draft = orderDraft(oid, 'online', info);
+  let saved = false;
+  if (typeof pushOrder === 'function') {
+    saved = await pushOrder(draft, { status: 'pending' });
+  }
+
+  /* Refusing here is the point. The usual reason is no stock, and taking
+     money for a bat we cannot ship is the one outcome worth blocking a sale
+     to avoid — the customer keeps their money and their basket. */
+  if (typeof pushOrder === 'function' && !saved) {
+    restore();
+    toast('We could not reserve that — it may have just sold out. ' +
+          'Nothing has been charged. Message us on WhatsApp and we will sort it.', true);
+    return;
+  }
+
+  /* ---- 2. ask the server what Razorpay should charge ---- */
+  let rzpOrder = null;
+  try {
+    const r = await fetch(SUPA_URL + '/functions/v1/razorpay-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPA_KEY },
+      body: JSON.stringify({ order_id: oid })
+    });
+    if (r.ok) rzpOrder = await r.json();
+    else console.warn('razorpay-order:', r.status, await r.text());
+  } catch (e) { console.warn('razorpay-order unreachable:', e.message); }
+
+  restore();
+
+  /* ---- 3. open Checkout ---- */
+  const opts = {
+    key: (rzpOrder && rzpOrder.key_id) || RAZORPAY_KEY,
+    currency: 'INR',
     name: 'Toss Sports',
-    description: cart.map(i => byId(i.id).name).join(', ').slice(0, 200),
-    prefill: { name: info.name, contact: info.phone },
-    notes: { address: info.address + ', ' + info.city + ' ' + info.pin },
+    description: cart.map(i => (byId(i.id) || {}).name || i.id).join(', ').slice(0, 200),
+    prefill: { name: info.name, contact: info.phone, email: info.email || undefined },
+    notes: { order_id: oid, address: info.address + ', ' + info.city + ' ' + info.pin },
     theme: { color: '#FF8A1E' },
-    handler: () => completeOrder('online', info)
-  });
+    /* The order already exists, so completeOrder must not write it again —
+       a second insert would be a duplicate id and a second stock decrement. */
+    handler: r => completeOrder('online', info, {
+      id: oid, payment_id: r.razorpay_payment_id, recorded: saved
+    }),
+    modal: { ondismiss: () => toast(
+      'Payment not completed — your bag is safe. Pay when ready, or order on WhatsApp.') }
+  };
+
+  if (rzpOrder && rzpOrder.razorpay_order_id) {
+    /* With an order id the amount comes from Razorpay's own record of it,
+       so it is not sent from here at all. */
+    opts.order_id = rzpOrder.razorpay_order_id;
+  } else {
+    opts.amount = grandTotal() * 100;
+    console.warn('Toss: paying without a Razorpay order — this payment will need ' +
+                 'capturing by hand. Set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET on the ' +
+                 'razorpay-order Edge Function to make capture automatic.');
+  }
+
+  const rzp = new window.Razorpay(opts);
+  rzp.on('payment.failed', r => toast(
+    ((r.error && r.error.description) || 'Payment failed') +
+    ' — nothing was charged. Try again or order on WhatsApp.'));
   rzp.open();
 }
+
 function loadRazorpay() {
   if (window.Razorpay || $('#rzpJs')) return;
   const s = document.createElement('script');
@@ -2954,6 +3880,14 @@ function route(keepScroll) {
 
   if (!keepScroll) window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   if (typeof trackPage === 'function') trackPage();
+  /* Which bats get looked at, not just bought — the gap between the two is
+     where a price or a photo is losing people. */
+  if (page === 'product' && typeof trackEvent === 'function' && !keepScroll) {
+    const vp = byId(parts[1]);
+    if (vp) trackEvent('view_item', { currency: 'INR', value: vp.price || 0,
+      items: [{ item_id: vp.id, item_name: vp.name, price: vp.price || 0,
+                item_category: (vp.ball || [])[0] || 'bats' }] });
+  }
   mount(page, parts);
   observeReveal();
   onScroll();
@@ -3057,7 +3991,7 @@ function wireHero() {
 /* ---------------- per-view wiring ---------------- */
 function mount(page, parts) {
   clearInterval(BOARD_TIMER);   /* the big screen only runs on the game page */
-  if (page === 'home') { wireHero(); wireTrust(); }
+  if (page === 'home') { wireHero(); wireTrust(); wireGully(); }
   if (page === 'service') wireService(parts[1]);
   if (page === 'track')   wireTrack();
   if (page === 'account') wireAccount();
@@ -3223,6 +4157,19 @@ function mount(page, parts) {
     };
     ['#addBtn', '#addBtn2'].forEach(s => { const el = $(s); if (el) el.onclick = add; });
 
+    /* Buy now is Add to Bag for somebody who has already decided: the same
+       line, the same engraving check, and then straight to checkout instead
+       of back to the page they were just on. It does not clear the bag —
+       anything already in there travels with it, because emptying a
+       customer's bag because they pressed Buy on one bat would be a
+       surprising way to lose the rest of the order. */
+    const goBuy = () => {
+      const before = cartCount();
+      add();
+      if (cartCount() > before) location.hash = '#/checkout';
+    };
+    ['#buyBtn', '#buyBtn2'].forEach(s => { const el = $(s); if (el) el.onclick = goBuy; });
+
     wireQA(p.id);
 
     const wa = () => {
@@ -3237,7 +4184,12 @@ function mount(page, parts) {
 
   if (page === 'finder') {
     $$('.q-opt').forEach(b => b.onclick = () => {
+      if (b.disabled) return;
       quizAns[QUIZ[quizStep].key] = b.dataset.q;
+      /* Answers after this one were given against a different earlier answer
+         — going Back and switching ball could otherwise leave "Quick Hands"
+         standing against a medium ball, which no bat satisfies. */
+      QUIZ.slice(quizStep + 1).forEach(st => { delete quizAns[st.key]; });
       quizStep++;
       route(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3249,6 +4201,35 @@ function mount(page, parts) {
   }
 
   if (page === 'checkout') {
+    /* The confirmation screen's hand-off. The way onward is hidden until the
+       customer has actually opened the WhatsApp thread; the flag lives on the
+       order so a re-render — a resize, a back-navigation — does not lock a
+       customer who already sent it back out of the rest of the site. */
+    const waDone = $('#waDone');
+    if (waDone) waDone.onclick = () => {
+      if (lastOrder) lastOrder.waSent = true;
+      const next = $('#doneNext');
+      if (next) next.classList.remove('hide');
+    };
+
+    /* The gate sends them to the account page. This remembers why, so that
+       signing in returns them to the order they were halfway through rather
+       than dropping them on their order history to find their own way back. */
+    const gateLink = $('#gateSignIn');
+    if (gateLink) gateLink.onclick = () => {
+      try { sessionStorage.setItem('toss_after_signin', '#/checkout'); } catch (e) { /* private mode */ }
+    };
+
+    /* Put back whatever they had already typed before this re-render, and
+       keep watching so the next one has something to put back. Runs before
+       the account prefill below, so a half-typed address is never replaced
+       by the saved one. */
+    coRestoreDraft();
+    CO_FIELDS.forEach(function (sel) {
+      const el = $(sel);
+      if (el) el.addEventListener('input', coSaveDraft);
+    });
+
     /* Saved details, for anyone signed in. Nothing is forced: these are a
        starting point that someone posting a bat to a team-mate types
        straight over. Signed out, acctPrefill() returns null and checkout
@@ -3284,7 +4265,7 @@ function mount(page, parts) {
       showPin();
     }
     trackEvent('begin_checkout', { value: grandTotal(), currency: 'INR' });
-    payMethod = 'wa';
+    payMethod = 'online';
     loadRazorpay();
 
     $$('.pay-opt').forEach(o => o.onclick = () => {
@@ -3348,7 +4329,16 @@ function mount(page, parts) {
         window.open(waLink(cartWaText(info)), '_blank');
         completeOrder('wa', info);
       } else {
-        payOnline(info);
+        /* payOnline handles its own failures and resets the button; this is
+           only here so an unexpected throw surfaces instead of leaving the
+           customer looking at a button that did nothing. */
+        payOnline(info).catch(e => {
+          console.error('payOnline:', e);
+          const b = $('#placeBtn');
+          if (b) { b.disabled = false; if (b.dataset.was) b.innerHTML = b.dataset.was; }
+          toast('Something went wrong starting the payment. Nothing was charged — ' +
+                'try again, or order on WhatsApp.', true);
+        });
       }
     };
   }

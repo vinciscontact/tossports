@@ -160,7 +160,8 @@ const SVC = {
           .map(v => ({ v, label: v })) },
       { k: 'ball', g: 'How you play', t: 'radios', label: 'Which ball?', req: true, opts: () => [
         { v: 'soft', label: 'Soft tennis ball' },
-        { v: 'medium', label: 'Medium / hard tennis ball' } ] },
+        { v: 'medium', label: 'Medium tennis ball' },
+          { v: 'hard',   label: 'Hard tennis / stumper ball' } ] },
       { k: 'handle', g: 'The shape', t: 'select', label: 'Handle',
         opts: () => ['Single piece', 'Joint handle', 'Cane handle', 'Whatever suits the spec']
           .map(v => ({ v, label: v })) },
@@ -1250,11 +1251,30 @@ function loadAnalytics() {
   }
 }
 
+/* GA4 drops everything after '#' when it reports which page was seen, and
+   this shop lives entirely after the '#'. Sent as-is, every product, the
+   shop, checkout and the finder would all have been counted as "/", and the
+   report would have said the whole site is one page. So the hash route is
+   turned into a path — #/product/black-mamba reports as /product/black-mamba.
+
+   And only when the address actually changes. route() also runs to redraw
+   the page it is already on — each finder answer, each filter tick — and
+   counting those would have inflated page views several times over. */
+let _lastTracked = null;
 function trackPage() {
   if (typeof gtag !== 'function') return;
+  const route = location.hash.replace(/^#/, '') || '/';
+  if (route === _lastTracked) return;
+  _lastTracked = route;
+  /* Keep the REAL query string — ?utm_source=…, ?gclid=…, ?fbclid=… — in front
+     of the route's own. GA4 reads a visit's source from page_location, and the
+     first version of this built page_location from the hash alone, so every
+     tagged link (the Google Business Profile, Google Ads, Instagram) would have
+     arrived stripped and been counted as "direct". */
+  const [rPath, rQuery] = (route.startsWith('/') ? route : '/' + route).split('?');
+  const q = [location.search.replace(/^\?/, ''), rQuery].filter(Boolean).join('&');
   gtag('event', 'page_view', {
-    page_location: location.href,
-    page_path: location.hash.replace(/^#/, '') || '/',
+    page_location: location.origin + rPath + (q ? '?' + q : ''),
     page_title: document.title
   });
 }

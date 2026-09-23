@@ -179,13 +179,30 @@ a{color:var(--orange);text-decoration:none}
 .dk.on{color:var(--orange-700)}
 .dk.on::after{content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
   width:4px;height:4px;border-radius:50%;background:var(--orange-700)}
-/* tooltip above, like a dock label */
-.dk-tip{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%) scale(.9);
-  opacity:0;pointer-events:none;white-space:nowrap;
+/* ---------- the dock's labels ----------
+   The label cannot live inside the dock, which is why it used to be
+   invisible. The bar scrolls sideways — eighteen tabs do not fit a narrow
+   window — and the moment overflow-x is auto the browser computes
+   overflow-y to auto along with it. A label drawn above the bar was
+   therefore clipped away before anyone could read it.
+
+   So the span stays in the button as the text, and is not drawn there.
+   One floating element at the top of the document is drawn instead, moved
+   to whichever icon the pointer is on. One element, because there is only
+   ever one pointer.
+
+   Hover and keyboard focus only, on purpose: a touchscreen has no hover,
+   and this panel is used on a desktop. */
+.dk-tip{display:none}
+
+.dk-float{
+  position:fixed;z-index:60;pointer-events:none;
+  left:0;top:0;opacity:0;white-space:nowrap;
+  transform:translate(-50%,-100%) scale(.94);
   background:rgba(28,28,32,.92);color:#fff;font-size:.68rem;font-weight:700;
   letter-spacing:.02em;padding:5px 10px;border-radius:8px;
-  transition:opacity .15s var(--ease),transform .15s var(--ease)}
-.dk:hover .dk-tip,.dk:focus-visible .dk-tip{opacity:1;transform:translateX(-50%) scale(1)}
+  transition:opacity .13s var(--ease),transform .13s var(--ease)}
+.dk-float.on{opacity:1;transform:translate(-50%,-100%) scale(1)}
 .dk-div{flex:none;width:1px;height:34px;margin:0 5px;align-self:center;
   background:rgba(0,0,0,.14)}
 
@@ -203,8 +220,8 @@ a{color:var(--orange);text-decoration:none}
   box-shadow:0 0 0 1px rgba(255,138,30,.5) inset, 0 4px 16px rgba(255,138,30,.3)}
 /* the divider that opens the founder group is warm too */
 .dk.owner ~ .dk-div,.dk-div:has(+ .dk.owner){background:rgba(255,138,30,.35)}
-/* "Founder only" line inside the tooltip */
-.dk-tip i{display:block;font-style:normal;font-size:.6rem;font-weight:800;
+/* "Founder only" line inside the label */
+.dk-float i{display:block;font-style:normal;font-size:.6rem;font-weight:800;
   letter-spacing:.08em;text-transform:uppercase;color:#ffbe70;margin-top:2px}
 .dk.me b{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
   background:linear-gradient(135deg,var(--orange),#ffb259);color:#1a1000;
@@ -287,6 +304,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .pill.new{background:rgba(91,140,255,.16);color:#3f6ad8}
 .pill.packed{background:rgba(255,176,32,.16);color:#9a6c00}
 .pill.shipped{background:rgba(40,199,111,.16);color:#148a4e}
+/* Delivered is not another shade of in-progress — it is the end of the
+   journey, so it reads settled rather than active. */
+.pill.delivered{background:rgba(20,138,78,.18);color:#0e6b3b}
 .pill.cancelled{background:rgba(255,90,95,.14);color:#c22f34}
 
 .warn-cell{color:var(--amber);font-weight:700}
@@ -386,6 +406,68 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .mw-key i.out{background:#8c92a6}
 .good-cell{color:var(--green)}
 tfoot td{border-top:2px solid var(--line);background:var(--panel-2)}
+
+/* ---------- danger zone ---------- */
+.panel.danger{border:1.5px solid rgba(229,72,77,.45)}
+.panel.danger h3{color:var(--red)}
+.btn.danger{background:var(--red);color:#fff}
+.btn.danger:hover{background:#c93c41}
+
+/* ---------- order buzzer ---------- */
+#buzzBox{position:fixed;top:18px;right:18px;z-index:400;display:flex;flex-direction:column;
+  gap:10px;max-width:340px;width:calc(100vw - 36px)}
+.buzz-card{background:var(--panel);border:1.5px solid var(--orange);border-left-width:6px;
+  border-radius:12px;padding:14px 16px;box-shadow:0 12px 32px rgba(0,0,0,.22);
+  animation:buzzIn .3s var(--ease)}
+.buzz-card b{display:block;font-size:.92rem;margin-bottom:2px}
+.buzz-card span{font-size:.82rem;color:var(--ink-60)}
+.buzz-act{display:flex;gap:8px;margin-top:10px;align-items:center}
+@keyframes buzzIn{from{transform:translateY(-10px);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion: reduce){.buzz-card{animation:none}}
+
+/* ---------- month filter ---------- */
+/* Chart columns double as the filter control: click a month to zoom the
+   page to it. Dim the rest instead of hiding them so the trend stays. */
+.mw-col.pick{cursor:pointer;border-radius:8px;transition:opacity .18s var(--ease),background .18s var(--ease)}
+.mw-col.pick:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.mw-col.dim{opacity:.32}
+.mw-col.sel{background:rgba(255,138,30,.09)}
+.mw-col.sel .mw-lbl{color:var(--orange)}
+tr.row-sel td{background:rgba(255,138,30,.08)}
+
+/* ---------- cash line ---------- */
+/* Fixed viewBox (not preserveAspectRatio:none) so dots stay round and the
+   in-SVG text keeps its proportions. */
+.cash-svg{width:100%;height:auto;display:block}
+.cash-fill.up{fill:rgba(40,199,111,.12)}
+.cash-fill.down{fill:rgba(229,72,77,.10)}
+.cash-line{fill:none;stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.cash-line.up{stroke:var(--green)}
+.cash-line.down{stroke:var(--red)}
+.cash-zero{stroke:var(--ink-40);stroke-width:1;stroke-dasharray:4 4;opacity:.5}
+.cash-dot{fill:var(--panel);stroke:var(--orange);stroke-width:2.5}
+.cash-val{font-size:11px;font-weight:700;fill:var(--ink-60);text-anchor:middle}
+.cash-mon{font-size:10px;font-weight:700;fill:var(--ink-40);text-anchor:middle}
+.cash-now{font-size:1.6rem;font-weight:800;margin:4px 0}
+
+/* ---------- stacked months ---------- */
+/* column-reverse so the first (biggest) series sits on the floor of the
+   stack and the axis reads bottom-up like every other chart here */
+.sk-chart{position:relative;display:flex;align-items:flex-end;gap:6px;height:170px;padding-top:6px}
+.sk-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;height:100%}
+.sk-stack{flex:1;width:44%;max-width:30px;display:flex;flex-direction:column-reverse;justify-content:flex-start}
+.sk-stack i{display:block;width:100%;min-height:2px;border-radius:2px;margin-top:1px}
+.sk-stack i:last-child{border-radius:4px 4px 2px 2px}
+.sk-col:hover .sk-stack i{opacity:.8}
+.key-dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* ---------- horizontal profit bars ---------- */
+.hbars{display:flex;flex-direction:column;gap:9px}
+.hbar{display:grid;grid-template-columns:minmax(90px,180px) 1fr auto;gap:10px;align-items:center}
+.hbar-name{font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hbar-track{height:12px;background:var(--panel-2);border-radius:6px;overflow:hidden}
+.hbar-track i{display:block;height:100%;background:linear-gradient(90deg,var(--orange-700),var(--orange));border-radius:6px}
+.hbar-val{font-size:.72rem;color:var(--ink-60);font-weight:700;white-space:nowrap}
 
 .grid-2{display:grid;gap:16px;grid-template-columns:1fr}
 @media (min-width:1000px){.grid-2{grid-template-columns:1fr 1fr}}
@@ -684,3 +766,19 @@ body.printing .inv{max-width:760px;margin:0 auto}
    it stays in the DOM so the label keeps working and so does the keyboard. */
 .ps-chip input{position:absolute;opacity:0;width:0;height:0}
 .ps-chip:focus-within{outline:2px solid var(--orange);outline-offset:2px}
+
+/* ---------- enquiries ----------
+   The contact form's inbox. Reads as a stack of messages rather than a
+   spreadsheet row, because what matters is what the person wrote. */
+.enq-list{display:grid;gap:12px}
+.enq{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff}
+.enq-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.enq-top b{margin-right:8px}
+.enq-meta{margin-top:4px;font-size:.78rem;color:var(--ink-60)}
+.enq-msg{margin:10px 0 0;font-size:.88rem;line-height:1.6;white-space:pre-wrap;
+  overflow-wrap:anywhere}
+.enq-act{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+
+.pill.new{background:rgba(255,138,30,.16);color:#a85800}
+.pill.replied{background:rgba(40,199,111,.16);color:#148a4e}
+.pill.closed{background:rgba(0,0,0,.07);color:var(--ink-60)}
