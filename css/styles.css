@@ -4117,3 +4117,70 @@ body.pdp-open .fab{bottom:82px}
 .sp-pill{display:inline-block;padding:3px 10px;border-radius:100px;
   background:var(--sp-bg);border:1px solid var(--sp-edge);color:var(--sp-ink);
   font-size:.8rem;font-weight:800}
+
+/* ---------- THE GULLY STORY ----------
+   Art pinned, words moving. The scene is one SVG; each panel fades its own
+   layer in and the earlier ones stay, so the wall gets chalk, then a game,
+   then a lost ball, and ends with the bat still leaning against it. */
+.gully{position:relative;overflow:hidden}
+.gully .eyebrow{color:var(--orange)}
+.gy-grid{display:grid;gap:24px;margin-top:26px}
+.gy-stage{position:sticky;top:calc(var(--hdr) + 12px);z-index:1;
+  border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.1);
+  box-shadow:0 26px 60px rgba(0,0,0,.45)}
+.gy-svg{display:block;width:100%;height:auto}
+
+/* every layer waits its turn; none of them leave once they have had it */
+.gy-l{opacity:0;transform:translateY(14px);
+  transition:opacity .55s var(--ease),transform .55s var(--ease)}
+.gully[data-p="1"] .gy-l1,
+.gully[data-p="2"] .gy-l1,.gully[data-p="2"] .gy-l2,
+.gully[data-p="3"] .gy-l1,.gully[data-p="3"] .gy-l2,.gully[data-p="3"] .gy-l3,
+.gully[data-p="4"] .gy-l1,.gully[data-p="4"] .gy-l2,.gully[data-p="4"] .gy-l3,
+.gully[data-p="4"] .gy-l4{opacity:1;transform:none}
+/* the run-up and the fielder belong to their own moment only — and by the
+   last panel everyone has gone home, so nothing of them is left behind */
+.gully[data-p="3"] .gy-l2{opacity:.28}
+.gully[data-p="4"] .gy-l2,.gully[data-p="4"] .gy-l3{opacity:0}
+/* the batter swings on panel three */
+.gy-blade{transform-origin:236px 286px;transition:transform .5s var(--ease)}
+.gully[data-p="3"] .gy-blade{transform:rotate(-58deg)}
+/* the chalk is drawn, not stamped */
+.gy-chalk path{stroke-dasharray:74;stroke-dashoffset:74}
+.gully[data-p] .gy-chalk path{animation:gyChalk .8s var(--ease) .15s forwards}
+@keyframes gyChalk{to{stroke-dashoffset:0}}
+.gy-arc{stroke-dasharray:9 12;animation:gyArc 1.4s linear infinite}
+@keyframes gyArc{to{stroke-dashoffset:-42}}
+
+.gy-steps{list-style:none;margin:0;padding:0}
+.gy-step{padding:12px 0 42px;max-width:46ch}
+.gy-n{display:inline-block;font-family:var(--f-display);font-size:.9rem;letter-spacing:.14em;
+  color:var(--orange);margin-bottom:8px}
+.gy-step h3{font-family:var(--f-display);font-size:clamp(1.5rem,4.6vw,2.1rem);
+  text-transform:uppercase;line-height:1.02;margin:0 0 10px;color:#fff}
+.gy-step p{margin:0;font-size:.97rem;line-height:1.65;color:rgba(255,255,255,.66)}
+.gy-end{padding-bottom:8px}
+
+@media (min-width:900px){
+  .gy-grid{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:56px;align-items:start}
+  .gy-stage{top:calc(var(--hdr) + 40px)}
+  /* each step gets a screen of its own to be the one in the middle band */
+  .gy-step{min-height:62vh;display:flex;flex-direction:column;justify-content:center;padding:0}
+  .gy-end{min-height:40vh}
+}
+@media (max-width:899px){
+  /* on a phone the art sits above the words and shrinks, so both fit */
+  .gy-stage{top:calc(var(--hdr) + 6px)}
+  .gy-step{min-height:54vh;display:flex;flex-direction:column;justify-content:center;
+    padding:18px 0}
+}
+@media (prefers-reduced-motion:reduce){
+  .gy-l,.gy-blade{transition:none}
+  .gy-arc{animation:none}
+  .gy-chalk path{stroke-dashoffset:0;animation:none}
+}
+/* the person with the chalk has done their job and gone; the slippers they
+   kicked off stay as the boundary */
+.gully[data-p="2"] .gy-l1:not(.gy-keep),
+.gully[data-p="3"] .gy-l1:not(.gy-keep),
+.gully[data-p="4"] .gy-l1:not(.gy-keep){opacity:0}

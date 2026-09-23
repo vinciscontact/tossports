@@ -1346,9 +1346,236 @@ function viewHome() {
     </div>
   </section>
 
+  ${gullyStoryHTML()}
   ${storyTeaserHTML()}
   ${trustBand()}
   `;
+}
+
+/* ---------------- THE GULLY STORY ----------------
+   Four panels of one evening in a street game, drawn rather than
+   photographed: no stock photo of "Indian street cricket" is honest about
+   this shop, and the one photograph that would be — theirs — does not exist
+   yet. Everything here is shapes and thick strokes, so it weighs a few kB,
+   scales to any screen and never loads a file.
+
+   The art is one SVG that stays put while the words scroll past it. Each
+   panel adds to the same scene instead of replacing it, which is the whole
+   point: the wall, the chalk and the bat are still there at the end. */
+function gullyArtSVG() {
+  return `
+  <svg class="gy-svg" viewBox="0 0 640 420" role="img" xmlns="http://www.w3.org/2000/svg"
+       aria-label="An evening street cricket game: chalk stumps on a wall, a ball bowled, a six over the wall, and the bat left leaning at dusk">
+    <defs>
+      <linearGradient id="gySky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0B0B24"/>
+        <stop offset=".55" stop-color="#241640"/>
+        <stop offset="1" stop-color="#7A3A12"/>
+      </linearGradient>
+      <radialGradient id="gyLamp" cx=".5" cy=".5">
+        <stop offset="0" stop-color="#FFC46B" stop-opacity=".55"/>
+        <stop offset="1" stop-color="#FFC46B" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="gyBlade" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#C9884A"/>
+        <stop offset=".5" stop-color="#E7B87E"/>
+        <stop offset="1" stop-color="#8E5A28"/>
+      </linearGradient>
+    </defs>
+
+    <!-- the evening, and the town behind the wall -->
+    <rect width="640" height="420" fill="url(#gySky)"/>
+    <g fill="#0A0A1E" opacity=".85">
+      <rect x="18"  y="120" width="86"  height="96"/>
+      <rect x="120" y="152" width="64"  height="64"/>
+      <rect x="250" y="104" width="104" height="112"/>
+      <rect x="372" y="146" width="72"  height="70"/>
+      <rect x="470" y="118" width="120" height="98"/>
+    </g>
+    <g fill="#FFC46B" opacity=".5">
+      <rect x="34"  y="140" width="10" height="12"/><rect x="62" y="166" width="10" height="12"/>
+      <rect x="272" y="126" width="11" height="13"/><rect x="316" y="160" width="11" height="13"/>
+      <rect x="492" y="140" width="11" height="13"/><rect x="536" y="172" width="11" height="13"/>
+    </g>
+
+    <!-- the wall every gully game is played against -->
+    <rect x="0" y="212" width="640" height="122" fill="#241F3E"/>
+    <g stroke="rgba(255,255,255,.055)" stroke-width="2">
+      <path d="M0 246H640M0 280H640M0 314H640"/>
+      <path d="M70 212v34M210 212v34M350 212v34M490 212v34
+               M140 246v34M280 246v34M420 246v34M560 246v34
+               M70 280v34M210 280v34M350 280v34M490 280v34"/>
+    </g>
+    <rect x="0" y="206" width="640" height="8" fill="#2E2850"/>
+    <!-- the road -->
+    <rect x="0" y="334" width="640" height="86" fill="#101026"/>
+    <rect x="0" y="334" width="640" height="4" fill="#1B1B3A"/>
+
+    <!-- CHALK: three lines and two bails, drawn on panel one and never rubbed out -->
+    <g class="gy-chalk" stroke="#F3F1FF" stroke-width="4" stroke-linecap="round" opacity=".92">
+      <path d="M150 236v66M168 236v66M186 236v66"/>
+      <path d="M144 230h48"/>
+    </g>
+
+    <!-- PANEL 1 — somebody crouches with a piece of chalk -->
+    <g class="gy-l gy-l1" fill="none" stroke="#08081A" stroke-width="9"
+       stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="238" cy="268" r="11" fill="#08081A" stroke="none"/>
+      <path d="M238 280l-6 26"/>
+      <path d="M232 306l-14 24M232 306l16 22"/>
+      <path d="M236 288l-32 6"/>
+      <circle cx="198" cy="294" r="5" fill="#F3F1FF" stroke="none"/>
+    </g>
+
+    <!-- The slippers stay all evening — they are the boundary now — so they
+         belong to the scene rather than to the panel that put them there. -->
+    <g class="gy-l gy-l1 gy-keep" stroke="none" fill="#08081A" opacity=".9">
+      <ellipse cx="392" cy="352" rx="17" ry="7"/>
+      <ellipse cx="424" cy="358" rx="17" ry="7"/>
+    </g>
+
+    <!-- PANEL 2 — first ball: the run-up, the ball, the bat ready -->
+    <g class="gy-l gy-l2" fill="none" stroke="#08081A" stroke-width="9"
+       stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="516" cy="248" r="11" fill="#08081A" stroke="none"/>
+      <path d="M516 260l-5 34"/>
+      <path d="M511 294l-20 38M511 294l18 34"/>
+      <path d="M514 272l18-24"/>
+      <path d="M512 274l-22 12"/>
+    </g>
+    <g class="gy-l gy-l2">
+      <circle cx="538" cy="238" r="9" fill="#C9D949"/>
+      <path d="M470 258h44M452 272h34" stroke="#F3F1FF" stroke-opacity=".45"
+            stroke-width="4" stroke-linecap="round"/>
+    </g>
+
+    <!-- the batter: present for panels two and three, mid-shot in the third -->
+    <g class="gy-bat gy-l gy-l2 gy-l3" fill="none" stroke="#08081A" stroke-width="9"
+       stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="214" cy="252" r="11" fill="#08081A" stroke="none"/>
+      <path d="M214 264l-3 34"/>
+      <path d="M211 298l-16 34M211 298l18 32"/>
+      <path d="M213 276l22 10"/>
+      <g class="gy-blade">
+        <path d="M235 286l16 12" stroke="#2A2035" stroke-width="7"/>
+        <path d="M249 296l20 26" stroke="url(#gyBlade)" stroke-width="15"/>
+      </g>
+    </g>
+
+    <!-- PANEL 3 — over the wall, and whoever hit it goes to fetch it -->
+    <g class="gy-l gy-l3">
+      <path class="gy-arc" d="M250 288C330 176 452 128 592 152" fill="none"
+            stroke="#FF8A1E" stroke-width="4" stroke-linecap="round"
+            stroke-dasharray="9 12" opacity=".85"/>
+      <circle cx="592" cy="152" r="10" fill="#C9D949"/>
+      <!-- a fielder sitting on the wall, legs over the edge, with no chance -->
+      <g fill="none" stroke="#08081A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="452" cy="158" r="10" fill="#08081A" stroke="none"/>
+        <path d="M452 169v36"/>
+        <path d="M452 180l-20-16M452 180l22-18"/>
+        <path d="M452 205l-16 10M436 215l-2 22"/>
+        <path d="M452 205l14 12M466 217v20"/>
+      </g>
+    </g>
+
+    <!-- PANEL 4 — the light goes, the bat stays -->
+    <g class="gy-l gy-l4">
+      <path d="M596 334V128" stroke="#08081A" stroke-width="8" stroke-linecap="round"/>
+      <path d="M596 132h-34" stroke="#08081A" stroke-width="8" stroke-linecap="round"/>
+      <ellipse cx="560" cy="138" rx="15" ry="7" fill="#FFC46B"/>
+      <path d="M560 140l-96 194h192z" fill="url(#gyLamp)"/>
+      <!-- the bat, leaning where it always ends up -->
+      <g>
+        <path d="M272 334l-22-74" stroke="url(#gyBlade)" stroke-width="18" stroke-linecap="round"/>
+        <path d="M250 260l-9-30" stroke="#2A2035" stroke-width="8" stroke-linecap="round"/>
+      </g>
+      <circle cx="300" cy="328" r="9" fill="#C9D949"/>
+      <!-- two of them walking home, bats over the shoulder -->
+      <g fill="none" stroke="#08081A" stroke-width="7" stroke-linecap="round"
+         stroke-linejoin="round" opacity=".92">
+        <circle cx="404" cy="266" r="8" fill="#08081A" stroke="none"/>
+        <path d="M404 275l3 26M407 301l-11 26M407 301l12 24M404 284l16-8"/>
+        <circle cx="452" cy="272" r="8" fill="#08081A" stroke="none"/>
+        <path d="M452 281l3 24M455 305l-10 24M455 305l12 22M452 289l16-7"/>
+      </g>
+    </g>
+  </svg>`;
+}
+
+/* The words beside the art. Each step is a real block of text in the page —
+   the scene is decoration, so the story still reads with the SVG blocked,
+   in a feed reader, or to Google. */
+const GULLY_STEPS = [
+  ['01', 'Three lines on a wall',
+   'Somebody finds a piece of chalk. That is the stumps sorted, and the match is on.'],
+  ['02', 'One tip, one hand',
+   'No umpire, no rope, no scoreboard. Only rules everyone agreed on years ago and nobody ever wrote down.'],
+  ['03', 'Whoever hits it, fetches it',
+   'Over the wall is six and out. The argument about whether it cleared the wall is part of the game.'],
+  ['04', 'The bat comes back tomorrow',
+   'The game ends when the light does. A street bat has to survive concrete, drains and a thousand tennis balls — so that is the bat we build.']
+];
+
+function gullyStoryHTML() {
+  return `
+  <section class="sec gully dark" id="gully" data-p="1">
+    <div class="wrap">
+      <p class="eyebrow">Where it actually happens</p>
+      <h2 class="d2">Every bat we make<br>starts in a gully.</h2>
+
+      <div class="gy-grid">
+        <div class="gy-stage" aria-hidden="true">${gullyArtSVG()}</div>
+
+        <ol class="gy-steps">
+          ${GULLY_STEPS.map(([n, h, p], i) => `
+            <li class="gy-step" data-i="${i + 1}">
+              <span class="gy-n">${n}</span>
+              <h3>${h}</h3>
+              <p>${p}</p>
+            </li>`).join('')}
+          <li class="gy-step gy-end" data-i="4">
+            <a class="btn btn-primary" href="#/shop">Shop the bats ${ICON.arrow}</a>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>`;
+}
+
+/* Which panel is showing is whichever block of text is nearest the middle of
+   the screen.
+
+   This deliberately does NOT use an IntersectionObserver holding references to
+   the steps. The home page re-renders when the catalogue arrives from the
+   database, which replaces every node in it — an observer wired at mount then
+   spends the rest of the visit watching elements that are no longer on the
+   page, and the art stays frozen on panel one. Re-reading the DOM on each
+   frame costs five getBoundingClientRect calls and cannot go stale. */
+let GULLY_ON = false;
+function wireGully() {
+  gullyTick();
+  if (GULLY_ON) return;
+  GULLY_ON = true;
+  let queued = false;
+  const onScroll = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; gullyTick(); });
+  };
+  addEventListener('scroll', onScroll, { passive: true });
+  addEventListener('resize', onScroll);
+}
+function gullyTick() {
+  const sec = document.getElementById('gully');
+  if (!sec) return;                       /* any other page — nothing to do */
+  const mid = innerHeight * 0.42;
+  let best = null, bestGap = Infinity;
+  $$('.gy-step', sec).forEach(s => {
+    const r = s.getBoundingClientRect();
+    const gap = Math.abs((r.top + r.bottom) / 2 - mid);
+    if (gap < bestGap) { bestGap = gap; best = s; }
+  });
+  if (best && sec.dataset.p !== best.dataset.i) sec.dataset.p = best.dataset.i;
 }
 
 /* The brand story, one paragraph, pointing at about-us/.
@@ -3744,7 +3971,7 @@ function wireHero() {
 /* ---------------- per-view wiring ---------------- */
 function mount(page, parts) {
   clearInterval(BOARD_TIMER);   /* the big screen only runs on the game page */
-  if (page === 'home') { wireHero(); wireTrust(); }
+  if (page === 'home') { wireHero(); wireTrust(); wireGully(); }
   if (page === 'service') wireService(parts[1]);
   if (page === 'track')   wireTrack();
   if (page === 'account') wireAccount();
