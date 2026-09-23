@@ -732,9 +732,9 @@ function cardHTML(p) {
       <!-- plain language first, the figure as fine print. "780 grams" means
            nothing to a first-time buyer; "Light pickup" is actionable. -->
       <div class="card-spec">
-        <span><b>${pickupWords(p).b}</b><i>${pickupWords(p).s}</i>
-          <u>${p.weight[0]}–${p.weight[1]}g</u></span>
-        <span><b>${ballWords(p).b}</b><i>${ballWords(p).s}</i></span>
+        <span class="sp sp-w-${pickupKey(p)}"><b>${pickupWords(p).b}</b><i>${pickupWords(p).s}</i>
+          <u>${p.weight[0]}–${p.weight[1]}g</u>${meterHTML()}</span>
+        <span class="sp sp-b-${ballKey(p)}"><b>${ballWords(p).b}</b><i>${ballWords(p).s}</i>${meterHTML()}</span>
       </div>
       ${p.reviews ? `<div class="rate">${ICON.star}${p.rating}<span>(${p.reviews})</span></div>` : ''}
       <div class="card-foot">
@@ -1629,6 +1629,17 @@ function pickupWords(p) {
   if (band === 'heavy') return { b: 'Heavy',        s: 'Hits hardest, tires you sooner' };
   return                       { b: 'Balanced',     s: 'The range most players pick' };
 }
+/* The colour key for the two spec tiles. Kept beside the words they colour,
+   so a new ball type or weight band cannot gain a label and lose its colour. */
+function pickupKey(p) { return weightBand(p) || 'balanced'; }
+/* Three segments, filled by the level in the class beside it (CSS decides how
+   many). Decorative only — aria-hidden, because the words above already say
+   "Light pickup" or "Hard ball" to a screen reader. */
+function meterHTML() { return '<em class="sp-m" aria-hidden="true"><i></i><i></i><i></i></em>'; }
+function ballKey(p) {
+  const b = p.ball || [];
+  return b.includes('hard') ? 'hard' : b.includes('medium') ? 'medium' : 'soft';
+}
 function ballWords(p) {
   const b = p.ball || [];
   if (b.includes('hard'))   return { b: 'Hard ball',   s: 'Hard tennis and stumper' };
@@ -2122,7 +2133,7 @@ function viewProduct(id) {
   const specs = [
     ['Wood', WOOD_OF(p).label],
     ['Profile', PROFILE_OF(p).label],
-    ['Weight', weightLabel(p)],
+    ['Weight', weightLabel(p), 'sp-w-' + pickupKey(p)],
     ['Height', heightLabel(p)],
     ['Handle', p.handle],
     ['Sweet spot', p.sweetSpot],
@@ -2132,7 +2143,7 @@ function viewProduct(id) {
     p.width ? ['Blade width', p.width] : null,
     p.blades ? ['Blade construction', p.blades + ' blade laminated'] : null,
     p.toeGuard ? ['Toe guard', 'Fitted'] : null,
-    ['Ball type', p.ball.map(b => BALL_LABEL[b]).join(' & ')],
+    ['Ball type', p.ball.map(b => BALL_LABEL[b]).join(' & '), 'sp-b-' + ballKey(p)],
     ['Best for', p.usage],
     p.warranty ? ['Warranty', p.warranty] : null
   ].filter(Boolean);
@@ -2244,7 +2255,9 @@ function viewProduct(id) {
             <summary><b>Specifications</b><span class="acc-i"></span></summary>
             <div class="acc-b">
               <table class="spec-tbl">
-                ${specs.map(s => `<tr><th>${esc(s[0])}</th><td>${esc(s[1])}</td></tr>`).join('')}
+                ${specs.map(s => `<tr><th>${esc(s[0])}</th><td>${s[2]
+                    ? `<span class="sp-pill ${esc(s[2])}">${esc(s[1])}</span>`
+                    : esc(s[1])}</td></tr>`).join('')}
               </table>
             </div>
           </details>

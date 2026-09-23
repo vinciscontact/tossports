@@ -1312,7 +1312,7 @@ canvas.gp-cv{display:block;width:100%;height:auto;image-rendering:pixelated;
 
 /* the meaning block inside a product card: words lead, figure is fine print */
 .card-tag{font-size:.8rem;color:var(--ink-50);line-height:1.45;margin-top:5px}
-.card-spec{display:grid;gap:7px;margin-top:11px}
+.card-spec{display:grid;gap:15px;margin-top:12px}
 .card-spec span{display:block;padding:8px 10px;border-radius:9px;
   background:var(--paper-alt);border:1px solid var(--line)}
 .card-spec b{display:block;font-size:.8rem;font-weight:800;color:var(--ink);line-height:1.2}
@@ -4071,3 +4071,49 @@ body.pdp-open .fab{bottom:82px}
    for the illustrated bats only. */
 .pdp-hero img#pdpMain{mix-blend-mode:multiply}
 .pdp-hero .pdp-stage.has-photo .pdp-floor{display:none}
+
+/* ---------- the two spec tiles, colour-coded ----------
+   Pickup weight and ball type are the two things a buyer sorts by, so each
+   carries its own colour: the grid can be read without reading it. Colour is
+   never the ONLY signal — the words stay exactly as they were — so this works
+   for a colour-blind reader and in a grayscale print.
+
+   Each pair is a pale tint, a 3px bar down the left, and the bold heading in
+   the dark shade. The dark shades all clear 4.5:1 on their own tint. */
+/* No box. The tile is the words plus a three-segment meter — one bar for a
+   light bat or a soft ball, three for the heaviest and hardest. Cheaper ink
+   than a tinted panel, and the whole grid can be scanned down one column. */
+.card-spec span.sp{background:none;border:0;padding:0;border-radius:0}
+.card-spec span.sp > b{color:var(--sp-ink)}
+.card-spec span.sp > u{color:var(--sp-ink);opacity:.75}
+.sp-m{display:flex;gap:5px;margin-top:8px;font-style:normal}
+.sp-m i{display:block;flex:1;height:5px;margin:0;border-radius:100px;background:var(--line);
+  font-size:0;line-height:0}
+/* How many segments light up — read straight off the band, so a bat cannot
+   show a label and a meter that disagree. */
+.sp-w-light .sp-m i:nth-child(1),
+.sp-b-soft  .sp-m i:nth-child(1),
+.sp-w-balanced .sp-m i:nth-child(-n+2),
+.sp-w-medium   .sp-m i:nth-child(-n+2),
+.sp-b-medium   .sp-m i:nth-child(-n+2),
+.sp-w-heavy .sp-m i,
+.sp-b-hard  .sp-m i{background:var(--sp-line)}
+
+/* Two brand colours, two scales. Weight runs down the navy the site is built
+   on; ball type runs up the Toss orange. Only the two house colours appear, so
+   the grid still looks like Toss and not like a chart. --sp-bg/--sp-edge are
+   for the product-page pills, which still need a surface to sit on. */
+.sp-w-light   {--sp-line:#9B9BE4;--sp-bg:#F5F5FE;--sp-edge:#DEDEF8;--sp-ink:#4747B0}
+.sp-w-medium,
+.sp-w-balanced{--sp-line:#4E4EC0;--sp-bg:#EDEDFB;--sp-edge:#CFCFF0;--sp-ink:#33338F}
+.sp-w-heavy   {--sp-line:#16163F;--sp-bg:#E7E8F1;--sp-edge:#C9CCE0;--sp-ink:#0B0B24}
+
+.sp-b-soft    {--sp-line:#FFB067;--sp-bg:#FFF7EF;--sp-edge:#FBE2CA;--sp-ink:#A85400}
+.sp-b-medium  {--sp-line:#FF8A1E;--sp-bg:#FFF2E4;--sp-edge:#F9D3AE;--sp-ink:#9A4A00}
+.sp-b-hard    {--sp-line:#C24D00;--sp-bg:#FDEDE2;--sp-edge:#F2C9A9;--sp-ink:#8A3600}
+
+/* the same two facts in the product page spec table, as a pill so the two
+   pages agree on what each colour means */
+.sp-pill{display:inline-block;padding:3px 10px;border-radius:100px;
+  background:var(--sp-bg);border:1px solid var(--sp-edge);color:var(--sp-ink);
+  font-size:.8rem;font-weight:800}
