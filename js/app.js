@@ -1376,6 +1376,10 @@ function gullyArtSVG() {
         <stop offset="0" stop-color="#FFC46B" stop-opacity=".55"/>
         <stop offset="1" stop-color="#FFC46B" stop-opacity="0"/>
       </radialGradient>
+      <radialGradient id="gyVig" cx=".5" cy=".48" r=".78">
+        <stop offset=".55" stop-color="#000" stop-opacity="0"/>
+        <stop offset="1" stop-color="#000" stop-opacity=".55"/>
+      </radialGradient>
       <linearGradient id="gyBlade" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0" stop-color="#C9884A"/>
         <stop offset=".5" stop-color="#E7B87E"/>
@@ -1478,6 +1482,10 @@ function gullyArtSVG() {
       </g>
     </g>
 
+    <!-- Evening falling. It sits above the game and below the streetlight, so
+         the lamp reads as the only light left rather than one more layer. -->
+    <rect class="gy-dusk" width="640" height="420" fill="#05050F"/>
+
     <!-- PANEL 4 — the light goes, the bat stays -->
     <g class="gy-l gy-l4">
       <path d="M596 334V128" stroke="#08081A" stroke-width="8" stroke-linecap="round"/>
@@ -1499,6 +1507,8 @@ function gullyArtSVG() {
         <path d="M452 281l3 24M455 305l-10 24M455 305l12 22M452 289l16-7"/>
       </g>
     </g>
+
+    <rect class="gy-vig" width="640" height="420" fill="url(#gyVig)"/>
   </svg>`;
 }
 
@@ -1529,7 +1539,11 @@ function gullyStoryHTML() {
              box, so pinning the column itself let the art scroll away after
              the first panel and left the rest of the story beside nothing. -->
         <div class="gy-stage" aria-hidden="true">
-          <div class="gy-pin">${gullyArtSVG()}</div>
+          <div class="gy-pin">
+            ${gullyArtSVG()}
+            <span class="gy-dots">${GULLY_STEPS.map((_, i) =>
+              `<i data-d="${i + 1}"></i>`).join('')}</span>
+          </div>
         </div>
 
         <ol class="gy-steps">
