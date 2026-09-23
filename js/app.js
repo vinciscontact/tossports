@@ -1524,7 +1524,13 @@ function gullyStoryHTML() {
       <h2 class="d2">Every bat we make<br>starts in a gully.</h2>
 
       <div class="gy-grid">
-        <div class="gy-stage" aria-hidden="true">${gullyArtSVG()}</div>
+        <!-- The column stretches the full height of the story; the pin inside
+             it is what sticks. A sticky element can only travel inside its own
+             box, so pinning the column itself let the art scroll away after
+             the first panel and left the rest of the story beside nothing. -->
+        <div class="gy-stage" aria-hidden="true">
+          <div class="gy-pin">${gullyArtSVG()}</div>
+        </div>
 
         <ol class="gy-steps">
           ${GULLY_STEPS.map(([n, h, p], i) => `
