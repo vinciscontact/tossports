@@ -46,6 +46,10 @@ function rowToProduct(r) {
     id: r.id, name: r.name,
     price: r.price, mrp: r.mrp, tier: r.tier,
     stock: r.stock, images: r.images || [], cost: r.cost,
+    /* The Maze Room's out-of-stock switch. Deliberately NOT derived from the
+       stock count: these bats are cut to order, so a count of 0 is normal and
+       would have marked the whole catalogue sold out. */
+    soldOut: r.sold_out === true,
     category: r.category || 'bats'
   });
 }

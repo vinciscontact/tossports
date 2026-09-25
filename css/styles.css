@@ -4248,3 +4248,26 @@ body.pdp-open .fab{bottom:82px}
 .gully[data-p="2"] .gy-l1:not(.gy-keep),
 .gully[data-p="3"] .gy-l1:not(.gy-keep),
 .gully[data-p="4"] .gy-l1:not(.gy-keep){opacity:0}
+
+/* ---------- out of stock ----------
+   An owner flips a switch in the Maze Room and this is what a customer sees.
+   The bat stays on the site — its page keeps its place in search and the
+   photo still sells the next one — but nothing pretends it can be bought. */
+.badge.b-out{background:#2A2540;color:#fff;border:1px solid rgba(255,255,255,.25)}
+.card.out .card-art{filter:grayscale(.85) brightness(.82)}
+.card.out .card-art::after{content:'';position:absolute;inset:0;z-index:1;
+  background:rgba(20,20,58,.12)}
+.card.out .price{color:var(--ink-50)}
+.card.out:hover .card-art .bat-art{transform:none}
+/* the Add button becomes an ask, and says so in green rather than orange */
+.add.add-wa{background:#1FA855;color:#fff}
+.add.add-wa:hover{background:#188945}
+
+/* the line on the product page, where the buy buttons would have been */
+.oos-note{display:flex;gap:10px;align-items:flex-start;margin:16px 0 4px;padding:12px 13px;
+  border-radius:12px;background:var(--paper-alt);border:1px solid var(--line);
+  font-size:.86rem;line-height:1.5;color:var(--ink-70)}
+.oos-note svg{width:17px;height:17px;flex:none;margin-top:2px;color:var(--ink-50)}
+.oos-note b{color:var(--ink)}
+/* and in the sticky bar */
+.bb-out{color:#FFC46B;font-weight:800}

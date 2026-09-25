@@ -943,7 +943,7 @@ function viewProducts() {
       <thead><tr>
         <th>Product</th><th>Category</th><th>Tier</th><th class="num">Price</th><th class="num">MRP</th>
         <th class="num">${multiBranch() ? (BRANCH ? esc(branchName(BRANCH)) : 'Stock (all)') : 'Stock'}</th>
-        <th>Live</th><th></th>
+        <th>Live</th><th>Stock status</th><th></th>
       </tr></thead>
       <tbody>${rows.length ? rows.map(p => `<tr>
         <td><div>${esc(p.name)}</div><div class="pid">${esc(p.id)}</div></td>
@@ -955,10 +955,14 @@ function viewProducts() {
           multiBranch() && !BRANCH ? `<div class="br-split">${DB.branches.filter(b => b.active)
             .map(b => `${esc(b.code)} ${stockOf(p.id, b.id)}`).join(' · ')}</div>` : ''}</td>
         <td><span class="pill ${p.active ? 'on' : 'off'}">${p.active ? 'Live' : 'Off'}</span></td>
+        <td><span class="pill ${p.sold_out ? 'off' : 'on'}">${
+          p.sold_out ? 'Out of stock' : 'In stock'}</span></td>
         <td style="text-align:right;white-space:nowrap">
+          <button class="btn ghost sm" data-oos="${esc(p.id)}">${
+            p.sold_out ? 'Mark in stock' : 'Mark out of stock'}</button>
           ${multiBranch() ? `<button class="btn ghost sm" data-move="${esc(p.id)}">Move</button>` : ''}
           <button class="btn ghost sm" data-edit="${esc(p.id)}">Edit</button></td>
-      </tr>`).join('') : `<tr><td colspan="8"><div class="empty">Nothing matches those filters.</div></td></tr>`}
+      </tr>`).join('') : `<tr><td colspan="9"><div class="empty">Nothing matches those filters.</div></td></tr>`}
       </tbody>
     </table></div>`;
 }
@@ -1019,6 +1023,26 @@ function wireProducts() {
   $('#catManage').onclick = manageCategories;
   $('#psManage').onclick = managePlaystyles;
   $('#pNew').onclick = () => editProduct(null);
+  /* The out-of-stock switch. One button, no form: this is the thing an owner
+     does in the middle of a working day, often on a phone, and it has to be
+     as quick as saying it out loud. The storefront reads the same column on
+     its next load, so nothing else has to be touched. */
+  $$('[data-oos]').forEach(b => b.onclick = async () => {
+    const p = DB.products.find(x => x.id === b.dataset.oos);
+    if (!p) return;
+    const next = !p.sold_out;
+    b.disabled = true;
+    try {
+      await saveRow('products', { id: p.id, sold_out: next });
+      p.sold_out = next;
+      toast(p.name + (next ? ' is now out of stock' : ' is back in stock'));
+      render();
+    } catch (e) {
+      b.disabled = false;
+      toast('Could not save: ' + (e.message || 'try again'));
+    }
+  });
+
   $$('[data-edit]').forEach(b => b.onclick = () => editProduct(b.dataset.edit));
   $$('[data-move]').forEach(b => b.onclick = () => moveStock(b.dataset.move));
 }

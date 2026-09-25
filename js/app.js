@@ -194,9 +194,18 @@ function shipFee() {
   const s = cartSubtotal();
   return (s === 0 || s >= FREE_SHIP_OVER) ? 0 : SHIP_FEE;
 }
+/* Out of stock is a switch an owner flips in the Maze Room, not a count.
+   Every screen asks this one function so none of them can disagree. */
+const isOut = p => !!(p && p.soldOut);
+
 function addToCart(id, variant, engrave) {
   const p = byId(id);
   if (!p) return;
+  /* The one gate every Add button goes through — card, product page and
+     sticky bar all end up here, so the check cannot be missed on one of
+     them. The database refuses the order too; this is only what stops a
+     customer getting as far as paying for it. */
+  if (isOut(p)) { toast(p.name + ' is out of stock right now'); enquire(p); return; }
   if (!hasPrice(p)) { enquire(p); return; }
   /* Engraved text is part of the line identity, not an attribute of it — two
      bats with different names on them are two lines, and must never merge
@@ -519,12 +528,16 @@ function filtered() {
   /* "price on request" items always sink to the bottom, whichever way we sort */
   const lo = p => (p.price == null ?  Infinity : p.price);
   const hi = p => (p.price == null ? -Infinity : p.price);
+  /* Whatever the sort, what you can buy comes first. A sold-out bat is still
+     listed — its page keeps its place in search — but never above a bat that
+     is on the shelf. */
+  const sink = arr => arr.sort((a, b) => (isOut(a) ? 1 : 0) - (isOut(b) ? 1 : 0));
   if (s === 'lo')      list.sort((a, b) => lo(a) - lo(b));
   else if (s === 'hi') list.sort((a, b) => hi(b) - hi(a));
   else if (s === 'light') list.sort((a, b) => (a.weight ? a.weight[0] : 1e9) - (b.weight ? b.weight[0] : 1e9));
   else if (s === 'rate')  list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
   else list.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
-  return list;
+  return sink(list);
 }
 function activeChips() {
   const out = [];
@@ -705,8 +718,11 @@ function genericCardHTML(p) {
         ${hasPrice(p)
           ? `<div class="price num">${fmt(p.price)}${p.mrp ? `<small>${fmt(p.mrp)}</small>` : ''}</div>`
           : `<div class="price por">Price on request</div>`}
-        <button class="add" data-add="${p.id}" aria-label="Add ${esc(p.name)} to bag">
-          ${hasPrice(p) ? ICON.cart : ICON.whatsapp}
+        <button class="add${isOut(p) ? ' add-wa' : ''}" data-add="${p.id}"
+                aria-label="${isOut(p)
+                  ? esc(p.name) + ' is out of stock — ask on WhatsApp'
+                  : 'Add ' + esc(p.name) + ' to bag'}">
+          ${isOut(p) || !hasPrice(p) ? ICON.whatsapp : ICON.cart}
         </button>
       </div>
     </div>
@@ -720,9 +736,10 @@ function cardHTML(p) {
     .map(b => `<span class="badge">${esc(b)}</span>`).join('');
   const offBadge = off >= 15 ? `<span class="badge b-off">${off}% OFF</span>` : '';
   return `
-  <article class="card">
+  <article class="card${isOut(p) ? ' out' : ''}">
     <a href="#/product/${p.id}" class="card-art" aria-label="${esc(p.name)}">
-      <div class="badges">${badges}${offBadge}</div>
+      <div class="badges">${isOut(p)
+        ? '<span class="badge b-out">Out of stock</span>' : badges}${offBadge}</div>
       ${batArt(p)}
     </a>
     <div class="card-b">
@@ -742,8 +759,11 @@ function cardHTML(p) {
           ? `<div class="price num">${fmt(p.price)}${p.mrp ? `<small>${fmt(p.mrp)}</small>` : ''}
                ${p.mrp && p.mrp > p.price ? `<span class="save">Save ${fmt(p.mrp - p.price)}</span>` : ''}</div>`
           : `<div class="price por">Price on request</div>`}
-        <button class="add" data-add="${p.id}" aria-label="Add ${esc(p.name)} to bag">
-          ${hasPrice(p) ? ICON.cart : ICON.whatsapp}
+        <button class="add${isOut(p) ? ' add-wa' : ''}" data-add="${p.id}"
+                aria-label="${isOut(p)
+                  ? esc(p.name) + ' is out of stock — ask on WhatsApp'
+                  : 'Add ' + esc(p.name) + ' to bag'}">
+          ${isOut(p) || !hasPrice(p) ? ICON.whatsapp : ICON.cart}
         </button>
       </div>
     </div>
@@ -2046,6 +2066,7 @@ function galleryHTML(p, off) {
   const imgs = (p.images || []).filter(Boolean);
   const badges = `
     <div class="badges">
+      ${isOut(p) ? '<span class="badge b-out">Out of stock</span>' : ''}
       ${(p.badges || []).map(b => `<span class="badge">${esc(b)}</span>`).join('')}
       ${off >= 15 ? `<span class="badge b-off">${off}% OFF</span>` : ''}
     </div>`;
@@ -2331,6 +2352,7 @@ function viewProductGeneric(p) {
    ------------------------------------------------------------ */
 function buybarHTML(p) {
   const priced = hasPrice(p);
+  const out = isOut(p);
   const img = ((p.images || []).filter(Boolean)[0] || '');
   const cut = img ? img.replace(/\.(webp|png|jpe?g)$/i, '-cut.webp') : '';
   const off = discount(p);
@@ -2350,14 +2372,20 @@ function buybarHTML(p) {
     </div>
 
     <div class="bb-p${priced ? '' : ' por'}">
-      ${priced
+      ${out
+        ? `<b class="num">${priced ? fmt(p.price) : 'Made to order'}</b>
+           <span class="bb-out">Out of stock</span>`
+        : priced
         ? `<b class="num">${fmt(p.price)}</b>
            <span>${off >= 15 ? off + '% off · incl. taxes' : 'incl. taxes'}</span>`
         : `<b>Made to order</b><span>Ask for today's price</span>`}
     </div>
 
     <div class="bb-act">
-      ${priced
+      ${out
+        ? `<button class="btn btn-wa" id="waBtn2">
+             ${ICON.whatsapp}<span class="bb-wa-t">Ask when it is back</span></button>`
+        : priced
         ? `<button class="btn btn-dark" id="buyBtn2">
              <span class="bb-wa-t">Buy now</span></button>
            <button class="btn btn-primary" id="addBtn2">${ICON.cart}
@@ -2464,8 +2492,15 @@ function viewProduct(id) {
                      placeholder="Up to ${SERVICES.engraving.maxChars} characters">
             </div>` : ''}
 
+          ${isOut(p) ? `
+            <p class="oos-note">${ICON.shield}<span><b>Out of stock right now.</b>
+              These are shaped by hand in our own unit — message us and we will
+              tell you when the next one is ready, or cut one to your weight.</span></p>` : ''}
+
           <div class="buy-row">
-            ${hasPrice(p)
+            ${isOut(p)
+              ? `<button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Ask when it is back</button>`
+              : hasPrice(p)
               ? `<button class="btn btn-primary btn-block" id="addBtn">${ICON.cart} Add to Bag</button>
                  <button class="btn btn-dark btn-block" id="buyBtn">Buy now</button>`
               : `<button class="btn btn-wa btn-block" id="waBtn">${ICON.whatsapp} Ask price on WhatsApp</button>`}
