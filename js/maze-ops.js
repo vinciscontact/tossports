@@ -1950,6 +1950,7 @@ function wireRequests() {
     const row = REQ.rows.find(r => r.id === id);
     if (!row) return;
     openModal('Quote this request', `
+      <div class="f">
       <div class="row"><label>Amount (₹)</label>
         <input id="q_amt" type="number" value="${row.quote != null ? row.quote : ''}"></div>
       <div class="row"><label>Discount code to give them</label>
@@ -1959,6 +1960,7 @@ function wireRequests() {
           which one you gave.</div></div>
       <div class="row"><label>Note (internal)</label>
         <textarea id="q_note" rows="3">${esc(row.staff_note || '')}</textarea></div>
+      </div>
     `, async () => {
       const amt = $('#q_amt').value.trim();
       try {
@@ -2033,6 +2035,7 @@ function wireQAAdmin() {
     const id = Number(b.dataset.ans), row = QA.rows.find(r => r.id === id);
     if (!row) return;
     openModal('Answer this question', `
+      <div class="f">
       <div class="row"><label>Question</label>
         <p class="hint">${esc(row.question)}</p></div>
       <div class="row"><label>Your answer</label>
@@ -2042,6 +2045,7 @@ function wireQAAdmin() {
       <div class="row"><label class="check">
         <input type="checkbox" id="a_pub" ${row.published ? 'checked' : ''}> Show it on the site
       </label></div>
+      </div>
     `, async () => {
       const answer = $('#a_txt').value.trim();
       if (!answer) { toast('Write an answer first', true); return false; }
@@ -2225,6 +2229,7 @@ function wireFulfil() {
     const id = b.dataset.ship, o = FUL.rows.find(x => x.id === id);
     if (!o) return;
     openModal('Tracking for ' + esc(id), `
+      <div class="f">
       <div class="row"><label>Courier</label>
         <select id="s_cour">
           <option value="">Choose…</option>
@@ -2239,6 +2244,7 @@ function wireFulfil() {
                placeholder="Leave empty to use the courier's own page">
         <div class="hint">Saving a tracking number moves the order to "On its way",
           which is what the customer sees on the tracking page.</div></div>
+      </div>
     `, async () => {
       const no = $('#s_no').value.trim();
       /* Named, because the same fields have to reach the database and then
