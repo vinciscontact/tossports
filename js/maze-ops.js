@@ -527,7 +527,11 @@ function viewSales() {
           <td><span class="pill ${esc(o.channel || 'web')}">${esc(o.channel || 'web')}</span></td>
           <td class="muted">${esc(s ? s.name : '—')}</td>
           <td class="num">${money(o.total)}</td>
-          <td>${o.paid ? '<span class="pill on">Paid</span>' : '<span class="pill off">Unpaid</span>'}</td>
+          <td>${o.paid
+            ? `<span class="pill on">Paid</span>${o.paid_source
+                ? `<div class="pid">${esc(String(o.paid_source).replace('staff:', 'by '))}</div>` : ''}`
+            : `<span class="pill off">Unpaid</span>${isOwner() && o.status !== 'cancelled'
+                ? `<div><button class="btn ghost sm" data-paid="${esc(o.id)}">Mark paid</button></div>` : ''}`}</td>
           <td>${isAdminRole()
             ? `<select data-status="${esc(o.id)}" class="inline-sel">
                 ${/* delivered was missing, and everything downstream already
@@ -641,6 +645,43 @@ function orderDetail(o) {
 
 function wireSales() {
   const b = $('#newSale'); if (b) b.onclick = logSaleModal;
+
+  /* Confirming a payment by hand.
+     Normally Razorpay tells the server itself and this is never touched —
+     the browser is not trusted to claim a payment, which is exactly why
+     orders show Unpaid until that message arrives. But a webhook that was
+     never registered, or an outage, leaves real money with no way to record
+     it, and a founder staring at a paid order marked Unpaid. This is that
+     way. Founder only, and the database enforces that independently; it
+     stamps who confirmed it and keeps the reference, so the row can always
+     be traced back to a real payment. */
+  $$('[data-paid]').forEach(btn => btn.onclick = async () => {
+    const id = btn.dataset.paid;
+    const o = DB.orders.find(x => x.id === id);
+    if (!o) return;
+    const ref = prompt(
+      'Confirm payment for ' + id + ' (' + money(o.total) + ').\n\n' +
+      'Paste the Razorpay payment id (pay_XXXXXXXX) if you have it — it is ' +
+      'how this order is matched to the money later. Leave blank for cash or UPI.',
+      '');
+    if (ref === null) return;              /* cancelled */
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const out = await supaRpc('mark_order_paid_by_staff', {
+        p_order_id: id, p_ref: ref.trim() || null
+      });
+      const ok = out && (out.ok === true || (Array.isArray(out) && out[0] && out[0].ok));
+      if (!ok) throw new Error((out && out.reason) || 'the database refused it');
+      o.paid = true;
+      o.paid_source = 'staff:' + ((ME && ME.name) || 'you');
+      if (ref.trim()) o.payment_id = ref.trim();
+      toast(id + ' marked paid');
+      render();
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Mark paid';
+      toast('Could not mark it paid: ' + (e.message || 'try again'), true);
+    }
+  });
 
   wireExport('sales', 'Sales report' + (BRANCH ? ' — ' + branchName(BRANCH) : ''), () => {
     const mine = !isAdminRole();
