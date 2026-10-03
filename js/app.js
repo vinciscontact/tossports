@@ -3770,6 +3770,24 @@ function completeOrder(method, info, extra) {
    old behaviour rather than refusing to sell. Manual capture is worse
    than automatic; both are better than a shop that cannot take money.
    ------------------------------------------------------------ */
+/* Tell the server a payment just happened, so it can check with Razorpay and
+   mark the order paid without waiting for the webhook.
+
+   Nothing here is trusted — the function re-reads the payment from Razorpay
+   with the secret key and refuses anything that does not match the order —
+   so this is a prompt, not a claim. Errors are swallowed on purpose: the sale
+   is already made, and the webhook and the Maze Room are both behind it. */
+function confirmPayment(orderId, paymentId) {
+  if (!orderId || !paymentId) return;
+  try {
+    fetch(SUPA_URL + '/functions/v1/razorpay-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPA_KEY },
+      body: JSON.stringify({ order_id: orderId, payment_id: paymentId })
+    }).catch(() => {});
+  } catch (e) { /* offline, blocked, whatever — not the customer's problem */ }
+}
+
 async function payOnline(info) {
   const oid = newOrderId();
 
@@ -3832,9 +3850,21 @@ async function payOnline(info) {
     theme: { color: '#FF8A1E' },
     /* The order already exists, so completeOrder must not write it again —
        a second insert would be a duplicate id and a second stock decrement. */
-    handler: r => completeOrder('online', info, {
-      id: oid, payment_id: r.razorpay_payment_id, recorded: saved
-    }),
+    handler: r => {
+      /* Ask the server to confirm the payment with Razorpay straight away,
+         rather than waiting for Razorpay to call the webhook. Both paths end
+         at the same mark_order_paid(), which refuses a second attempt, so
+         whichever arrives first wins and the other is harmless.
+
+         This is deliberately fire-and-forget: the customer has paid and must
+         see their confirmation now, whatever the network does next. If it
+         fails, the webhook still marks the order, and a founder can confirm
+         it by hand in the Maze Room. */
+      confirmPayment(oid, r.razorpay_payment_id);
+      completeOrder('online', info, {
+        id: oid, payment_id: r.razorpay_payment_id, recorded: saved
+      });
+    },
     modal: { ondismiss: () => toast(
       'Payment not completed — your bag is safe. Pay when ready, or order on WhatsApp.') }
   };
