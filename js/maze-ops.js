@@ -527,11 +527,11 @@ function viewSales() {
           <td><span class="pill ${esc(o.channel || 'web')}">${esc(o.channel || 'web')}</span></td>
           <td class="muted">${esc(s ? s.name : '—')}</td>
           <td class="num">${money(o.total)}</td>
-          <td>${o.paid
+          <td><div class="paid-cell">${o.paid
             ? `<span class="pill on">Paid</span>${o.paid_source
-                ? `<div class="pid">${esc(String(o.paid_source).replace('staff:', 'by '))}</div>` : ''}`
+                ? `<span class="pid">${esc(String(o.paid_source).replace('staff:', 'by '))}</span>` : ''}`
             : `<span class="pill off">Unpaid</span>${isOwner() && o.status !== 'cancelled'
-                ? `<div><button class="btn ghost sm" data-paid="${esc(o.id)}">Mark paid</button></div>` : ''}`}</td>
+                ? `<button class="btn ghost xs" data-paid="${esc(o.id)}">Mark paid</button>` : ''}`}</div></td>
           <td>${isAdminRole()
             ? `<select data-status="${esc(o.id)}" class="inline-sel">
                 ${/* delivered was missing, and everything downstream already

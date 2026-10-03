@@ -782,3 +782,12 @@ body.printing .inv{max-width:760px;margin:0 auto}
 .pill.new{background:rgba(255,138,30,.16);color:#a85800}
 .pill.replied{background:rgba(40,199,111,.16);color:#148a4e}
 .pill.closed{background:rgba(0,0,0,.07);color:var(--ink-60)}
+
+/* The Paid column holds a status pill and, for a founder, the button that
+   confirms a payment by hand. Stacked and left-aligned in a column of their
+   own so the pill never shifts sideways when the button appears, and every
+   row keeps the same height whether or not it has one. */
+.paid-cell{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.paid-cell .pid{font-size:.68rem}
+.btn.xs{padding:3px 9px;font-size:.68rem;border-radius:7px;font-weight:700;
+  white-space:nowrap}
