@@ -1,0 +1,285 @@
+================================================================================
+TOSS SPORTS — PROMPT FOR GENERATING THE TWO MANUALS
+================================================================================
+WHAT THIS FILE IS
+  A ready-to-paste prompt. Open a NEW Claude conversation (one that can browse
+  the web), paste everything between the START and END markers, and Claude will
+  produce two illustrated manuals:
+
+      BOOK 1 — The Maze Room Handbook   (for you, your managers and staff)
+      BOOK 2 — The Toss Sports Guide    (for customers)
+
+HOW TO USE IT
+  1. Copy from "=== START OF PROMPT ===" to "=== END OF PROMPT ===".
+  2. Paste into Claude. Ask for one book at a time if the reply gets cut off —
+     say "Do Book 1 only" first, then "Now do Book 2".
+  3. Ask for it as a PDF, or as a document you can print.
+
+A NOTE ON ACCURACY
+  Claude can open tossports.com and see the shop exactly as a customer does.
+  It CANNOT sign in to the Maze Room — that needs your password, and it should
+  never have it. So the facts about the Maze Room are written into the prompt
+  below (Appendix A). They were taken from the live system on 29 September 2026
+  and are correct as of that date.
+
+================================================================================
+=== START OF PROMPT ===
+
+You are writing two manuals for Toss Sports, a handmade cricket bat business in
+Chennai that sells at tossports.com. I want them to read like good instruction
+books — the kind someone actually finishes — not like software documentation.
+
+FIRST, GO AND LOOK
+Before writing a word, visit these pages and study how the site looks, what it
+says, and how it behaves:
+  https://tossports.com                 the shop (home, and the sections below it)
+  https://tossports.com/#/shop          all 31 bats, filters, sorting
+  https://tossports.com/#/finder        "Find My Bat" — the guided questions
+  https://tossports.com/#/game          "Play & Win" — the cricket game
+  https://tossports.com/#/track         order tracking
+  https://tossports.com/#/account       customer sign-in
+  https://tossports.com/contact-us/     the contact page
+  https://tossports.com/warranty-policy/  warranty, returns and replacement
+  https://tossports.com/refund-policy/    refunds
+  https://tossports.com/shipping-policy/  shipping
+Pick up the real colours (deep navy and orange), the typefaces, the tone of
+voice, the words the site itself uses for things, and the actual prices and
+policies. Use those words in the books. Do not invent features, prices,
+timelines or policies: if something is not on the site and not in the appendices
+below, either leave it out or mark it clearly as "[TO CONFIRM]".
+
+WHO IS READING
+  Book 1: the two founders, plus managers, sales staff and workshop staff.
+          Some are very comfortable with phones and computers; some are not.
+          Several will read it on a phone. Some may prefer plain English over
+          jargon, and may be reading in their second language.
+  Book 2: customers buying a cricket bat — mostly players and club organisers
+          across India, often on a phone, often buying a bat online for the
+          first time. Also useful for stakeholders and partners who want to
+          understand what the business offers.
+
+HOUSE STYLE FOR BOTH BOOKS
+  - Short sentences. Everyday words. Explain any term the first time it appears.
+  - Second person: "you". Never "the user".
+  - Every instruction is a numbered step that starts with a verb, and says what
+    you should see on screen after the step: "Tap Products. The list of all 31
+    bats opens."
+  - Each chapter opens with one line saying what it covers and who needs it.
+  - Use tables for anything comparative (roles, statuses, prices, policies).
+  - Add a "If something goes wrong" box at the end of each chapter: the two or
+    three things most likely to confuse someone, and what to do.
+  - Describe where things are on screen in words ("the row of icons down the
+    left edge"), since you cannot take screenshots of the Maze Room.
+  - Where a screenshot would help, insert a clearly marked placeholder:
+        [SCREENSHOT: Products list showing the Mark out of stock button]
+    and gather them into a checklist at the end so the team can take them.
+  - Mark anything dangerous or irreversible with a warning line.
+  - Design it to match the site: navy and orange, generous headings, plenty of
+    white space, page numbers, and a table of contents with page numbers.
+
+--------------------------------------------------------------------------------
+BOOK 1 — THE MAZE ROOM HANDBOOK
+--------------------------------------------------------------------------------
+The Maze Room is the private admin panel at https://tossports.com/maze.html.
+Only staff can sign in. It runs the whole business: orders, stock, billing,
+staff, money and the website's own content.
+
+Structure it like this:
+
+  Part 1 — Before you start
+    What the Maze Room is, and the one rule: it is the real business, not a
+    practice copy. Anything changed here shows on the public shop within
+    seconds. Signing in, signing out, forgetting a password, and what to do if
+    the screen says "Your role doesn't have access to this".
+
+  Part 2 — Your role, and what you can see
+    Explain the five roles plainly, using Appendix A. Give the full access
+    table. Explain that the sections a person cannot open are not merely hidden
+    — the database itself refuses them, so nothing can be reached by guessing a
+    web address. Explain the founder-only group and why those six sections
+    (team, money, history, branches, settings, insights) are locked down.
+
+  Part 3 — Day-to-day work, one chapter per section
+    Write a chapter for each of the nineteen sections listed in Appendix A.
+    In each chapter: what the section is for, who can open it, the most common
+    job done there step by step, and what NOT to do. Give the everyday jobs the
+    most room — taking an order through to delivered, adding or editing a bat,
+    marking a bat out of stock, raising a bill, answering an enquiry, setting a
+    task. Keep the rarely-used sections short.
+
+  Part 4 — The jobs that cross several sections
+    Walk these end to end, because this is how work actually happens:
+      - A new online order arrives, and what happens to it until it is delivered
+      - A bat is out of stock, and how the shop shows that (Appendix C)
+      - A customer wants a repair, a custom bat, or a jersey order
+      - A warranty claim
+      - A refund
+      - Adding a new member of staff and giving them access
+      - Month end: what a founder checks
+
+  Part 5 — Looking after it
+    Who to call when something breaks. What is backed up and what is not.
+    The handful of settings that change the public website, and the care they
+    need. A one-page "first week" checklist for a new staff member.
+
+--------------------------------------------------------------------------------
+BOOK 2 — THE TOSS SPORTS GUIDE (for customers)
+--------------------------------------------------------------------------------
+This one should feel like part of the brand, not a manual: warm, confident,
+proud of the fact that every bat is shaped by hand in Chennai and never resold.
+It has to work for someone who has never bought online before.
+
+Structure it like this:
+
+  Part 1 — Who we are
+    The workshop, the two brothers, the promise that nothing is resold. Keep it
+    to two pages and use the site's own words.
+
+  Part 2 — Choosing a bat
+    The three ball types (soft, medium, hard) and why the ball decides the bat.
+    Pickup weight, and what light, balanced and heavy feel like in the hands.
+    Wood: Sri Lankan, Kashmir Willow, Poplar. Shapes: classic, scoop, flat face,
+    big edge, short blade, layered blade. Playing styles and levels.
+    Explain the colour coding used on every bat card: navy bars for weight, one
+    to three, and orange bars for ball type, one to three.
+    Then three ways to choose: browse the shop with filters; answer the Find My
+    Bat questions; or ask on WhatsApp. Walk through each.
+
+  Part 3 — Ordering
+    Reading a bat's page. Engraving (₹199, up to 18 characters). Adding to the
+    bag. Paying online by card, UPI or netbanking, or finishing the order on
+    WhatsApp instead. What "Out of stock" means and what to do about it.
+    Delivery, charges and free-delivery threshold — take the real numbers from
+    the site. Tracking an order. Creating an account and what it gives you.
+
+  Part 4 — Services
+    One short chapter each: Bat Doctor repairs, custom bats, team jerseys,
+    wholesale and club orders, corporate gifting, trade-in, and video content.
+    For each: who it is for, what to send us, and what happens next.
+
+  Part 5 — After you buy
+    Looking after a tennis-ball bat. Warranty, returns and replacement, in plain
+    English, matching the policy pages exactly. How to make a claim and what
+    photographs to send. Refunds.
+
+  Part 6 — Play & Win, and staying in touch
+    The game and its discount codes. The WhatsApp line, the hours, and which
+    number or email to use for what (Appendix B).
+
+  Close with a one-page quick reference: contact details, hours, delivery
+  timings, warranty in one line, and the website address.
+
+DELIVERABLE
+  Two separate documents, each with a cover page, a table of contents with page
+  numbers, and numbered pages. Aim for 25–40 pages for Book 1 and 15–25 pages
+  for Book 2 — long enough to be complete, short enough to be read. Finish with
+  the screenshot checklist and a list of anything you marked [TO CONFIRM].
+
+================================================================================
+APPENDIX A — THE MAZE ROOM: ROLES AND SECTIONS (facts, use these)
+================================================================================
+Address: https://tossports.com/maze.html — staff sign in with an email and
+password. A person must also have a staff record created by a founder; an
+account on its own gives no access to anything.
+
+THE FIVE ROLES
+  Founder   the owners. Everything, including money, staff and settings.
+  Manager   runs a branch day to day. Everything operational, but no money,
+            no staff records, no settings.
+  Sales     takes orders and talks to customers.
+  Workshop  makes and repairs bats. Sees only their own work.
+  (There is also an "owner" role which is identical to Founder.)
+
+THE NINETEEN SECTIONS, AND WHO CAN OPEN EACH
+  Section        What it is for                          Founder Manager Sales Workshop
+  Dashboard      today's numbers and what needs doing        Y      Y      Y      Y
+  Sales          orders and what stage each is at            Y      Y      Y      -
+  Fulfilment     packing, courier and tracking               Y      Y      Y      -
+  Requests       service requests: repairs, custom, jerseys  Y      Y      Y      Y
+  Questions      customer questions awaiting an answer       Y      Y      Y      -
+  Enquiries      messages from the contact form              Y      Y      Y      -
+  Billing        invoices and GST bills                      Y      Y      -      -
+  Products       the 31 bats: price, stock, photos, details  Y      Y      -      -
+  Tasks          jobs assigned to people                     Y      Y      Y      Y
+  SOPs           how-we-do-it notes for the team             Y      Y      Y      Y
+  Leaderboards   club and player boards                      Y      Y      Y      -
+  Rewards        discount codes                              Y      Y      -      -
+  Game scores    scores from the Play & Win game             Y      Y      -      -
+  Team           staff records, salaries, attendance         Y      -      -      -
+  Finance        revenue, costs, expenses, profit            Y      -      -      -
+  Insights       deeper questions about the business         Y      -      -      -
+  Activity       the audit trail: who changed what           Y      -      -      -
+  Branches       the shops and their stock                   Y      -      -      -
+  Settings       numbers and text that the public site uses  Y      -      -      -
+
+  The last six are founder-only and are tinted differently in the menu.
+  Access is enforced by the database, not only by hiding menu items.
+
+NAVIGATION
+  A vertical strip of icons down the left edge. Hovering shows the name of each.
+  A back arrow at the top returns to the previous section. The circle at the
+  bottom with your initials opens your account menu.
+
+================================================================================
+APPENDIX B — CONTACT DETAILS (as published on the site)
+================================================================================
+  Customer service and orders (phone and WhatsApp):
+      +91 91769 95707   and   +91 86106 62462
+      tossturf@gmail.com
+  Collaboration, careers, investors, franchise and marketing:
+      +91 89399 81055 (phone and WhatsApp)
+      tossportst055@gmail.com
+  Legal, privacy and grievances:
+      tossports.legal@gmail.com
+  Open: Monday to Sunday, 10am to 9pm IST.
+  Workshop and store: 69, Kavignar Kannadasan Nagar 5th St, Kannadasan Nagar,
+      Nesapakkam, Ramapuram, Chennai 600078.
+  Toss The Turf: Avenue, Plot Number 4, Kanchi Nagar, Vinayakapuram, Kolathur,
+      Chennai 600099.
+
+================================================================================
+APPENDIX C — THE OUT-OF-STOCK SWITCH (newest feature, explain it in both books)
+================================================================================
+  In the Maze Room, Products, each bat's row has a button: "Mark out of stock"
+  or "Mark in stock", and a column showing which it currently is. One click,
+  no form to fill in.
+
+  This is a switch, not a count. Bats are cut to order, so the stock number is
+  often zero on purpose; the switch is how you say "do not sell this one now".
+
+  What a customer then sees, straight away:
+    - a dark OUT OF STOCK label on the bat's card and on its photo
+    - the photo turns grey, and the bat moves to the bottom of its group so
+      bats you can sell appear first
+    - the bat's page still works and still appears in Google
+    - Add to Bag and Buy now are replaced by "Ask when it is back", which opens
+      WhatsApp
+  An order containing that bat is refused by the database as well, so nobody
+  can pay for something that cannot be shipped.
+
+================================================================================
+APPENDIX D — WHAT A CUSTOMER CAN DO ON THE SITE (the full list)
+================================================================================
+  Browse 31 bats; filter by ball type, playing style, level, wood, highlights
+      and price; sort by popularity, price, weight or rating.
+  Find My Bat: answer four questions (ball, style, level, budget) and get
+      matching bats.
+  Open a bat's page: photos with zoom, full specifications, weight and ball
+      type shown as coloured bars, warranty and returns, similar bats.
+  Add engraving: up to 18 characters, ₹199.
+  Add to bag, then either pay online (card, UPI, netbanking, through Razorpay)
+      or send the whole order as a WhatsApp message instead.
+  Apply a discount code.
+  Track an order with the order number and phone number, no sign-in needed.
+  Create an account (email and password) to see past orders.
+  Play & Win: a cricket game that unlocks discount codes at certain scores.
+  Junior page for younger players.
+  Services, each with its own form: Bat Doctor repairs, custom bats, team
+      jerseys, wholesale and club orders, corporate gifting, trade-in, video.
+  Ask a question through the contact form, or on WhatsApp, or through the chat
+      button in the corner.
+  Read the policies: warranty and replacement, refunds and returns, shipping,
+      privacy, terms.
+
+=== END OF PROMPT ===
+================================================================================

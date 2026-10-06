@@ -285,7 +285,7 @@ function batSVG(p, opts) {
     </filter>
   </defs>
 
-  ${glow ? `<ellipse cx="110" cy="300" rx="118" ry="250" fill="#3D3DA8" opacity="0.13"/>` : ''}
+  ${glow ? `<ellipse class="bat-glow" cx="110" cy="300" rx="118" ry="250" fill="#3D3DA8" opacity="0.13"/>` : ''}
 
   <g filter="url(#sh${uid})">
     <!-- handle -->

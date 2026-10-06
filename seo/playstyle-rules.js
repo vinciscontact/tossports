@@ -109,8 +109,13 @@ const PLAYSTYLE_CLUSTERS = {
     ]
   },
 
+  /* The URL stays 'all-rounder' because it is indexed and the phrase is what
+     people search; the STYLE it points at is now 'classic', which is the
+     2026 catalogue's own word for the same bat — even balance, mid sweet
+     spot. Left pointing at the retired 'all-rounder' tag this page listed
+     nothing at all, which is worse than either name. */
   'all-rounder-cricket-bats': {
-    styleId: 'all-rounder',
+    styleId: 'classic',
     head: 'all round cricket bat',
     also: ['balanced cricket bat', 'all rounder tennis ball bat', 'versatile cricket bat',
            'good all round tennis cricket bat'],
@@ -124,15 +129,20 @@ const PLAYSTYLE_CLUSTERS = {
     ]
   },
 
+  /* Same reasoning as above: the URL is indexed and 'control' is a real
+     search, but the catalogue's word for this player is Quick Hands —
+     top-light, mid-high sweet spot, scoring off timing rather than force.
+     The copy has been moved onto that meaning rather than left describing a
+     tag no bat carries. */
   'cricket-bats-for-defenders': {
-    styleId: 'defender',
+    styleId: 'quick-hands',
     head: 'cricket bat for control',
     also: ['bat for defensive batting', 'controlled cricket bat', 'cricket bat good control',
-           'classic blade cricket bat'],
-    title: 'Cricket Bats for Control and Timing',
-    h1: 'Bats for players who bat time',
-    desc: 'Classic-blade tennis ball cricket bats built for control rather than brute power — even pickup, honest edges, made by hand in Chennai from ₹950.',
-    intro: 'Somebody has to still be there in the last over. These are the controlled bats: a classic blade, an ordinary edge, weight spread evenly so the face comes down straight and stays there. Nothing exaggerated, because an exaggerated bat is a bat that plays one shot well and the rest badly.',
+           'light pickup cricket bat', 'quick hands cricket bat'],
+    title: 'Cricket Bats for Control and Quick Hands',
+    h1: 'Bats for players who score off timing',
+    desc: 'Top-light tennis ball cricket bats built for control and fast hands rather than brute power — quick pickup, mid-high sweet spot, made by hand in Chennai from ₹900.',
+    intro: 'Somebody has to still be there in the last over. These are the quick-hands bats: top-light, so the face comes down straight and arrives on time, with the sweet spot a little higher up the blade where a good length ball actually hits it. Nothing exaggerated, because an exaggerated bat plays one shot well and the rest badly.',
     sections: [
       ['Why an ordinary edge is a feature',
        'A thick edge adds mass at the outside of the blade, and that mass has to be swung. For a player whose scoring comes from placement and timing rather than force, it is weight in the wrong place — it slows the bat down through the line and makes the pickup top-heavy. An honest edge on a well-pressed blade is the more useful bat.']

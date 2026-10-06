@@ -22,8 +22,27 @@ const fs = require('fs');
 const path = require('path');
 const { SITE, BUSINESS, CLUSTERS: C1, GUIDES: G1, FAQS } = require('./seo-data');
 const { TURF_PAGES, AREAS, CLUSTERS_2, GUIDES_2 } = require('./seo-data-extra');
-const { LEGAL } = require('./legal-data');
+const { LEGAL, ANALYTICS_SECTION } = require('./legal-data');
+
+/* The Google Analytics ID, read from js/config.js — the same place the shop
+   reads it — so pasting it once switches on BOTH the shop and these static
+   pages. These are the pages Google search actually sends people to; without
+   a tag here the report would have started counting only after a visitor
+   clicked through into the shop, missing every first landing. */
+const GA4 = (function () {
+  try {
+    /* __dirname, not ROOT: this runs before ROOT is declared, and the catch below
+       used to swallow that ReferenceError and quietly build with no tag at all. */
+    const m = /ga4:\s*'([^']*)'/.exec(fs.readFileSync(path.join(__dirname, '..', 'js/config.js'), 'utf8'));
+    const id = m ? m[1].trim() : '';
+    return /^G-[A-Z0-9]{4,}$/.test(id) ? id : '';
+  } catch (e) { return ''; }
+})();
+if (GA4) {
+  LEGAL['privacy-policy'].body.splice(-1, 0, ANALYTICS_SECTION);
+}
 const { loadTags, playstyleClusters } = require('./playstyle-rules');
+const { contactPage } = require('./contact-page');
 const GUIDES = G1.concat(GUIDES_2);
 
 const ROOT = path.resolve(__dirname, '..');
@@ -105,8 +124,22 @@ function assertNoSlugClashes(reserved) {
 const CSS_V = (function () {
   try {
     const m = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
-      .match(/styles\.css\?v=(\d+)/);
+      .match(/styles\.css\?v=([A-Za-z0-9]+)/);   /* hex since tools/stamp-assets.js */
     return m ? m[1] : '1';
+  } catch (e) { return '1'; }
+})();
+
+/* seo.css was pinned at ?v=1 for the life of the site while the file itself
+   kept changing, so every returning visitor held a stale copy — which is why
+   the contact form first shipped with no styling at all on a browser that had
+   ever seen these pages before. Hashing the file means the version moves
+   whenever the bytes move, and nobody has to remember. */
+const SEO_CSS_V = (function () {
+  try {
+    return require('crypto')
+      .createHash('sha1')
+      .update(fs.readFileSync(path.join(ROOT, 'css/seo.css')))
+      .digest('hex').slice(0, 8);
   } catch (e) { return '1'; }
 })();
 
@@ -184,12 +217,20 @@ const ORG = {
   logo: SITE + '/images/logo/toss-mark-192.png',
   image: SITE + '/images/logo/toss-mark-192.png',
   email: BUSINESS.email,
-  telephone: BUSINESS.phones[0],
+  telephone: BUSINESS.phone,
   foundingDate: BUSINESS.founded,
   description: 'Handcrafted tennis ball cricket bats made in Chennai. Sri Lankan wood, Kashmir Willow and Poplar, shaped to order.',
   sameAs: [BUSINESS.instagram],
   address: addressOf(BUSINESS.main),
-  areaServed: { '@type': 'Country', name: 'India' }
+  areaServed: { '@type': 'Country', name: 'India' },
+  contactPoint: [
+    { '@type': 'ContactPoint', contactType: 'customer service', telephone: BUSINESS.phone,
+      email: BUSINESS.email, areaServed: 'IN', availableLanguage: ['en', 'ta'] },
+    { '@type': 'ContactPoint', contactType: 'customer service', telephone: BUSINESS.phone2,
+      email: BUSINESS.email, areaServed: 'IN', availableLanguage: ['en', 'ta'] },
+    { '@type': 'ContactPoint', contactType: 'business enquiries', telephone: BUSINESS.bizPhone,
+      email: BUSINESS.bizEmail, areaServed: 'IN' }
+  ]
 };
 
 /** The workshop — a shop people can visit, which is the local-SEO asset. */
@@ -200,8 +241,9 @@ const STORE = {
   parentOrganization: { '@id': SITE + '/#organization' },
   url: SITE + '/cricket-bat-shop-chennai/',
   image: SITE + '/images/logo/toss-mark-192.png',
-  telephone: BUSINESS.phones[0],
+  telephone: BUSINESS.phone,
   email: BUSINESS.email,
+  openingHours: BUSINESS.openingHours,
   priceRange: '₹₹',
   currenciesAccepted: 'INR',
   paymentAccepted: 'Cash, UPI, Card',
@@ -227,7 +269,7 @@ const TURF = {
   name: BUSINESS.turf.name,
   parentOrganization: { '@id': SITE + '/#organization' },
   url: SITE + '/cricket-bat-shop-chennai/',
-  telephone: BUSINESS.phones[1],
+  telephone: BUSINESS.phone,
   address: addressOf(BUSINESS.turf),
   geo: { '@type': 'GeoCoordinates',
          latitude: BUSINESS.turf.lat, longitude: BUSINESS.turf.lng },
@@ -285,6 +327,8 @@ function shell(o) {
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0B0B24">
 <title>${esc(o.title)}</title>
+${GA4 ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${GA4}"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${GA4}');</script>` : ''}
 <meta name="description" content="${esc(o.desc)}">
 ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords.join(', '))}">` : ''}
 <link rel="canonical" href="${url}">
@@ -309,7 +353,7 @@ ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords.join(', '))}">` 
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="${o.depth}css/styles.css?v=${CSS_V}">
-<link rel="stylesheet" href="${o.depth}css/seo.css?v=1">
+<link rel="stylesheet" href="${o.depth}css/seo.css?v=${SEO_CSS_V}">
 <link rel="icon" href="${o.depth}images/logo/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="${o.depth}images/logo/favicon-180.png">
 ${jsonld({ '@context': 'https://schema.org', '@graph': graph })}
@@ -339,15 +383,23 @@ ${o.body}
 <footer class="seo-ftr">
   <div class="wrap">
     <div>
-      <b>${esc(BUSINESS.name)}</b>
-      <p>${esc(BUSINESS.main.street)}, ${esc(BUSINESS.main.locality)} ${esc(BUSINESS.main.postal)}</p>
-      <p><a href="tel:${BUSINESS.phones[0]}">${BUSINESS.phones[0]}</a> ·
-         <a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></p>
+      <b>${esc(BUSINESS.legalName)}</b>
+      <p>${esc(BUSINESS.main.street)}, ${esc(BUSINESS.main.locality)},
+         ${esc(BUSINESS.main.region)} ${esc(BUSINESS.main.postal)}, India</p>
+      <p>Orders &amp; support (phone / WhatsApp)<br>
+         <a href="tel:${BUSINESS.phone}">${BUSINESS.phone}</a> ·
+         <a href="tel:${BUSINESS.phone2}">${BUSINESS.phone2}</a></p>
+      <p><a href="mailto:${BUSINESS.email}">${BUSINESS.email}</a></p>
+      <p>${esc(BUSINESS.hoursShort)}</p>
+      <p>Collaboration, careers, investors &amp; franchise<br>
+         <a href="tel:${BUSINESS.bizPhone}">${BUSINESS.bizPhone}</a> ·
+         <a href="mailto:${BUSINESS.bizEmail}">${BUSINESS.bizEmail}</a></p>
+      <p><a href="${o.depth}contact-us/">Contact us</a></p>
     </div>
     <div>
       <b>Toss The Turf</b>
       <p>${esc(BUSINESS.turf.street)}, ${esc(BUSINESS.turf.locality)} ${esc(BUSINESS.turf.postal)}</p>
-      <p><a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a></p>
+      <p><a href="tel:${BUSINESS.phone}">${BUSINESS.phone}</a></p>
     </div>
     <div>
       <b>Bats</b>
@@ -364,8 +416,8 @@ ${o.body}
     </div>
   </div>
   <div class="wrap seo-ftr-bot">
-    <span>© ${new Date().getFullYear()} Toss Sports. Handcrafted in Chennai.</span>
-    <span>Designed by TheVincis</span>
+    <span>© ${new Date().getFullYear()} ${esc(BUSINESS.legalName)}. Handcrafted in Chennai.</span>
+    <span>Designed by <a href="https://vincisglobal.com/" target="_blank" rel="noopener">TheVincis</a></span>
   </div>
 </footer>
 
@@ -625,14 +677,14 @@ function chennaiBody() {
       <h3>The workshop — Nesapakkam</h3>
       <p>${esc(BUSINESS.main.street)}<br>${esc(BUSINESS.main.locality)},
          ${esc(BUSINESS.main.region)} ${esc(BUSINESS.main.postal)}</p>
-      <p><a href="tel:${BUSINESS.phones[0]}">${BUSINESS.phones[0]}</a></p>
+      <p><a href="tel:${BUSINESS.phone}">${BUSINESS.phone}</a></p>
       <p>Where the bats are actually made. Come and pick your weight.</p>
     </div>
     <div>
       <h3>Toss The Turf — Kolathur</h3>
       <p>${esc(BUSINESS.turf.street)}<br>${esc(BUSINESS.turf.locality)},
          ${esc(BUSINESS.turf.region)} ${esc(BUSINESS.turf.postal)}</p>
-      <p><a href="tel:${BUSINESS.phones[1]}">${BUSINESS.phones[1]}</a></p>
+      <p><a href="tel:${BUSINESS.phone}">${BUSINESS.phone}</a></p>
       <p>Our cricket turf on the north side — book the ground, and buy a bat while you are there.</p>
     </div>
   </div>`;
@@ -739,7 +791,7 @@ function turfPage(slug, t) {
     <a class="seo-btn" href="https://wa.me/${BUSINESS.whatsapp}?text=${
       encodeURIComponent('Hi, I want to book a slot at Toss The Turf')}"
       rel="nofollow">Book on WhatsApp</a>
-    <a class="seo-btn ghost" href="tel:${BUSINESS.phones[1]}">Call ${BUSINESS.phones[1]}</a>
+    <a class="seo-btn ghost" href="tel:${BUSINESS.phone}">Call ${BUSINESS.phone}</a>
   </div>
 
   ${t.sections.map(([h, p]) => `<h2>${esc(h)}</h2><p>${esc(p)}</p>`).join('')}
@@ -893,8 +945,15 @@ assertNoSlugClashes(new Set([
   ...Object.keys(CLUSTERS),
   ...Object.keys(TURF_PAGES),
   ...Object.keys(LEGAL),
-  'guides', 'cricket-bats', 'images', 'css', 'js'
+  'guides', 'cricket-bats', 'contact-us', 'images', 'css', 'js'
 ]));
+
+/* contact us — required for Meta Business Verification, and the page a
+   customer looks for when something has gone wrong. See seo/contact-page.js. */
+add('contact-us/index.html',
+    contactPage({ shell, esc, fitTitle, fitDesc, SITE, BUSINESS, ROOT }),
+    SITE + '/contact-us/', '0.7', 'monthly');
+console.log('  1 contact page');
 
 /* policy pages */
 Object.keys(LEGAL).forEach(slug => {
@@ -991,7 +1050,9 @@ triple blade. ${PRODUCTS.length} models.
 ## Where we are
 Workshop and store: ${BUSINESS.main.street}, ${BUSINESS.main.locality} ${BUSINESS.main.postal}.
 Cricket turf and store: ${BUSINESS.turf.street}, ${BUSINESS.turf.locality} ${BUSINESS.turf.postal}.
-Phone ${BUSINESS.phones[0]} · WhatsApp ${BUSINESS.phones[1]} · ${BUSINESS.email}
+Orders & customer service (phone & WhatsApp): ${BUSINESS.phone}, ${BUSINESS.phone2} · ${BUSINESS.email} · ${BUSINESS.hours}
+Collaboration, careers, investors, franchise & marketing (phone & WhatsApp): ${BUSINESS.bizPhone} · ${BUSINESS.bizEmail}
+Legal & privacy: ${BUSINESS.legalEmail}
 
 ## Guides
 ${GUIDES.map(g => `- [${g.h1}](${SITE}/guides/${g.slug}/): ${g.answer}`).join('\n')}

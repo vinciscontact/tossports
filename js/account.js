@@ -113,6 +113,19 @@ async function accountBootFinish() {
      as its probe, which is what proved the token works. Calling it twice
      would be a wasted round trip on every page load. */
   acctHeader();
+
+  /* Anyone sent here by the checkout gate goes back to checkout, with their
+     bag and the details they had already typed still there. Without this they
+     land on their order history mid-purchase and have to find the way back
+     themselves, which is where a half-finished order stops being one. */
+  let back = null;
+  try { back = sessionStorage.getItem('toss_after_signin'); } catch (e) { /* private mode */ }
+  if (back) {
+    try { sessionStorage.removeItem('toss_after_signin'); } catch (e) {}
+    location.hash = back;
+    return;
+  }
+
   if (currentPage() === 'account') route(true);
 }
 
@@ -873,7 +886,10 @@ function paintAccountChrome() {
    ------------------------------------------------------------ */
 async function acctRead(uid) {
   const [orders, reqs, prof] = await Promise.allSettled([
-    supa(`orders?user_id=eq.${uid}&order=created_at.desc&limit=100`),
+    /* Same reason as the Maze Room: a pending basket is not an order the
+       customer has placed, and showing one would promise something that may
+       be cancelled minutes later. It appears once payment confirms it. */
+    supa(`orders?user_id=eq.${uid}&status=neq.pending&order=created_at.desc&limit=100`),
     supa(`requests?user_id=eq.${uid}&order=created_at.desc&limit=50`),
     supa(`customer_profiles?user_id=eq.${uid}&limit=1`)
   ]);

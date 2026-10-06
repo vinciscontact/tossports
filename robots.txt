@@ -16,4 +16,4 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 
-Sitemap: https://tossports.in/sitemap.xml
+Sitemap: https://tossports.com/sitemap.xml

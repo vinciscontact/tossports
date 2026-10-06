@@ -1,0 +1,407 @@
+/* ============================================================
+   TOSS SPORTS — "Our Story" (about-us/)
+
+   An editorial system, not a landing page. The rules it runs on:
+
+     · ONE display face, Archivo Black, set enormous and tracked
+       tight. No second display voice — the marker and handwriting
+       faces that used to be here are gone on purpose.
+     · Black ground. Green is the accent, orange is the action.
+       Both are used sparingly; a page where everything is loud
+       has no loud.
+     · Hairlines and meta-labels carry the structure the way a
+       magazine's rules and folios do.
+     · Space is a material. Most of these spreads are mostly
+       empty, and that is the part doing the work.
+   ============================================================ */
+
+:root{
+  --ed-bg:#000;
+  --ed-ink:#fff;
+  --ed-dim:rgba(255,255,255,.58);
+  --ed-faint:rgba(255,255,255,.34);
+  --ed-rule:rgba(255,255,255,.15);
+  --ed-green:#4ADE30;
+  --ed-orange:#FF7A1E;
+  --ed-display:'Archivo Black','Arial Black',Impact,sans-serif;
+  --ed-text:'Inter',system-ui,-apple-system,sans-serif;
+  --ed-gut:clamp(20px,5vw,72px);
+}
+
+/* The storefront scrolls smoothly, which is right everywhere it is a
+   response to a click already on screen. It is wrong for the way this
+   page is opened: arriving at /about-us/#founder, the smooth scroll is
+   still travelling down toward the spread while the view transition is
+   measuring where the plate has to land, and the window never gets
+   there — the page opens at the cover with the plate a screen below it.
+   Only this page loads this file, so only this page lands instantly. */
+html{scroll-behavior:auto}
+
+.ed-page{background:var(--ed-bg)}
+.ed-page .crumbs{max-width:1500px;margin:0 auto;padding:16px var(--ed-gut) 0}
+.ed{background:var(--ed-bg);color:var(--ed-ink);font-family:var(--ed-text)}
+
+/* ---------- the running header ----------
+   Fixed, hairline-ruled, and it reports the spread you are in. */
+.ed-rail{
+  position:fixed;top:var(--hdr,64px);left:0;right:0;z-index:20;
+  display:flex;justify-content:space-between;gap:16px;
+  padding:9px var(--ed-gut);
+  font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ed-faint);background:rgba(0,0,0,.78);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--ed-rule);pointer-events:none;
+}
+.ed-rail-now{color:var(--ed-green)}
+
+/* ---------- the spread ---------- */
+.ed-sp{
+  position:relative;
+  min-height:100vh;min-height:100svh;
+  display:flex;flex-direction:column;justify-content:center;
+  padding:clamp(90px,13vh,150px) var(--ed-gut) clamp(60px,10vh,110px);
+  border-bottom:1px solid var(--ed-rule);
+}
+.ed-in{width:100%;max-width:1500px;margin:0 auto}
+
+/* ---------- meta rows and labels ---------- */
+.ed-meta{
+  display:flex;flex-wrap:wrap;gap:clamp(16px,4vw,54px);margin:0;
+  font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ed-faint);
+}
+.ed-meta-top{padding-bottom:22px;border-bottom:1px solid var(--ed-rule);margin-bottom:clamp(30px,6vh,64px)}
+.ed-meta-foot{padding-top:22px;border-top:1px solid var(--ed-rule);margin-top:clamp(34px,6vh,60px);justify-content:space-between}
+
+.ed-tag{
+  display:flex;align-items:center;gap:14px;margin:0 0 clamp(20px,4vh,40px);
+  font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--ed-dim);
+}
+.ed-tag i{
+  font-style:normal;font-family:var(--ed-display);font-size:.74rem;letter-spacing:.02em;
+  color:var(--ed-green);border:1px solid var(--ed-green);border-radius:2px;padding:3px 7px;
+}
+
+/* ---------- the display type ----------
+   Tight tracking and leading under 1 are what separate an editorial
+   headline from a big one. */
+.ed-mega{
+  font-family:var(--ed-display);
+  font-size:clamp(2.9rem,10.5vw,9.5rem);
+  line-height:.86;letter-spacing:-.035em;text-transform:uppercase;
+  margin:0;color:var(--ed-ink);
+}
+.ed-mega-sm{font-size:clamp(2.4rem,7.6vw,6.6rem)}
+.ed-mega .g,.ed-name .g{color:var(--ed-green)}
+.ed-mega .o{color:var(--ed-orange)}
+
+/* ---------- cover ----------
+   Sized to land inside one screen on a laptop. The opening spread is the
+   one place where running past the fold reads as an accident rather than
+   an invitation, because it cuts the first sentence of the story. */
+.ed-cover .ed-mega{font-size:clamp(2.6rem,8.6vw,7.6rem)}
+.ed-cover{padding-top:clamp(80px,11vh,124px)}
+/* Short laptops: the opening still has to land inside one screen, and
+   the headline is the only thing with enough size to give back. */
+@media (min-width:861px) and (max-height:880px){
+  .ed-cover .ed-mega{font-size:clamp(2.4rem,7vw,5.6rem)}
+  .ed-cover{padding-top:86px;padding-bottom:52px}
+  .ed-cover .ed-meta-top{padding-bottom:14px;margin-bottom:24px}
+  .ed-cover-base{margin-top:22px;padding-top:18px}
+}
+.ed-cover-base{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:clamp(26px,5vw,70px);align-items:end;
+  margin-top:clamp(34px,7vh,76px);padding-top:26px;border-top:1px solid var(--ed-rule);
+}
+.ed-lead{margin:0;font-size:clamp(.98rem,1.35vw,1.16rem);line-height:1.6;color:var(--ed-dim);max-width:46ch}
+.ed-lead .q{color:var(--ed-green)}
+
+.ed-stats{display:flex;flex-wrap:wrap;gap:clamp(20px,4vw,56px);margin:0;padding:0;list-style:none}
+.ed-stats b{
+  display:block;font-family:var(--ed-display);font-size:clamp(1.6rem,3.4vw,2.9rem);
+  line-height:1;letter-spacing:-.03em;
+}
+.ed-stats span{display:block;margin-top:8px;font-size:.68rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ed-faint)}
+
+/* ---------- founder plates ---------- */
+/* Both columns hang from the same top line. Centring them looked
+   arbitrary — the plate and the text are different heights, so nothing
+   in the spread agreed with anything else. Aligned to the top, the
+   plate's edge and the section label sit on one line and the spread
+   reads as a grid instead of two floating blocks. */
+.ed-grid{
+  display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);
+  gap:clamp(26px,5vw,80px);align-items:start;
+}
+.ed-flip .ed-fig{order:2}
+
+/* The flip reorders the two columns but not the two tracks, so the plate
+   landed in the wider one and still hung from its left edge: a band of
+   dead space between it and the page's right margin, and a text column
+   narrower than the one facing it. The tracks swap with the order, and
+   the plate hangs from the outer edge — the same edge of the page its
+   opposite number hangs from, which is what makes the two read as a
+   spread and its mirror rather than two unrelated pages. */
+@media (min-width:861px){
+  .ed-flip .ed-grid{grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr)}
+  .ed-flip .ed-fig{align-items:flex-end}
+}
+
+/* The label is small and the plate is a hard edge, so matching their box
+   tops leaves the label looking high. This drops the text column by the
+   label's own optical offset to put them on the same line. */
+.ed-plate .ed-side{padding-top:4px}
+
+/* The plates are tall portraits — 2:3 and nearly 1:2 — so sizing them by
+   column width alone runs them straight off the top and bottom of the
+   spread. Height is the binding constraint, and the width follows from
+   it, which is also why the two plates are not the same width: they are
+   different shapes, and a magazine would not pretend otherwise. */
+.ed-fig{margin:0;position:relative;display:flex;flex-direction:column;align-items:flex-start}
+/* THE FRAME IS THE PICTURE, NOT THE IMAGE.
+
+   The plate drifts and sits at 1.08 scale so the drift never exposes an
+   edge. With the border and the box on the <img> itself, that transform
+   moved the frame too: the image escaped its own outline by ~40px and
+   pulled out of line with the text column beside it.
+
+   So <picture> is the window — it holds the height, the border and the
+   clip — and the image moves inside it. Height drives the size, and
+   aspect-ratio gives the width before the lazy file has loaded, so the
+   column reserves the right space from the first paint. */
+.ed-fig picture{
+  display:block;width:auto;max-width:100%;
+  height:min(66vh,700px);
+  overflow:hidden;border:1px solid var(--ed-rule);background:#000;
+}
+.ed-plate .ed-fig picture{aspect-ratio:1024/1536}
+.ed-flip  .ed-fig picture{aspect-ratio:941/1672}
+.ed-fig img{
+  width:100%;height:100%;object-fit:cover;display:block;border:0;
+}
+.ed-fig figcaption{
+  margin-top:14px;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ed-faint);
+}
+
+/* Sized so the longer of the two names still sets on one line at desktop
+   widths. "Imayavarman" broken across two lines read as two words. */
+.ed-name{
+  font-family:var(--ed-display);font-size:clamp(2rem,4.6vw,4.4rem);
+  line-height:.9;letter-spacing:-.035em;text-transform:uppercase;margin:0 0 20px;
+}
+.ed-quote{
+  font-family:var(--ed-display);font-size:clamp(1.05rem,2vw,1.6rem);
+  letter-spacing:-.01em;color:var(--ed-green);margin:0 0 clamp(22px,4vh,38px);
+}
+
+/* ---------- index lists ----------
+   Numbered, hairline-separated rows. The device that makes a list of
+   features read as a contents page instead of a pile of chips. */
+.ed-index{list-style:none;margin:0 0 clamp(22px,4vh,34px);padding:0;border-top:1px solid var(--ed-rule)}
+.ed-index li{
+  display:flex;align-items:baseline;gap:16px;padding:12px 2px;
+  border-bottom:1px solid var(--ed-rule);
+}
+.ed-index i{
+  font-style:normal;font-size:.64rem;letter-spacing:.14em;color:var(--ed-faint);
+  min-width:22px;
+}
+.ed-index span{font-size:clamp(.94rem,1.3vw,1.08rem);color:var(--ed-ink)}
+.ed-index-wide li{padding:14px 2px}
+
+.ed-two{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:clamp(26px,5vw,80px);align-items:start;
+  margin-top:clamp(34px,6vh,64px);
+}
+
+.ed-body{margin:0;font-size:clamp(.95rem,1.25vw,1.08rem);line-height:1.68;color:var(--ed-dim);max-width:52ch}
+.ed-body-lead{max-width:58ch;margin-bottom:clamp(30px,6vh,56px)}
+
+/* ---------- the roll ----------
+   The ecosystem, set as large as the page will take. Each row is a
+   line of the brand's own contents page. */
+.ed-roll{list-style:none;margin:0;padding:0;border-top:1px solid var(--ed-rule)}
+.ed-roll li{
+  display:flex;align-items:baseline;gap:clamp(14px,3vw,38px);
+  padding:clamp(10px,1.6vh,18px) 2px;border-bottom:1px solid var(--ed-rule);
+}
+.ed-roll i{
+  font-style:normal;font-size:.66rem;letter-spacing:.14em;color:var(--ed-faint);min-width:26px;
+}
+.ed-roll span{
+  font-family:var(--ed-display);font-size:clamp(1.35rem,4.4vw,3.1rem);
+  line-height:1;letter-spacing:-.03em;text-transform:uppercase;
+  transition:transform .45s cubic-bezier(.22,.9,.28,1);
+}
+.ed-roll li:nth-child(3n+2) span{color:var(--ed-green)}
+.ed-roll li:nth-child(5n+4) span{color:var(--ed-orange)}
+
+/* ---------- the light on the row ----------
+   A gradient clipped to the letterforms, with its centre at --mx: the
+   cursor's own position along the row, set by js/about-anim.js. The
+   result is a band of light that stays under the pointer and falls off
+   to either side, so the word lights where you are touching it rather
+   than flashing a different colour.
+
+   Everything needed to make it READ is CSS — without the script --mx
+   simply holds its default and the row still lights on hover, centred.
+   The pointer tracking is the refinement, not the effect. */
+.ed-roll li{--mx:50%;position:relative;isolation:isolate;transition:background .4s ease}
+.ed-roll li::before{
+  content:'';position:absolute;inset:0;z-index:-1;opacity:0;
+  transition:opacity .4s ease;
+  background:radial-gradient(420px circle at var(--mx) 50%,rgba(74,222,48,.1),transparent 70%);
+}
+.ed-roll li:hover::before{opacity:1}
+
+.ed-roll li:hover span{
+  background:linear-gradient(90deg,
+      var(--ed-orange) 0%,
+      #fff 38%,
+      var(--ed-green) 50%,
+      #fff 62%,
+      var(--ed-orange) 100%);
+  /* 320% wide so the sweep has somewhere to travel */
+  background-size:320% 100%;
+  background-position:var(--mx) 50%;
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+  transform:translateX(10px);
+}
+.ed-roll li:hover i{color:var(--ed-green)}
+
+/* A pointer-driven highlight is meaningless on touch, where there is no
+   hover state to sit in — and :hover sticks after a tap on iOS, leaving
+   one row permanently lit. */
+@media (hover:none){
+  .ed-roll li:hover span{
+    background:none;-webkit-text-fill-color:currentColor;color:inherit;transform:none;
+  }
+  .ed-roll li:hover::before{opacity:0}
+}
+
+/* ---------- pull quote ---------- */
+.ed-bq{
+  margin:0 0 clamp(28px,5vh,48px);padding:0;
+  font-family:var(--ed-display);
+  font-size:clamp(1.7rem,5.2vw,4.2rem);line-height:1.02;letter-spacing:-.03em;
+  max-width:20ch;
+}
+.ed-bq .g{color:var(--ed-green)}
+
+/* ---------- facts table ---------- */
+.ed-facts{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:0;margin:clamp(34px,6vh,64px) 0 clamp(26px,5vh,44px);
+  border-top:1px solid var(--ed-rule);
+}
+.ed-facts > div{padding:18px 18px 18px 0;border-bottom:1px solid var(--ed-rule)}
+.ed-facts dt{font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--ed-faint)}
+.ed-facts dd{margin:9px 0 0;font-size:clamp(.95rem,1.3vw,1.1rem);color:var(--ed-ink)}
+
+/* ---------- close ---------- */
+.ed-colophon{
+  margin:clamp(30px,5vh,52px) 0 0;padding-top:24px;border-top:1px solid var(--ed-rule);
+  font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ed-dim);
+}
+.ed-actions{display:flex;flex-wrap:wrap;gap:12px;margin:clamp(26px,5vh,42px) 0 0}
+.ed-btn{
+  display:inline-flex;align-items:center;gap:12px;
+  padding:15px 24px;border:1px solid var(--ed-orange);background:var(--ed-orange);
+  color:#000!important;font-weight:800;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;
+  transition:background .2s,color .2s;
+}
+.ed-btn i{font-style:normal;transition:transform .25s var(--ease,ease)}
+.ed-btn:hover{background:#ffa04a;text-decoration:none!important}
+.ed-btn:hover i{transform:translateX(5px)}
+.ed-btn.ghost{background:transparent;border-color:var(--ed-rule);color:#fff!important}
+.ed-btn.ghost:hover{border-color:var(--ed-green);color:var(--ed-green)!important;background:transparent}
+
+/* ============================================================
+   THE FOOTER
+
+   Scoped to .ed-page on purpose. .seo-ftr is shared by every
+   pre-rendered page on the site, so it is overridden here rather than
+   edited — the other sixty pages keep the footer they have.
+
+   Same rules as the rest of the spread: black, hairlines, meta-label
+   type, and the column headings numbered so the footer reads as the
+   last page of the magazine rather than a different site's furniture.
+   ============================================================ */
+.ed-page .seo-ftr{
+  background:var(--ed-bg);border-top:1px solid var(--ed-rule);
+  margin-top:0;padding:clamp(46px,7vh,80px) 0 0;
+}
+.ed-page .seo-ftr .wrap{
+  max-width:1500px;padding-left:var(--ed-gut);padding-right:var(--ed-gut);
+  gap:clamp(24px,4vw,56px);
+  grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+}
+.ed-page .seo-ftr > .wrap > div{
+  position:relative;padding-top:20px;border-top:1px solid var(--ed-rule);
+}
+/* the folio number on each column */
+.ed-page .seo-ftr > .wrap > div::before{
+  position:absolute;top:20px;right:0;
+  font-size:.62rem;letter-spacing:.14em;color:var(--ed-faint);
+}
+.ed-page .seo-ftr > .wrap > div:nth-child(1)::before{content:'01'}
+.ed-page .seo-ftr > .wrap > div:nth-child(2)::before{content:'02'}
+.ed-page .seo-ftr > .wrap > div:nth-child(3)::before{content:'03'}
+.ed-page .seo-ftr > .wrap > div:nth-child(4)::before{content:'04'}
+
+.ed-page .seo-ftr b{
+  display:block;margin-bottom:14px;color:#fff;
+  font-size:.68rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;
+}
+.ed-page .seo-ftr p{
+  margin:0 0 9px;font-size:.86rem;line-height:1.55;color:var(--ed-dim);
+}
+.ed-page .seo-ftr a{color:var(--ed-dim);transition:color .2s}
+.ed-page .seo-ftr a:hover{color:var(--ed-green);text-decoration:none}
+
+.ed-page .seo-ftr-bot{
+  max-width:1500px;margin:clamp(34px,5vh,56px) auto 0;
+  padding:18px var(--ed-gut) clamp(30px,5vh,44px);
+  border-top:1px solid var(--ed-rule);
+  font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ed-faint);
+}
+.ed-page .seo-ftr-bot a{color:var(--ed-dim)}
+.ed-page .seo-ftr-bot a:hover{color:var(--ed-green)}
+
+/* ---------- scroll progress ----------
+   Created by js/about-anim.js, so it never exists as an empty bar on a
+   page whose script did not arrive. */
+.ed-progress{
+  position:fixed;top:0;left:0;right:0;height:2px;z-index:60;transform:scaleX(0);
+  transform-origin:0 50%;background:var(--ed-green);
+}
+
+/* ============================================================
+   NARROW
+   ============================================================ */
+@media (max-width:860px){
+  .ed-grid,.ed-two,.ed-cover-base{grid-template-columns:minmax(0,1fr)}
+  .ed-cover-base{align-items:start}
+  .ed-flip .ed-fig{order:0}
+  .ed-fig{max-width:520px}
+  /* In one column the column is the binding constraint, not the height.
+     Sizing by height put Iniyavan's plate 22px past the gutter and
+     Imayavarman's 33px short of it, so neither agreed with the text
+     beside it or with the other plate. Width binds, height follows. */
+  .ed-fig,.ed-fig picture{width:100%}
+  .ed-fig picture{height:auto}
+  .ed-sp{min-height:auto;padding-top:clamp(76px,12vh,110px);padding-bottom:clamp(50px,9vh,80px)}
+  .ed-stats{gap:26px}
+  .ed-meta-foot{gap:10px}
+}
+
+@media (max-width:560px){
+  .ed-rail{font-size:.58rem;letter-spacing:.1em}
+  .ed-mega{font-size:clamp(2.5rem,12vw,3.6rem)}
+  .ed-roll span{font-size:clamp(1.3rem,7vw,2rem)}
+  .ed-actions{flex-direction:column;align-items:stretch}
+  .ed-btn{justify-content:space-between}
+}

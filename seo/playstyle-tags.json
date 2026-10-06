@@ -1,36 +1,53 @@
 {
-  "fetched_at": "2026-08-27",
+  "fetched_at": "2026-09-17",
   "source": "https://rbrokxstbzewdjdfhiwk.supabase.co",
   "tags": {
+    "regular-bat": [
+      "beginner",
+      "light"
+    ],
+    "alpha-bat-lite": [
+      "beginner",
+      "classic",
+      "heavy"
+    ],
+    "power-x-sixit": [
+      "tournament",
+      "attacker",
+      "medium"
+    ],
+    "customised-scoop-lite": [
+      "serious",
+      "classic",
+      "quick-hands",
+      "light"
+    ],
+    "double-wood-pressed": [
+      "beginner",
+      "classic",
+      "medium"
+    ],
+    "cws": [
+      "tournament",
+      "attacker",
+      "heavy"
+    ],
+    "mongoose-pro": [
+      "serious",
+      "attacker",
+      "heavy"
+    ],
+    "hard-scoop-pro": [
+      "serious",
+      "classic",
+      "medium"
+    ],
     "kerala-scoop-unfurnished": [
       "heavy",
       "attacker"
     ],
-    "regular-premium": [
-      "defender",
-      "light",
-      "beginner",
-      "all-rounder"
-    ],
     "poplar-full-scoop": [
       "beginner",
-      "medium",
-      "all-rounder"
-    ],
-    "varnished-bat": [
-      "defender",
-      "all-rounder",
-      "medium",
-      "beginner"
-    ],
-    "sl-varnished": [
-      "all-rounder",
-      "defender",
-      "light"
-    ],
-    "cws": [
-      "all-rounder",
-      "defender",
       "medium"
     ],
     "kerala-scoop-furnished": [
@@ -40,36 +57,21 @@
     "four-six-scoop-poplar": [
       "beginner",
       "medium",
-      "all-rounder",
       "attacker"
     ],
     "flat-kw-spine": [
       "beginner",
-      "heavy",
-      "all-rounder"
+      "heavy"
     ],
     "power-x": [
       "light",
       "attacker"
     ],
-    "flat-poplar-spine": [
-      "all-rounder",
-      "beginner",
-      "heavy"
-    ],
-    "regular-bat": [
-      "beginner",
-      "defender",
-      "all-rounder",
-      "light"
-    ],
     "flat-kw-nospine": [
-      "medium",
-      "all-rounder"
+      "medium"
     ],
     "csl-scoop": [
-      "light",
-      "all-rounder"
+      "light"
     ],
     "poplar-triple-blade": [
       "heavy",
@@ -83,32 +85,35 @@
       "medium",
       "attacker"
     ],
-    "sl-furnished": [
-      "defender",
-      "all-rounder",
-      "light"
-    ],
     "big-edge-varnish-pro": [
       "attacker",
       "heavy"
     ],
     "four-six-scoop-kw": [
       "medium",
-      "attacker",
-      "all-rounder"
+      "attacker"
     ],
     "swagger": [
       "heavy",
       "attacker"
     ],
+    "regular-premium": [
+      "light",
+      "beginner"
+    ],
     "cs-pro": [
       "attacker",
-      "heavy",
-      "all-rounder"
+      "heavy"
     ],
     "kw-full-scoop": [
-      "medium",
-      "all-rounder"
+      "medium"
+    ],
+    "sl-varnished": [
+      "light"
+    ],
+    "flat-poplar-spine": [
+      "beginner",
+      "heavy"
     ],
     "poplar-double-blade": [
       "heavy",
@@ -118,21 +123,150 @@
       "attacker",
       "medium"
     ],
-    "jhl": [
-      "all-rounder",
+    "varnished-bat": [
       "medium",
-      "defender"
+      "beginner"
     ],
     "kw-triple-blade": [
       "heavy",
       "attacker"
     ],
     "flat-poplar-nospine": [
-      "medium",
-      "all-rounder"
+      "medium"
+    ],
+    "sl-furnished": [
+      "light"
+    ],
+    "jhl": [
+      "medium"
     ],
     "custom-scoop": [
-      "all-rounder",
+      "medium"
+    ],
+    "hard-scoop-plus": [
+      "beginner",
+      "classic",
+      "medium"
+    ],
+    "srilankan-pro": [
+      "serious",
+      "quick-hands",
+      "attacker",
+      "medium"
+    ],
+    "mongoose-feather": [
+      "serious",
+      "attacker",
+      "light"
+    ],
+    "power-x-feather": [
+      "tournament",
+      "quick-hands",
+      "light"
+    ],
+    "power-x-mercury": [
+      "tournament",
+      "attacker",
+      "medium"
+    ],
+    "kerala-scoop": [
+      "tournament",
+      "classic",
+      "medium"
+    ],
+    "hard-scoop-elite": [
+      "tournament",
+      "attacker",
+      "classic",
+      "medium"
+    ],
+    "mri-srilankan": [
+      "serious",
+      "classic",
+      "medium"
+    ],
+    "kerala-scoop-lite": [
+      "serious",
+      "classic",
+      "medium"
+    ],
+    "glossy-premium": [
+      "tournament",
+      "classic",
+      "attacker",
+      "heavy"
+    ],
+    "four-scoop-lite": [
+      "beginner",
+      "classic",
+      "medium"
+    ],
+    "glossy-premium-hard": [
+      "tournament",
+      "classic",
+      "attacker",
+      "medium"
+    ],
+    "black-mamba": [
+      "tournament",
+      "attacker",
+      "heavy"
+    ],
+    "graphix-premium-hard": [
+      "tournament",
+      "classic",
+      "attacker",
+      "heavy"
+    ],
+    "srilankan-hard-monster": [
+      "tournament",
+      "attacker",
+      "heavy"
+    ],
+    "mongoose-core": [
+      "serious",
+      "attacker",
+      "light"
+    ],
+    "regular-srilankan": [
+      "beginner",
+      "quick-hands",
+      "light"
+    ],
+    "alpha-bat": [
+      "serious",
+      "classic",
+      "heavy"
+    ],
+    "srilankan-prime": [
+      "beginner",
+      "classic",
+      "medium"
+    ],
+    "customized-scoop": [
+      "tournament",
+      "attacker",
+      "classic",
+      "heavy"
+    ],
+    "regular-upgraded": [
+      "beginner",
+      "quick-hands",
+      "light"
+    ],
+    "ys-big-edge": [
+      "serious",
+      "classic",
+      "light"
+    ],
+    "four-scoop": [
+      "serious",
+      "classic",
+      "medium"
+    ],
+    "hard-scoop": [
+      "beginner",
+      "quick-hands",
       "medium"
     ]
   }
