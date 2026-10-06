@@ -4324,7 +4324,14 @@ window.addEventListener('hashchange', () => { closeDrawers(); route(); });
   /* the playful bits, mounted last so nothing above depends on them */
   if (typeof NavPlay !== 'undefined') NavPlay.mount();
   /* after first paint — measurement must never delay the page it measures */
-  if (typeof loadAnalytics === 'function') requestAnimationFrame(loadAnalytics);
+  /* Analytics is no longer started here. js/consent.js owns that decision:
+     it loads the tag only once a visitor has said yes, and on every later
+     visit reads their answer back. Calling loadAnalytics() here would have
+     loaded it regardless and made the banner a lie. */
+  if (typeof loadAnalytics === 'function' &&
+      typeof tossConsentGiven === 'function' && tossConsentGiven()) {
+    requestAnimationFrame(loadAnalytics);
+  }
   if (typeof Bot !== 'undefined') Bot.mount();
 
   /* Live data is fetched AFTER the page is already interactive.

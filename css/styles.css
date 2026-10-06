@@ -4149,3 +4149,38 @@ body.pdp-open .fab{bottom:82px}
 .oos-note b{color:var(--ink)}
 /* and in the sticky bar */
 .bb-out{color:#FFC46B;font-weight:800}
+
+/* ---------- the cookie notice ----------
+   A bar, not a wall. It asks one question, offers two answers of equal
+   weight, and never blocks the page: somebody who wants to look at bats can
+   look at bats, and we simply do not measure them until they say yes.
+
+   It sits above the phone's bottom bar and clear of the chat button, because
+   a notice you cannot reach past is a dark pattern of a different kind. */
+.ck-bar{position:fixed;left:0;right:0;bottom:0;z-index:94;
+  background:rgba(11,11,36,.97);backdrop-filter:blur(10px);
+  border-top:1px solid rgba(255,255,255,.14);
+  padding:14px 18px;transform:translateY(110%);
+  transition:transform .32s var(--ease)}
+.ck-bar.on{transform:none}
+.ck-in{max-width:1180px;margin:0 auto;display:flex;flex-wrap:wrap;gap:12px 24px;
+  align-items:center;justify-content:space-between}
+.ck-in p{margin:0;font-size:.86rem;line-height:1.5;color:rgba(255,255,255,.76);
+  max-width:72ch}
+.ck-in a{color:var(--orange);text-decoration:underline}
+.ck-btns{display:flex;gap:10px;flex:none}
+.ck-bar button{font-size:.84rem;font-weight:800;padding:10px 18px;border-radius:100px;
+  cursor:pointer;border:1px solid transparent;white-space:nowrap}
+/* Equal weight on purpose: refusing has to be as easy as agreeing. */
+.ck-no{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.26)}
+.ck-no:hover{background:rgba(255,255,255,.18)}
+.ck-yes{background:var(--orange);color:var(--navy-900)}
+.ck-yes:hover{background:var(--orange-600)}
+@media (max-width:760px){
+  /* clear of the bottom nav bar on the shop */
+  .ck-bar{padding-bottom:calc(14px + 72px)}
+  .ck-in{gap:12px}
+  .ck-btns{width:100%}
+  .ck-bar button{flex:1}
+}
+@media (prefers-reduced-motion:reduce){.ck-bar{transition:none}}

@@ -313,6 +313,62 @@ const LEGAL = {
     ]
   },
 
+  'cookie-policy': {
+    h1: 'Cookie Policy',
+    title: 'Cookie Policy',
+    desc: 'What Toss Sports stores in your browser, what it is for, and how to change your mind.',
+    body: [
+      ['The short version', `
+        <p>This site sets no cookies of its own. It keeps a few things in your
+        browser so the shop works — your bag, a discount code you entered, your
+        game score — and none of that leaves your device or tells us who you are.</p>
+        <p>Two other things do involve cookies. We ask before one of them and
+        cannot avoid the other, and both are explained below.</p>`],
+
+      ['What the shop keeps on your device', `
+        <p>These are stored by your own browser, not sent to us, and are what
+        make the shop usable at all. There is nothing to consent to, and
+        clearing your browser data removes them.</p>
+        <ul>
+          <li><b>Your bag</b> — what you added, so it survives a refresh.</li>
+          <li><b>A discount code</b> you entered or unlocked.</li>
+          <li><b>Game scores and rewards</b> from Play &amp; Win.</li>
+          <li><b>Your cookie answer</b> — yes or no, so we stop asking.</li>
+        </ul>`],
+
+      ['Visitor measurement — we ask first', `
+        <p>We would like to know how many people visit, which bats they look at
+        and whether they go on to buy. That is Google Analytics, and it sets
+        cookies in your browser (<code>_ga</code> and similar) that recognise
+        the same browser on a later visit.</p>
+        <p><b>Nothing is measured until you agree.</b> The notice at the bottom
+        of the page offers Yes and No equally, and if you ignore it or choose
+        No, Analytics is never loaded at all. We never send Google your name,
+        phone number, address or payment details.</p>`],
+
+      ['Payments', `
+        <p>When you pay, Razorpay — our payment provider — sets its own cookies
+        to carry out that payment and to keep it secure. These only appear once
+        you choose to pay, and they are part of the transaction you asked for,
+        so they are not something we can switch off. We never see your card
+        details at any point.</p>`],
+
+      ['Signing in', `
+        <p>If you create an account, Firebase (Google) keeps a sign-in token in
+        your browser so you are not asked for your password on every page. It
+        exists only while you stay signed in, and signing out removes it.</p>`],
+
+      ['Changing your mind', `
+        <p>Use the <b>Cookie choice</b> link in the footer of any page, on this
+        site, at any time. You can also clear cookies and site data in your
+        browser settings, or install Google's opt-out add-on at
+        <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener" target="_blank">tools.google.com/dlpage/gaoptout</a>.</p>`],
+
+      ['Questions', `
+        <p>Anything about this page: <a href="mailto:tossports.legal@gmail.com">tossports.legal@gmail.com</a>.</p>`]
+    ]
+  },
+
   'shipping-policy': {
     h1: 'Shipping Policy',
     title: 'Shipping Policy',

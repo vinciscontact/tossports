@@ -327,8 +327,11 @@ function shell(o) {
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0B0B24">
 <title>${esc(o.title)}</title>
-${GA4 ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${GA4}"></script>
-<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${GA4}');</script>` : ''}
+${GA4 ? `<!-- The tag is NOT loaded here. consent.js requests it only after a
+     visitor has said yes, and these pages honour the same answer as the shop
+     because both read the same stored choice. -->
+<script>window.TOSS_GA4=${JSON.stringify(GA4)};</script>
+<script defer src="${o.depth}js/consent.js?v=2"></script>` : ''}
 <meta name="description" content="${esc(o.desc)}">
 ${o.keywords ? `<meta name="keywords" content="${esc(o.keywords.join(', '))}">` : ''}
 <link rel="canonical" href="${url}">

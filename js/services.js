@@ -1219,6 +1219,9 @@ let _analyticsLoaded = false;
 
 function loadAnalytics() {
   if (_analyticsLoaded) return;
+  /* consent.js may already have loaded the tag after a yes. Loading it twice
+     doubles every page view. */
+  if (typeof gtag === 'function' && window.dataLayer) { _analyticsLoaded = true; trackPage(); return; }
   const { ga4, meta } = ANALYTICS || {};
   if (!ga4 && !meta) return;
   _analyticsLoaded = true;
