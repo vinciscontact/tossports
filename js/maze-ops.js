@@ -484,6 +484,43 @@ function wireDash() {
 /* 'owner' and 'founder' are the same rank — the database says the same
    thing in is_founder(), so the UI and the policies can never disagree. */
 function isAdminRole() { return !!ME && ['founder','owner','manager'].includes(ME.role); }
+
+/* HOW the order came in and how it is meant to be paid.
+
+   The Channel column used to print the raw `channel` column, which is 'web'
+   for everything the website produces — so an order paid by card and an order
+   sent over WhatsApp to be paid later looked identical, and the second one
+   showed "Unpaid" as if something had gone wrong. What an owner needs to know
+   is the ROUTE, which is channel and method together. */
+function orderRoute(o) {
+  const ch = o.channel || 'web';
+  if (ch !== 'web') {
+    const named = { whatsapp: 'WhatsApp', walkin: 'Walk-in', phone: 'Phone', instagram: 'Instagram' };
+    return { cls: ch, text: named[ch] || ch };
+  }
+  return o.method === 'whatsapp'
+    ? { cls: 'whatsapp', text: 'WhatsApp order' }
+    : { cls: 'web', text: 'Online payment' };
+}
+
+/* Where the money stands, said the way a shop says it.
+
+   "Unpaid" was one word doing four different jobs: money still to collect on a
+   WhatsApp order, a card payment that failed, a basket somebody abandoned, and
+   a sale genuinely owed. They need different actions, so they get different
+   words. */
+function payState(o) {
+  if (o.paid) return { cls: 'on', text: 'Paid' };
+  if (o.status === 'cancelled') {
+    return (o.channel || 'web') === 'web' && o.method === 'online'
+      ? { cls: 'off', text: 'Payment failed' }
+      : { cls: 'off', text: 'Not collected' };
+  }
+  if ((o.channel || 'web') === 'web' && o.method === 'online') {
+    return { cls: 'due', text: 'Awaiting payment' };
+  }
+  return { cls: 'due', text: 'To collect' };
+}
 function isOwner() { return !!ME && ['founder','owner'].includes(ME.role); }
 
 function topProductsTable() {
@@ -524,14 +561,18 @@ function viewSales() {
           <td><button class="od-open pid" data-order="${esc(o.id)}">${esc(o.id)}</button></td>
           <td><div>${esc(c.name || '—')}</div><div class="pid">${esc(c.phone || '')}</div></td>
           ${multiBranch() ? `<td class="muted">${esc(branchName(o.branch_id || defaultBranch()))}</td>` : ''}
-          <td><span class="pill ${esc(o.channel || 'web')}">${esc(o.channel || 'web')}</span></td>
+          <td>${(r => `<span class="pill ${esc(r.cls)}">${esc(r.text)}</span>`)(orderRoute(o))}</td>
           <td class="muted">${esc(s ? s.name : '—')}</td>
           <td class="num">${money(o.total)}</td>
-          <td><div class="paid-cell">${o.paid
-            ? `<span class="pill on">Paid</span>${o.paid_source
-                ? `<span class="pid">${esc(String(o.paid_source).replace('staff:', 'by '))}</span>` : ''}`
-            : `<span class="pill off">Unpaid</span>${isOwner() && o.status !== 'cancelled'
-                ? `<button class="btn ghost xs" data-paid="${esc(o.id)}">Mark paid</button>` : ''}`}</div></td>
+          <td><div class="paid-cell">${(st => `
+            <span class="pill ${st.cls}">${st.text}</span>
+            ${o.paid && o.paid_source
+              ? `<span class="pid">${esc(String(o.paid_source)
+                  .replace('staff:', 'by ').replace('razorpay-webhook', 'by Razorpay'))}</span>`
+              : ''}
+            ${!o.paid && isOwner() && o.status !== 'cancelled'
+              ? `<button class="btn ghost xs" data-paid="${esc(o.id)}">Mark paid</button>` : ''}
+          `)(payState(o))}</div></td>
           <td>${isAdminRole()
             ? `<select data-status="${esc(o.id)}" class="inline-sel">
                 ${/* delivered was missing, and everything downstream already
@@ -715,7 +756,7 @@ function wireSales() {
           id: o.id, created_at: o.created_at, branch: branchName(o.branch_id || defaultBranch()),
           customer: c.name || '', phone: c.phone || '',
           city: c.city || '', channel: o.channel || 'web', soldBy: s ? s.name : '',
-          status: o.status, paid: o.paid ? 'Paid' : 'Unpaid', total: o.total || 0,
+          status: o.status, paid: payState(o).text, total: o.total || 0,
           items: (o.items || []).map(i => `${i.name || i.id} x${i.qty || 1}`).join(', ')
         };
       })
