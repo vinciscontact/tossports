@@ -36,7 +36,20 @@ const PRODUCT_SHAPE = {
   weight: [], ball: [], usage: [], features: [], badges: [],
   tagline: '', edge: '', spine: '', handle: '', finish: '',
   height: '', sweetSpot: '',
-  rating: 0, reviews: 0, popularity: 0
+  rating: 0, reviews: 0, popularity: 0,
+
+  /* Per-product selling terms, all optional and all set in the Maze Room.
+     Empty means "use the shop's own rule", which is why a bat nobody has
+     touched still behaves exactly as it did before these existed.
+
+       warrantyOff   true  = this item carries no warranty (balls, grips)
+       warranty      text  = wording that replaces the standard cover
+       noReturn      true  = the 10-day return does not apply
+       shipFee       ₹     = this item's own delivery charge
+       shipNeverFree true  = never counts towards free delivery
+       specs         [[label, value], …] shown as a table on the page */
+  warrantyOff: false, warranty: '', noReturn: false,
+  shipFee: null, shipNeverFree: false, specs: []
 };
 
 /* Supabase keeps the queryable columns separate from the spec blob.

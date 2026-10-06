@@ -1698,6 +1698,10 @@ function editProduct(id) {
         images: [], data: {}, category: newCat }
     : DB.products.find(x => x.id === id);
   if (!p) return;
+  /* The spec blob as it stands. The fields above read from it and write back
+     into it on save, so the JSON box below stays the single source of truth
+     and nothing is stored twice. */
+  const d = p.data || {};
   openModal(isNew ? 'New product' : `Edit — ${esc(p.name)}`, `
     <div class="f">
       <div class="row"><label>Name</label><input id="f_name" value="${esc(p.name)}"></div>
@@ -1764,6 +1768,53 @@ function editProduct(id) {
             : (stylesOf(p.id).length && DB.prodStyles.some(r => r.product_id === p.id && r.auto)
                ? 'These were suggested from the specs — tick or untick anything and it becomes your decision.'
                : '')}</div></div>` : ''}
+      <!-- Selling terms, one product at a time.
+
+           These used to be reachable only by hand-editing the JSON below,
+           which meant in practice they were never set: an owner should not
+           have to know what a brace is to say that a cricket ball carries no
+           warranty. Every box here is optional and empty means "do what the
+           shop does", so a bat nobody opens keeps behaving exactly as it did. -->
+      <div class="row"><label>Short tagline</label>
+        <input id="f_tag" value="${esc(d.tagline || '')}"
+               placeholder="One line under the name, e.g. Swings fast, hits hard">
+      </div>
+
+      <div class="row"><label>Description</label>
+        <textarea id="f_desc" style="min-height:90px"
+          placeholder="The paragraph on the product page.">${esc(d.description || '')}</textarea>
+      </div>
+
+      <div class="row"><label>Warranty &amp; returns</label>
+        <label class="check"><input type="checkbox" id="f_warr"
+          ${d.warrantyOff ? '' : 'checked'}> Covered by the standard warranty</label>
+        <label class="check" style="margin-top:8px"><input type="checkbox" id="f_ret"
+          ${d.noReturn ? '' : 'checked'}> The 10-day return applies</label>
+        <input id="f_warrtxt" style="margin-top:8px" value="${esc(d.warranty || '')}"
+               placeholder="Custom wording — leave empty for the usual terms">
+        <div class="hint">Untick the first for balls, grips and anything that wears out by
+          design. The product page then says "No warranty on this item" instead of
+          promising cover you cannot honour.</div></div>
+
+      <div class="grid2">
+        <div class="row"><label>Delivery charge (₹)</label>
+          <input id="f_ship" type="number" min="0" value="${d.shipFee ?? ''}"
+                 placeholder="Empty = the shop's rule">
+          <div class="hint">This item's own charge. A bag pays the highest single
+            charge in it, never the sum.</div></div>
+        <div class="row"><label>Free delivery</label>
+          <label class="check"><input type="checkbox" id="f_nofree"
+            ${d.shipNeverFree ? 'checked' : ''}> Never qualifies for free delivery</label>
+          <div class="hint">Normally free over ${inr(1500)} — tick to exclude this item.</div></div>
+      </div>
+
+      <div class="row"><label>Spec rows</label>
+        <textarea id="f_specs" style="min-height:90px"
+          placeholder="One per line, label and value separated by a colon:&#10;Weight: 75g&#10;Pack: 6 balls">${
+          esc((d.specs || []).map(r => (r[0] || '') + ': ' + (r[1] == null ? '' : r[1])).join('\n'))}</textarea>
+        <div class="hint">Shown as a table on the product page. Mostly for balls, bags and
+          anything that is not a bat — bats build their table from the spec data below.</div></div>
+
       <div class="row"><label>Spec data (JSON)</label>
         <textarea id="f_data" style="min-height:190px">${esc(JSON.stringify(p.data || {}, null, 2))}</textarea>
         <div class="hint">For bats: wood, profile, weight, features and so on. For other
@@ -1774,6 +1825,28 @@ function editProduct(id) {
     let data;
     try { data = JSON.parse($('#f_data').value || '{}'); }
     catch (e) { toast('Spec data is not valid JSON', true); return false; }
+
+    /* The boxes win over the JSON for the keys they own — somebody who edits
+       both in one sitting means what they typed into the field they can see. */
+    const shipRaw = $('#f_ship').value.trim();
+    Object.assign(data, {
+      tagline: $('#f_tag').value.trim() || undefined,
+      description: $('#f_desc').value.trim() || undefined,
+      warrantyOff: !$('#f_warr').checked || undefined,
+      noReturn: !$('#f_ret').checked || undefined,
+      warranty: $('#f_warrtxt').value.trim() || undefined,
+      shipFee: shipRaw === '' ? undefined : Number(shipRaw),
+      shipNeverFree: $('#f_nofree').checked || undefined,
+      specs: $('#f_specs').value.split('\n').map(line => {
+        const i = line.indexOf(':');
+        if (i < 1) return null;
+        return [line.slice(0, i).trim(), line.slice(i + 1).trim()];
+      }).filter(Boolean)
+    });
+    /* undefined would be written as a key with no value; drop them so a
+       product that says nothing about delivery really says nothing. */
+    Object.keys(data).forEach(k => { if (data[k] === undefined) delete data[k]; });
+    if (!data.specs || !data.specs.length) delete data.specs;
 
     const priceRaw = $('#f_price').value.trim();
     const row = {

@@ -190,13 +190,68 @@ function cartSubtotal() {
                         + warrantyPrice(i)) * i.qty;
   }, 0);
 }
+/* What delivery costs for the bag as it stands.
+
+   The shop's rule is still the rule — free over the threshold, otherwise the
+   flat fee — and most products say nothing about delivery, so most bags are
+   priced exactly as before. Two things a product may say override it:
+
+     shipNeverFree   this item never rides along on free delivery
+     shipFee         this item's own charge, used instead of the flat fee
+
+   When a bag mixes them, the customer pays the HIGHEST single charge, never
+   the sum. A bat at ₹99 and two balls at ₹60 is ₹99: buying more should not
+   feel like a penalty, and one number is explainable at the counter. */
 function shipFee() {
   const s = cartSubtotal();
-  return (s === 0 || s >= FREE_SHIP_OVER) ? 0 : SHIP_FEE;
+  if (s === 0) return 0;
+
+  const items = cart.map(i => byId(i.id)).filter(Boolean);
+  const neverFree = items.some(p => p.shipNeverFree);
+
+  if (!neverFree && s >= FREE_SHIP_OVER) return 0;
+
+  /* Below the threshold: each item charges its own fee if it has one, and
+     the shop's flat fee if it does not. */
+  const fees = items.map(p =>
+    (p.shipFee != null && p.shipFee !== '') ? Number(p.shipFee) : SHIP_FEE);
+  return fees.length ? Math.max.apply(null, fees) : SHIP_FEE;
 }
 /* Out of stock is a switch an owner flips in the Maze Room, not a count.
    Every screen asks this one function so none of them can disagree. */
 const isOut = p => !!(p && p.soldOut);
+
+/* The cover THIS product carries, in the words the page should print.
+   A cricket ball is not a bat: it wears out by design, and promising a
+   warranty on it would be a promise nobody could keep. */
+/* What this product's page should say about delivery, in four words.
+   A product carrying its own charge says the charge, because "free shipping
+   over ₹1,500" would be a lie on something that never qualifies. */
+/* The small print under the price. A product carrying its own charge must
+   not advertise the shop's free-delivery promise, which does not apply to it. */
+function shipNote(p) {
+  if (p && p.shipFee != null && p.shipFee !== '') return 'Delivery ' + fmt(Number(p.shipFee));
+  if (p && p.shipNeverFree) return 'Delivery ' + fmt(SHIP_FEE) + ' — no free delivery on this item';
+  return (hasPrice(p) && p.price >= FREE_SHIP_OVER)
+    ? 'Free shipping' : 'Free shipping over ' + fmt(FREE_SHIP_OVER);
+}
+
+function deliveryLine(p) {
+  if (p && p.shipFee != null && p.shipFee !== '') return 'Delivery ' + fmt(Number(p.shipFee));
+  if (p && p.shipNeverFree) return 'Delivery ' + fmt(SHIP_FEE);
+  return (hasPrice(p) && p.price >= FREE_SHIP_OVER) ? 'Free shipping' : 'Ships India-wide';
+}
+
+function coverOf(p) {
+  if (!p) return { warranty: warrantyLabel(), returns: RETURN_DAYS + '-day return if unused' };
+  return {
+    warranty: p.warrantyOff ? 'No warranty on this item'
+            : (String(p.warranty || '').trim() || warrantyLabel()),
+    returns: p.noReturn ? 'No returns on this item'
+           : RETURN_DAYS + '-day return if unused',
+    none: !!p.warrantyOff
+  };
+}
 
 function addToCart(id, variant, engrave) {
   const p = byId(id);
@@ -2278,7 +2333,7 @@ function viewProductGeneric(p) {
               ${p.mrp ? `<s class="num">${fmt(p.mrp)}</s>` : ''}
               ${off >= 10 ? `<span class="save">Save ${fmt(p.mrp - p.price)}</span>` : ''}
             </div>
-            <p class="incl">Inclusive of all taxes · ${p.price >= FREE_SHIP_OVER ? 'Free shipping' : 'Free shipping over ₹1500'}</p>
+            <p class="incl">Inclusive of all taxes · ${shipNote(p)}</p>
           ` : `
             <div class="pdp-price"><b style="font-size:1.5rem;color:var(--orange-700)">Price on request</b></div>
             <p class="incl">Message us for the current price and availability.</p>
@@ -2286,10 +2341,23 @@ function viewProductGeneric(p) {
 
           <div class="pdp-assure">
             <span>${ICON.hammer}<b>From our unit</b><i>Hand-checked</i></span>
-            <span>${ICON.truck}<b>${hasPrice(p) && p.price >= FREE_SHIP_OVER ? 'Free shipping' : 'Ships India-wide'}</b><i>3–6 days</i></span>
+            <span>${ICON.truck}<b>${deliveryLine(p)}</b><i>3–6 days</i></span>
             <span>${ICON.whatsapp}<b>Ask before you pay</b><i>Message us, no sign-in</i></span>
             <span>${ICON.check}<b>Checked &amp; packed</b><i>Photographed first</i></span>
           </div>
+
+          ${(c => `
+          <div class="pdp-terms${c.none ? ' bare' : ''}">
+            <span>${ICON.shield}${esc(c.warranty)}</span>
+            <span>${ICON.truck}${esc(c.returns)}</span>
+            <a href="${WARRANTY_URL}">Warranty &amp; returns ${ICON.arrow}</a>
+          </div>`)(coverOf(p))}
+
+          ${(p.specs || []).length ? `
+          <table class="spec-tbl" style="margin-top:18px">
+            ${p.specs.filter(r => r && r[0]).map(r =>
+              `<tr><th>${esc(r[0])}</th><td>${esc(r[1] == null ? '' : r[1])}</td></tr>`).join('')}
+          </table>` : ''}
 
           <div class="buy-row">
             ${hasPrice(p)
@@ -2445,7 +2513,7 @@ function viewProduct(id) {
               ${p.mrp ? `<s class="num">${fmt(p.mrp)}</s>` : ''}
               ${off >= 10 ? `<span class="save">Save ${fmt(p.mrp - p.price)}</span>` : ''}
             </div>
-            <p class="incl">Inclusive of all taxes · ${p.price >= FREE_SHIP_OVER ? 'Free shipping' : 'Free shipping over ₹1500'}</p>
+            <p class="incl">Inclusive of all taxes · ${shipNote(p)}</p>
           ` : `
             <div class="pdp-price"><b style="font-size:1.5rem;color:var(--orange-700)">Price on request</b></div>
             <p class="incl">This model is made to order. Message us for the current price and available weights.</p>
@@ -2455,7 +2523,8 @@ function viewProduct(id) {
           <div class="pdp-assure">
             <span>${ICON.hammer}<b>Made by us</b><i>Never resold</i></span>
             <span>${ICON.truck}<b>${p.price >= FREE_SHIP_OVER ? 'Free shipping' : 'Ships India-wide'}</b><i>3–6 days</i></span>
-            <span>${ICON.shield}<b>${warrantyLabel()}</b><i>Defects, after inspection</i></span>
+            <span>${ICON.shield}<b>${esc(coverOf(p).warranty)}</b><i>${
+              p.warrantyOff ? 'Not covered — see terms' : 'Defects, after inspection'}</i></span>
             <span>${ICON.check}<b>Weight to order</b><i>Tell us yours</i></span>
           </div>
 
@@ -2509,11 +2578,12 @@ function viewProduct(id) {
           <!-- Directly under the decision, because this is where somebody
                hesitates: "what if it breaks, what if it's wrong". Three lines
                and a link beat a policy page nobody finds. -->
-          <div class="pdp-terms">
-            <span>${ICON.shield}${warrantyLabel()}</span>
-            <span>${ICON.truck}${RETURN_DAYS}-day return if unused</span>
+          ${(c => `
+          <div class="pdp-terms${c.none ? ' bare' : ''}">
+            <span>${ICON.shield}${esc(c.warranty)}</span>
+            <span>${ICON.truck}${esc(c.returns)}</span>
             <a href="${WARRANTY_URL}">Warranty &amp; returns ${ICON.arrow}</a>
-          </div>
+          </div>`)(coverOf(p))}
 
           ${reviewCard(p)}
         </div>
