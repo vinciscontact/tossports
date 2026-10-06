@@ -2094,6 +2094,11 @@ body.has-annc .filter-bar{top:var(--hdr)}
 /* Deliberately quiet — a wrapped row of text links, not a fifth nav column.
    These earn their place by being crawlable, and a visitor who wants them
    will find them; making them loud would push the real navigation down. */
+@media (min-width:620px) and (max-width:899px){
+  /* Two link columns per row under the brand — narrower than five, but every
+     item still reads on one line. */
+  .ftr-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 .ftr-seo{margin-top:30px;padding-top:22px;border-top:1px solid rgba(255,255,255,.1)}
 .ftr-seo ul{display:flex;flex-wrap:wrap;gap:8px 20px}
 .ftr-seo li{list-style:none}
@@ -2196,7 +2201,11 @@ body.pdp-open .fab{bottom:82px}
   .buybar .btn{flex:0 0 auto}
   .co-grid{grid-template-columns:1.25fr .75fr;align-items:start}
   .co-side{position:sticky;top:calc(var(--hdr) + 20px)}
-  .ftr-grid{grid-template-columns:2fr 1fr 1fr 1fr}
+  /* Five columns now: the brand, then four link lists of roughly equal
+     length. The brand keeps the widest share because it carries a paragraph
+     and the social buttons; the rest share what is left evenly, so no column
+     runs three times longer than its neighbours. */
+  .ftr-grid{grid-template-columns:1.7fr repeat(4,minmax(0,1fr));gap:30px 26px}
   .finder-cta{padding:46px 44px;display:flex;align-items:center;justify-content:space-between;gap:30px}
   .finder-cta div{flex:1}
   .finder-cta p{margin-bottom:0}
