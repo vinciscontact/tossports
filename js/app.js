@@ -1439,21 +1439,28 @@ function viewHome() {
    point: the wall, the chalk and the bat are still there at the end. */
 function gullyArtSVG() {
   return `
-  <svg class="gy-svg" viewBox="0 0 640 420" role="img" xmlns="http://www.w3.org/2000/svg"
-       aria-label="An evening street cricket game: chalk stumps on a wall, a ball bowled, a six over the wall, and the bat left leaning at dusk">
+  <svg class="gy-svg" viewBox="0 0 1440 760" preserveAspectRatio="xMidYMid slice"
+       role="img" xmlns="http://www.w3.org/2000/svg"
+       aria-label="An evening street cricket game: chalk stumps on a compound wall, a ball bowled, a six over the wall, and the bat left leaning under a streetlight">
     <defs>
       <linearGradient id="gySky" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#0B0B24"/>
-        <stop offset=".55" stop-color="#241640"/>
-        <stop offset="1" stop-color="#7A3A12"/>
+        <stop offset="0"   stop-color="#090A20"/>
+        <stop offset=".42" stop-color="#2A1945"/>
+        <stop offset=".72" stop-color="#8A3C17"/>
+        <stop offset="1"   stop-color="#E0761F"/>
       </linearGradient>
+      <radialGradient id="gySun" cx=".5" cy=".5">
+        <stop offset="0" stop-color="#FFC46B" stop-opacity=".95"/>
+        <stop offset=".45" stop-color="#FF8A1E" stop-opacity=".35"/>
+        <stop offset="1" stop-color="#FF8A1E" stop-opacity="0"/>
+      </radialGradient>
       <radialGradient id="gyLamp" cx=".5" cy=".5">
-        <stop offset="0" stop-color="#FFC46B" stop-opacity=".55"/>
+        <stop offset="0" stop-color="#FFC46B" stop-opacity=".6"/>
         <stop offset="1" stop-color="#FFC46B" stop-opacity="0"/>
       </radialGradient>
-      <radialGradient id="gyVig" cx=".5" cy=".48" r=".78">
-        <stop offset=".55" stop-color="#000" stop-opacity="0"/>
-        <stop offset="1" stop-color="#000" stop-opacity=".55"/>
+      <radialGradient id="gyVig" cx=".5" cy=".46" r=".78">
+        <stop offset=".5" stop-color="#000" stop-opacity="0"/>
+        <stop offset="1" stop-color="#000" stop-opacity=".62"/>
       </radialGradient>
       <linearGradient id="gyBlade" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0" stop-color="#C9884A"/>
@@ -1462,128 +1469,174 @@ function gullyArtSVG() {
       </linearGradient>
     </defs>
 
-    <!-- the evening, and the town behind the wall -->
-    <rect width="640" height="420" fill="url(#gySky)"/>
-    <g fill="#0A0A1E" opacity=".85">
-      <rect x="18"  y="120" width="86"  height="96"/>
-      <rect x="120" y="152" width="64"  height="64"/>
-      <rect x="250" y="104" width="104" height="112"/>
-      <rect x="372" y="146" width="72"  height="70"/>
-      <rect x="470" y="118" width="120" height="98"/>
+    <!-- ===== the evening ===== -->
+    <rect width="1440" height="760" fill="url(#gySky)"/>
+    <circle class="gy-sun" cx="1120" cy="470" r="230" fill="url(#gySun)"/>
+
+    <!-- far skyline, flat and dark so the wall reads in front of it -->
+    <g fill="#120F28" opacity=".9">
+      <rect x="40"   y="300" width="150" height="190"/>
+      <rect x="210"  y="352" width="104" height="138"/>
+      <rect x="330"  y="268" width="176" height="222"/>
+      <rect x="530"  y="340" width="120" height="150"/>
+      <rect x="676"  y="292" width="188" height="198"/>
+      <rect x="890"  y="356" width="130" height="134"/>
+      <rect x="1046" y="276" width="196" height="214"/>
+      <rect x="1266" y="340" width="140" height="150"/>
     </g>
-    <g fill="#FFC46B" opacity=".5">
-      <rect x="34"  y="140" width="10" height="12"/><rect x="62" y="166" width="10" height="12"/>
-      <rect x="272" y="126" width="11" height="13"/><rect x="316" y="160" width="11" height="13"/>
-      <rect x="492" y="140" width="11" height="13"/><rect x="536" y="172" width="11" height="13"/>
+    <!-- windows: a few of them warm, because somebody is cooking -->
+    <g fill="#FFC46B" class="gy-win">
+      <rect x="70"   y="330" width="18" height="22"/><rect x="118" y="372" width="18" height="22"/>
+      <rect x="360"  y="300" width="20" height="24"/><rect x="430" y="352" width="20" height="24"/>
+      <rect x="712"  y="322" width="20" height="24"/><rect x="792" y="380" width="20" height="24"/>
+      <rect x="1080" y="306" width="20" height="24"/><rect x="1168" y="364" width="20" height="24"/>
+      <rect x="1300" y="372" width="18" height="22"/>
     </g>
 
-    <!-- the wall every gully game is played against -->
-    <rect x="0" y="212" width="640" height="122" fill="#241F3E"/>
-    <g stroke="rgba(255,255,255,.055)" stroke-width="2">
-      <path d="M0 246H640M0 280H640M0 314H640"/>
-      <path d="M70 212v34M210 212v34M350 212v34M490 212v34
-               M140 246v34M280 246v34M420 246v34M560 246v34
-               M70 280v34M210 280v34M350 280v34M490 280v34"/>
+    <!-- the tree that is in every gully, leaning over the wall -->
+    <g fill="#0C0A1E">
+      <path d="M120 490V330"  stroke="#0C0A1E" stroke-width="16" stroke-linecap="round"/>
+      <path d="M120 388l-44-36M120 360l40-32" stroke="#0C0A1E" stroke-width="10" stroke-linecap="round"/>
+      <g class="gy-tree">
+        <ellipse cx="96"  cy="300" rx="78" ry="54"/>
+        <ellipse cx="168" cy="286" rx="66" ry="46"/>
+        <ellipse cx="128" cy="252" rx="56" ry="40"/>
+      </g>
     </g>
-    <rect x="0" y="206" width="640" height="8" fill="#2E2850"/>
+
+    <!-- washing lines, swaying -->
+    <g class="gy-line" stroke="#0C0A1E" stroke-width="3" fill="none">
+      <path d="M330 300q70 26 150 10"/>
+      <g fill="#1B1733">
+        <rect x="356" y="304" width="26" height="34" rx="3"/>
+        <rect x="398" y="310" width="22" height="30" rx="3"/>
+        <rect x="436" y="308" width="28" height="36" rx="3"/>
+      </g>
+    </g>
+
+    <!-- ===== the wall every gully game is played against ===== -->
+    <rect x="0" y="482" width="1440" height="196" fill="#241F3E"/>
+    <rect x="0" y="474" width="1440" height="12" fill="#322A58"/>
+    <g stroke="rgba(255,255,255,.05)" stroke-width="2">
+      <path d="M0 528H1440M0 574H1440M0 620H1440"/>
+      <path d="M90 482v46M250 482v46M410 482v46M570 482v46M730 482v46M890 482v46M1050 482v46M1210 482v46M1370 482v46
+               M170 528v46M330 528v46M490 528v46M650 528v46M810 528v46M970 528v46M1130 528v46M1290 528v46
+               M90 574v46M250 574v46M410 574v46M570 574v46M730 574v46M890 574v46M1050 574v46M1210 574v46M1370 574v46"/>
+    </g>
+    <!-- a torn poster, because there always is one -->
+    <g opacity=".5">
+      <rect x="980" y="500" width="96" height="70" fill="#3A2C5E"/>
+      <rect x="980" y="500" width="96" height="14" fill="#FF8A1E" opacity=".5"/>
+    </g>
+
     <!-- the road -->
-    <rect x="0" y="334" width="640" height="86" fill="#101026"/>
-    <rect x="0" y="334" width="640" height="4" fill="#1B1B3A"/>
+    <rect x="0" y="678" width="1440" height="82" fill="#0E0C22"/>
+    <rect x="0" y="678" width="1440" height="5" fill="#1C1940"/>
 
-    <!-- CHALK: three lines and two bails, drawn on panel one and never rubbed out -->
-    <g class="gy-chalk" stroke="#F3F1FF" stroke-width="4" stroke-linecap="round" opacity=".92">
-      <path d="M150 236v66M168 236v66M186 236v66"/>
-      <path d="M144 230h48"/>
+    <!-- CHALK: drawn on panel one, never rubbed out -->
+    <g class="gy-chalk" stroke="#F3F1FF" stroke-width="7" stroke-linecap="round" opacity=".92">
+      <path d="M470 520v112M496 520v112M522 520v112"/>
+      <path d="M460 512h72"/>
     </g>
 
-    <!-- PANEL 1 — somebody crouches with a piece of chalk -->
-    <g class="gy-l gy-l1" fill="none" stroke="#08081A" stroke-width="9"
+    <!-- dust in the last of the light -->
+    <g class="gy-dust" fill="#FFC46B" opacity=".5">
+      <circle cx="300" cy="640" r="3"/><circle cx="520" cy="600" r="2.4"/>
+      <circle cx="760" cy="650" r="3.2"/><circle cx="980" cy="604" r="2.6"/>
+      <circle cx="1180" cy="648" r="3"/><circle cx="660" cy="580" r="2.2"/>
+    </g>
+
+    <!-- the stray dog, crossing on its own business -->
+    <g class="gy-dog" fill="#0B0A1C">
+      <path d="M0 724h36l6-14h10l5 14h12l5-14h9l6 14h10v-8c0-10-8-18-18-18H24c-12 0-20 7-22 17z"/>
+      <circle cx="4" cy="694" r="9"/>
+      <path d="M-4 686l-6-10 12 3z"/>
+    </g>
+
+    <!-- ===== PANEL 1 — somebody crouches with a piece of chalk ===== -->
+    <g class="gy-l gy-l1" fill="none" stroke="#08081A" stroke-width="13"
        stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="238" cy="268" r="11" fill="#08081A" stroke="none"/>
-      <path d="M238 280l-6 26"/>
-      <path d="M232 306l-14 24M232 306l16 22"/>
-      <path d="M236 288l-32 6"/>
-      <circle cx="198" cy="294" r="5" fill="#F3F1FF" stroke="none"/>
+      <circle cx="620" cy="560" r="16" fill="#08081A" stroke="none"/>
+      <path d="M620 578l-10 44"/>
+      <path d="M610 622l-22 42M610 622l26 38"/>
+      <path d="M616 592l-48 10"/>
+      <circle cx="562" cy="604" r="7" fill="#F3F1FF" stroke="none"/>
+    </g>
+    <!-- slippers: the boundary, and they stay all evening -->
+    <g class="gy-l gy-l1 gy-keep" fill="#08081A" opacity=".92">
+      <ellipse cx="930" cy="712" rx="26" ry="10"/>
+      <ellipse cx="984" cy="722" rx="26" ry="10"/>
     </g>
 
-    <!-- The slippers stay all evening — they are the boundary now — so they
-         belong to the scene rather than to the panel that put them there. -->
-    <g class="gy-l gy-l1 gy-keep" stroke="none" fill="#08081A" opacity=".9">
-      <ellipse cx="392" cy="352" rx="17" ry="7"/>
-      <ellipse cx="424" cy="358" rx="17" ry="7"/>
-    </g>
-
-    <!-- PANEL 2 — first ball: the run-up, the ball, the bat ready -->
-    <g class="gy-l gy-l2" fill="none" stroke="#08081A" stroke-width="9"
-       stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="516" cy="248" r="11" fill="#08081A" stroke="none"/>
-      <path d="M516 260l-5 34"/>
-      <path d="M511 294l-20 38M511 294l18 34"/>
-      <path d="M514 272l18-24"/>
-      <path d="M512 274l-22 12"/>
-    </g>
+    <!-- ===== PANEL 2 — first ball ===== -->
     <g class="gy-l gy-l2">
-      <circle cx="538" cy="238" r="9" fill="#C9D949"/>
-      <path d="M470 258h44M452 272h34" stroke="#F3F1FF" stroke-opacity=".45"
-            stroke-width="4" stroke-linecap="round"/>
+      <g class="gy-bowl" fill="none" stroke="#08081A" stroke-width="13"
+         stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="1180" cy="534" r="16" fill="#08081A" stroke="none"/>
+        <path d="M1180 552l-8 52"/>
+        <path d="M1172 604l-30 58M1172 604l26 52"/>
+        <path d="M1176 572l28-38"/>
+        <path d="M1174 576l-34 18"/>
+      </g>
+      <circle class="gy-ball2" cx="1208" cy="518" r="13" fill="#C9D949"/>
+      <g class="gy-speed" stroke="#F3F1FF" stroke-opacity=".4" stroke-width="5" stroke-linecap="round">
+        <path d="M1090 548h66M1050 572h50"/>
+      </g>
     </g>
 
-    <!-- the batter: present for panels two and three, mid-shot in the third -->
-    <g class="gy-bat gy-l gy-l2 gy-l3" fill="none" stroke="#08081A" stroke-width="9"
+    <!-- the batter, there for panels two and three -->
+    <g class="gy-bat gy-l gy-l2 gy-l3" fill="none" stroke="#08081A" stroke-width="13"
        stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="214" cy="252" r="11" fill="#08081A" stroke="none"/>
-      <path d="M214 264l-3 34"/>
-      <path d="M211 298l-16 34M211 298l18 32"/>
-      <path d="M213 276l22 10"/>
+      <circle cx="660" cy="542" r="16" fill="#08081A" stroke="none"/>
+      <path d="M660 560l-4 52"/>
+      <path d="M656 612l-24 52M656 612l28 48"/>
+      <path d="M658 584l34 16"/>
       <g class="gy-blade">
-        <path d="M235 286l16 12" stroke="#2A2035" stroke-width="7"/>
-        <path d="M249 296l20 26" stroke="url(#gyBlade)" stroke-width="15"/>
+        <path d="M692 600l24 18" stroke="#2A2035" stroke-width="10"/>
+        <path d="M714 616l32 40" stroke="url(#gyBlade)" stroke-width="22"/>
       </g>
     </g>
 
-    <!-- PANEL 3 — over the wall, and whoever hit it goes to fetch it -->
+    <!-- ===== PANEL 3 — over the wall ===== -->
     <g class="gy-l gy-l3">
-      <path class="gy-arc" d="M250 288C330 176 452 128 592 152" fill="none"
-            stroke="#FF8A1E" stroke-width="4" stroke-linecap="round"
-            stroke-dasharray="9 12" opacity=".85"/>
-      <circle cx="592" cy="152" r="10" fill="#C9D949"/>
-      <!-- a fielder sitting on the wall, legs over the edge, with no chance -->
-      <g fill="none" stroke="#08081A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="452" cy="158" r="10" fill="#08081A" stroke="none"/>
-        <path d="M452 169v36"/>
-        <path d="M452 180l-20-16M452 180l22-18"/>
-        <path d="M452 205l-16 10M436 215l-2 22"/>
-        <path d="M452 205l14 12M466 217v20"/>
+      <path class="gy-arc" d="M716 606C860 420 1080 356 1360 400" fill="none"
+            stroke="#FF8A1E" stroke-width="6" stroke-linecap="round" opacity=".9"/>
+      <circle class="gy-ball3" cx="716" cy="606" r="14" fill="#C9D949"/>
+      <!-- a fielder sitting on the wall, with no chance -->
+      <g fill="none" stroke="#08081A" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="1020" cy="408" r="15" fill="#08081A" stroke="none"/>
+        <path d="M1020 424v54"/>
+        <g class="gy-reach"><path d="M1020 440l-30 -24M1020 440l32 -26"/></g>
+        <path d="M1020 478l-24 16M996 494l-4 34"/>
+        <path d="M1020 478l22 18M1042 496v32"/>
       </g>
     </g>
 
-    <!-- Evening falling. It sits above the game and below the streetlight, so
-         the lamp reads as the only light left rather than one more layer. -->
-    <rect class="gy-dusk" width="640" height="420" fill="#05050F"/>
-
-    <!-- PANEL 4 — the light goes, the bat stays -->
+    <!-- ===== PANEL 4 — the light goes, the bat stays ===== -->
     <g class="gy-l gy-l4">
-      <path d="M596 334V128" stroke="#08081A" stroke-width="8" stroke-linecap="round"/>
-      <path d="M596 132h-34" stroke="#08081A" stroke-width="8" stroke-linecap="round"/>
-      <ellipse cx="560" cy="138" rx="15" ry="7" fill="#FFC46B"/>
-      <path d="M560 140l-96 194h192z" fill="url(#gyLamp)"/>
+      <path d="M1290 678V330" stroke="#08081A" stroke-width="12" stroke-linecap="round"/>
+      <path d="M1290 336h-52" stroke="#08081A" stroke-width="12" stroke-linecap="round"/>
+      <g class="gy-lamp">
+        <ellipse cx="1236" cy="344" rx="22" ry="10" fill="#FFC46B"/>
+        <path d="M1236 348l-150 330h300z" fill="url(#gyLamp)"/>
+      </g>
       <!-- the bat, leaning where it always ends up -->
       <g>
-        <path d="M272 334l-22-74" stroke="url(#gyBlade)" stroke-width="18" stroke-linecap="round"/>
-        <path d="M250 260l-9-30" stroke="#2A2035" stroke-width="8" stroke-linecap="round"/>
+        <path d="M690 678l-34-116" stroke="url(#gyBlade)" stroke-width="26" stroke-linecap="round"/>
+        <path d="M656 562l-14-48" stroke="#2A2035" stroke-width="12" stroke-linecap="round"/>
       </g>
-      <circle cx="300" cy="328" r="9" fill="#C9D949"/>
+      <circle cx="736" cy="666" r="13" fill="#C9D949"/>
       <!-- two of them walking home, bats over the shoulder -->
-      <g fill="none" stroke="#08081A" stroke-width="7" stroke-linecap="round"
-         stroke-linejoin="round" opacity=".92">
-        <circle cx="404" cy="266" r="8" fill="#08081A" stroke="none"/>
-        <path d="M404 275l3 26M407 301l-11 26M407 301l12 24M404 284l16-8"/>
-        <circle cx="452" cy="272" r="8" fill="#08081A" stroke="none"/>
-        <path d="M452 281l3 24M455 305l-10 24M455 305l12 22M452 289l16-7"/>
+      <g class="gy-home" fill="none" stroke="#08081A" stroke-width="10" stroke-linecap="round"
+         stroke-linejoin="round" opacity=".95">
+        <circle cx="900" cy="546" r="13" fill="#08081A" stroke="none"/>
+        <path d="M900 560l5 42M905 602l-18 44M905 602l20 40M900 574l26-14"/>
+        <circle cx="984" cy="556" r="13" fill="#08081A" stroke="none"/>
+        <path d="M984 570l5 40M989 610l-16 40M989 610l20 38M984 584l26-12"/>
       </g>
     </g>
 
-    <rect class="gy-vig" width="640" height="420" fill="url(#gyVig)"/>
+    <rect class="gy-vig" width="1440" height="760" fill="url(#gyVig)"/>
   </svg>`;
 }
 
@@ -1603,35 +1656,38 @@ const GULLY_STEPS = [
 
 function gullyStoryHTML() {
   return `
-  <section class="sec gully dark" id="gully" data-p="1">
-    <div class="wrap">
-      <p class="eyebrow">Where it actually happens</p>
-      <h2 class="d2">Every bat we make<br>starts in a gully.</h2>
+  <section class="gully" id="gully" data-p="1">
+    <div class="gy-track">
+      <!-- The picture holds still, full width, while the story moves over it.
+           Everything that scrolls is in .gy-marks below: four empty blocks
+           whose only job is to be the thing the page measures. The words
+           themselves live here, over the art, so they are read once, said
+           once, and indexed once. -->
+      <div class="gy-stage">
+        ${gullyArtSVG()}
 
-      <div class="gy-grid">
-        <!-- The column stretches the full height of the story; the pin inside
-             it is what sticks. A sticky element can only travel inside its own
-             box, so pinning the column itself let the art scroll away after
-             the first panel and left the rest of the story beside nothing. -->
-        <div class="gy-stage" aria-hidden="true">
-          <div class="gy-pin">
-            ${gullyArtSVG()}
-            <span class="gy-dots">${GULLY_STEPS.map((_, i) =>
-              `<i data-d="${i + 1}"></i>`).join('')}</span>
-          </div>
+        <div class="gy-head">
+          <p class="eyebrow">Where it actually happens</p>
+          <h2>Every bat we make<br>starts in a gully.</h2>
         </div>
 
-        <ol class="gy-steps">
-          ${GULLY_STEPS.map(([n, h, p], i) => `
-            <li class="gy-step" data-i="${i + 1}">
+        <div class="gy-caps">
+          ${GULLY_STEPS.map(([n, h, t], i) => `
+            <article class="gy-cap" data-i="${i + 1}">
               <span class="gy-n">${n}</span>
               <h3>${h}</h3>
-              <p>${p}</p>
-            </li>`).join('')}
-          <li class="gy-step gy-end" data-i="4">
-            <a class="btn btn-primary" href="#/shop">Shop the bats ${ICON.arrow}</a>
-          </li>
-        </ol>
+              <p>${t}</p>
+              ${i === GULLY_STEPS.length - 1
+                ? `<a class="btn btn-primary gy-cta" href="#/shop">Shop the bats ${ICON.arrow}</a>` : ''}
+            </article>`).join('')}
+        </div>
+
+        <span class="gy-dots" aria-hidden="true">${GULLY_STEPS.map((_, i) =>
+          `<i data-d="${i + 1}"></i>`).join('')}</span>
+      </div>
+
+      <div class="gy-marks" aria-hidden="true">
+        ${GULLY_STEPS.map((_, i) => `<div class="gy-step" data-i="${i + 1}"></div>`).join('')}
       </div>
     </div>
   </section>`;
