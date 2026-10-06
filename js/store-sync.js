@@ -45,11 +45,8 @@ const PRODUCT_SHAPE = {
        warrantyOff   true  = this item carries no warranty (balls, grips)
        warranty      text  = wording that replaces the standard cover
        noReturn      true  = the 10-day return does not apply
-       shipFee       ₹     = this item's own delivery charge
-       shipNeverFree true  = never counts towards free delivery
        specs         [[label, value], …] shown as a table on the page */
-  warrantyOff: false, warranty: '', noReturn: false,
-  shipFee: null, shipNeverFree: false, specs: []
+  warrantyOff: false, warranty: '', noReturn: false, specs: []
 };
 
 /* Supabase keeps the queryable columns separate from the spec blob.
@@ -101,6 +98,11 @@ async function syncSettings() {
     if (s.whatsapp)       WA_NUMBER      = String(s.whatsapp);
     if (s.free_ship_over != null) FREE_SHIP_OVER = Number(s.free_ship_over);
     if (s.ship_fee      != null) SHIP_FEE       = Number(s.ship_fee);
+    /* The switch an owner flips when shipping is on the house. Absent means
+       on, so a shop that has never seen this setting keeps charging exactly
+       as it did before. */
+    if (s.charge_shipping != null) CHARGE_SHIPPING = s.charge_shipping === true
+      || s.charge_shipping === 'true' || s.charge_shipping === 1;
     if (s.razorpay_key)   RAZORPAY_KEY   = String(s.razorpay_key);
     if (s.announcement)   STORE_NOTE     = String(s.announcement);
     /* The database re-prices every web order from the catalogue, engraving

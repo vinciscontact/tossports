@@ -9,6 +9,9 @@
 let WA_NUMBER = '919176995707';
 let FREE_SHIP_OVER = 1500;
 let SHIP_FEE = 99;
+/* Settings → Charge shipping. Off and nothing is added to any order, on the
+   website or in the WhatsApp message. */
+let CHARGE_SHIPPING = true;
 let STORE_NOTE = '';
 
 /* Months of warranty every Toss bat carries as standard.
@@ -192,31 +195,16 @@ function cartSubtotal() {
 }
 /* What delivery costs for the bag as it stands.
 
-   The shop's rule is still the rule — free over the threshold, otherwise the
-   flat fee — and most products say nothing about delivery, so most bags are
-   priced exactly as before. Two things a product may say override it:
-
-     shipNeverFree   this item never rides along on free delivery
-     shipFee         this item's own charge, used instead of the flat fee
-
-   When a bag mixes them, the customer pays the HIGHEST single charge, never
-   the sum. A bat at ₹99 and two balls at ₹60 is ₹99: buying more should not
-   feel like a penalty, and one number is explainable at the counter. */
+   One rule for the whole shop, set in Settings: a switch, a fee, and the
+   figure above which it is free. Per-product delivery charges were tried and
+   taken out again — a shop this size wants one number it can change in one
+   place, not a charge hiding on a product nobody remembers editing. */
 function shipFee() {
   const s = cartSubtotal();
-  if (s === 0) return 0;
-
-  const items = cart.map(i => byId(i.id)).filter(Boolean);
-  const neverFree = items.some(p => p.shipNeverFree);
-
-  if (!neverFree && s >= FREE_SHIP_OVER) return 0;
-
-  /* Below the threshold: each item charges its own fee if it has one, and
-     the shop's flat fee if it does not. */
-  const fees = items.map(p =>
-    (p.shipFee != null && p.shipFee !== '') ? Number(p.shipFee) : SHIP_FEE);
-  return fees.length ? Math.max.apply(null, fees) : SHIP_FEE;
+  if (s === 0 || !CHARGE_SHIPPING) return 0;
+  return s >= FREE_SHIP_OVER ? 0 : SHIP_FEE;
 }
+
 /* Out of stock is a switch an owner flips in the Maze Room, not a count.
    Every screen asks this one function so none of them can disagree. */
 const isOut = p => !!(p && p.soldOut);
@@ -224,21 +212,17 @@ const isOut = p => !!(p && p.soldOut);
 /* The cover THIS product carries, in the words the page should print.
    A cricket ball is not a bat: it wears out by design, and promising a
    warranty on it would be a promise nobody could keep. */
-/* What this product's page should say about delivery, in four words.
-   A product carrying its own charge says the charge, because "free shipping
-   over ₹1,500" would be a lie on something that never qualifies. */
-/* The small print under the price. A product carrying its own charge must
-   not advertise the shop's free-delivery promise, which does not apply to it. */
+/* What the page says about delivery. Both read the same Settings the price
+   does, so switching shipping off stops the site promising a charge it no
+   longer makes. */
 function shipNote(p) {
-  if (p && p.shipFee != null && p.shipFee !== '') return 'Delivery ' + fmt(Number(p.shipFee));
-  if (p && p.shipNeverFree) return 'Delivery ' + fmt(SHIP_FEE) + ' — no free delivery on this item';
+  if (!CHARGE_SHIPPING) return 'Free delivery';
   return (hasPrice(p) && p.price >= FREE_SHIP_OVER)
     ? 'Free shipping' : 'Free shipping over ' + fmt(FREE_SHIP_OVER);
 }
 
 function deliveryLine(p) {
-  if (p && p.shipFee != null && p.shipFee !== '') return 'Delivery ' + fmt(Number(p.shipFee));
-  if (p && p.shipNeverFree) return 'Delivery ' + fmt(SHIP_FEE);
+  if (!CHARGE_SHIPPING) return 'Free delivery';
   return (hasPrice(p) && p.price >= FREE_SHIP_OVER) ? 'Free shipping' : 'Ships India-wide';
 }
 
@@ -2275,7 +2259,7 @@ function viewProduct(id) {
           <!-- reassurance sits directly under the price, where the doubt is -->
           <div class="pdp-assure">
             <span>${ICON.hammer}<b>Made by us</b><i>Never resold</i></span>
-            <span>${ICON.truck}<b>${p.price >= FREE_SHIP_OVER ? 'Free shipping' : 'Ships India-wide'}</b><i>3–6 days</i></span>
+            <span>${ICON.truck}<b>${deliveryLine(p)}</b><i>3–6 days</i></span>
             <span>${ICON.shield}<b>${esc(coverOf(p).warranty)}</b><i>${
               p.warrantyOff ? 'Not covered — see terms' : 'Defects, after inspection'}</i></span>
             <span>${ICON.check}<b>Weight to order</b><i>Tell us yours</i></span>

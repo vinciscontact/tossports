@@ -1796,18 +1796,6 @@ function editProduct(id) {
           design. The product page then says "No warranty on this item" instead of
           promising cover you cannot honour.</div></div>
 
-      <div class="grid2">
-        <div class="row"><label>Delivery charge (₹)</label>
-          <input id="f_ship" type="number" min="0" value="${d.shipFee ?? ''}"
-                 placeholder="Empty = the shop's rule">
-          <div class="hint">This item's own charge. A bag pays the highest single
-            charge in it, never the sum.</div></div>
-        <div class="row"><label>Free delivery</label>
-          <label class="check"><input type="checkbox" id="f_nofree"
-            ${d.shipNeverFree ? 'checked' : ''}> Never qualifies for free delivery</label>
-          <div class="hint">Normally free over ${inr(1500)} — tick to exclude this item.</div></div>
-      </div>
-
       <div class="row"><label>Spec rows</label>
         <textarea id="f_specs" style="min-height:90px"
           placeholder="One per line, label and value separated by a colon:&#10;Weight: 75g&#10;Pack: 6 balls">${
@@ -1828,15 +1816,12 @@ function editProduct(id) {
 
     /* The boxes win over the JSON for the keys they own — somebody who edits
        both in one sitting means what they typed into the field they can see. */
-    const shipRaw = $('#f_ship').value.trim();
     Object.assign(data, {
       tagline: $('#f_tag').value.trim() || undefined,
       description: $('#f_desc').value.trim() || undefined,
       warrantyOff: !$('#f_warr').checked || undefined,
       noReturn: !$('#f_ret').checked || undefined,
       warranty: $('#f_warrtxt').value.trim() || undefined,
-      shipFee: shipRaw === '' ? undefined : Number(shipRaw),
-      shipNeverFree: $('#f_nofree').checked || undefined,
       specs: $('#f_specs').value.split('\n').map(line => {
         const i = line.indexOf(':');
         if (i < 1) return null;
@@ -2482,6 +2467,8 @@ function wireScores() {
 const SETTING_FIELDS = [
   ['whatsapp',       'WhatsApp number', 'text',   'Country code, no plus. e.g. 919176995707'],
   ['instagram',      'Instagram handle', 'text',  'Without the @'],
+  ['charge_shipping', 'Charge shipping', 'toggle',
+    'Off means every order ships free — on the website and in the WhatsApp order message. The two amounts below are ignored while this is off.'],
   ['free_ship_over', 'Free shipping over (₹)', 'number', 'Orders at or above this ship free'],
   ['ship_fee',       'Shipping fee (₹)', 'number', 'Charged below the free-shipping threshold'],
   ['razorpay_key',   'Razorpay key id', 'text',   'Starts rzp_live_ or rzp_test_. Blank disables online payment.'],
@@ -2503,8 +2490,11 @@ function viewSettings() {
     <div class="panel"><div class="f">
       ${SETTING_FIELDS.map(([k, label, type, hint]) => `
         <div class="row">
-          <label>${label}</label>
-          <input id="s_${k}" type="${type}" value="${esc(DB.settings[k] ?? '')}">
+          ${type === 'toggle'
+            ? `<label class="check"><input id="s_${k}" type="checkbox"
+                 ${DB.settings[k] ? 'checked' : ''}> ${label}</label>`
+            : `<label>${label}</label>
+               <input id="s_${k}" type="${type}" value="${esc(DB.settings[k] ?? '')}">`}
           <div class="hint">${hint}</div>
         </div>`).join('')}
       <button class="btn primary" id="saveSettings">Save settings</button>
@@ -2534,8 +2524,10 @@ function wireSettings() {
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
       for (const [k, , type] of SETTING_FIELDS) {
-        const raw = $('#s_' + k).value;
-        const value = type === 'number' ? Number(raw || 0) : raw;
+        const el = $('#s_' + k);
+        const value = type === 'toggle' ? el.checked
+                    : type === 'number' ? Number(el.value || 0)
+                    : el.value;
         await supa('settings', {
           method: 'POST',
           headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
